@@ -1,0 +1,43 @@
+# --- secrets ---
+server/.env
+.env.local
+*.pem
+*.key
+
+# --- node / expo ---
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.tsbuildinfo
+
+# --- ios / android ---
+app/ios/
+app/android/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- db / docker ---
+pgdata/
+*.sqlite3
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
