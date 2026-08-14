@@ -54,6 +54,10 @@ function AppNavigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="run/active" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="run/finish" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="run/report" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="spike" options={{ presentation: 'modal' }} />
       </Stack>
     </>
