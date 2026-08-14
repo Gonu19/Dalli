@@ -5,6 +5,10 @@
 ## 스택
 FastAPI · SQLAlchemy 2.0 (`Mapped[]`) · Alembic · PostgreSQL 16 · Pydantic v2
 
+- Python: **3.12.11** (`.python-version`)
+- 런타임 패키지: `requirements.txt`
+- 테스트·개발 패키지: `requirements-dev.txt`
+
 ## 실행
 ```bash
 cd server
@@ -15,6 +19,38 @@ python seed.py            # 데모용 과거 기록
 ```
 - Swagger: `http://localhost:8000/docs`
 - OpenAPI: `http://localhost:8000/openapi.json`
+- Health: `http://localhost:8000/health` (`{"status":"ok"}`; DB와 분리된 liveness)
+
+로컬 Python 실행:
+
+```bash
+cd server
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+uvicorn app.main:app --reload
+python -m pytest -q
+```
+
+현재는 도메인 모델과 revision이 없으므로 `alembic current`는 revision을 출력하지 않는 것이 정상이다.
+첫 모델 계획에서 모델을 `app/models/__init__.py`에 import하고 migration을 생성한다.
+
+## 프론트용 Mock API (화요일 전)
+
+실제 PostgreSQL·OpenAI 연결이 가능한 화요일 전까지는 fixture 기반 서버를 사용한다.
+
+```bash
+cd server
+python -m pip install -r requirements-dev.txt
+python -m uvicorn app.mock_main:app --host 0.0.0.0 --port 8001
+```
+
+- Swagger: `http://localhost:8001/docs`
+- 아이폰 Base URL: `http://<개발-PC-LAN-IP>:8001`
+- 데이터: `../docs/mock-data/api-fixtures.json`
+- DB와 OpenAI를 호출하지 않으며 재시작 시 상태가 초기화된다.
+- 화요일 실서버 전환 시 실행 모듈을 `app.main:app`으로 바꾸고 HTTPS Base URL을 전달한다.
 
 ## .env
 ```

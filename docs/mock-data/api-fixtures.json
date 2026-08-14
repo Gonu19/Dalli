@@ -1,0 +1,459 @@
+{
+  "requests": {
+    "auth_device": {
+      "device_uuid": "A1B2-C3D4"
+    },
+    "patch_user_onboarding": {
+      "running_purpose": "COMPLETE",
+      "experience_level": 0,
+      "max_continuous_min": 10,
+      "weekly_goal_count": 3,
+      "baseline_cadence": 157,
+      "height_cm": 165,
+      "weight_kg": 54.0,
+      "birth_year": 2004,
+      "gender": "F"
+    },
+    "create_app_run_minimum_analyzable": {
+      "client_run_id": "20000000-0000-4000-8000-000000000005",
+      "source": "APP",
+      "plan_id": null,
+      "started_at": "2026-08-14T09:00:00Z",
+      "ended_at": "2026-08-14T09:03:00Z",
+      "goal_type": "TIME",
+      "goal_value": 180,
+      "condition": 3,
+      "target_cadence_min": 153,
+      "target_cadence_max": 161,
+      "final_target_min": 153,
+      "final_target_max": 161,
+      "duration_sec": 180,
+      "distance_m": 420,
+      "avg_cadence": 157,
+      "avg_pace_sec_per_km": 429,
+      "completed": true,
+      "intervention_count": 0,
+      "downshift_count": 0,
+      "memo": null,
+      "samples": [
+        { "t": 0, "c": 156, "p": 430, "d": 0.0 },
+        { "t": 5, "c": 157, "p": 429, "d": 11.7 },
+        { "t": 10, "c": 158, "p": 428, "d": 23.4 },
+        { "t": 15, "c": 156, "p": 430, "d": 35.1 },
+        { "t": 20, "c": 157, "p": 429, "d": 46.8 },
+        { "t": 25, "c": 158, "p": 428, "d": 58.5 },
+        { "t": 30, "c": 156, "p": 430, "d": 70.2 },
+        { "t": 35, "c": 157, "p": 429, "d": 81.9 },
+        { "t": 40, "c": 158, "p": 428, "d": 93.6 },
+        { "t": 45, "c": 156, "p": 430, "d": 105.3 },
+        { "t": 50, "c": 157, "p": 429, "d": 117.0 },
+        { "t": 55, "c": 158, "p": 428, "d": 128.7 },
+        { "t": 60, "c": 156, "p": 430, "d": 140.4 },
+        { "t": 65, "c": 157, "p": 429, "d": 152.1 },
+        { "t": 70, "c": 158, "p": 428, "d": 163.8 },
+        { "t": 75, "c": 156, "p": 430, "d": 175.5 },
+        { "t": 80, "c": 157, "p": 429, "d": 187.2 },
+        { "t": 85, "c": 158, "p": 428, "d": 198.9 },
+        { "t": 90, "c": 156, "p": 430, "d": 210.6 },
+        { "t": 95, "c": 157, "p": 429, "d": 222.3 },
+        { "t": 100, "c": 158, "p": 428, "d": 234.0 },
+        { "t": 105, "c": 156, "p": 430, "d": 245.7 },
+        { "t": 110, "c": 157, "p": 429, "d": 257.4 },
+        { "t": 115, "c": 158, "p": 428, "d": 269.1 },
+        { "t": 120, "c": 156, "p": 430, "d": 280.8 },
+        { "t": 125, "c": 157, "p": 429, "d": 292.5 }
+      ],
+      "events": [
+        { "t": 0, "type": "RUN_START", "payload": { "min": 153, "max": 161 } },
+        { "t": 180, "type": "RUN_END", "payload": { "completed": true } }
+      ]
+    },
+    "create_manual_run": {
+      "client_run_id": "20000000-0000-4000-8000-000000000004",
+      "source": "MANUAL",
+      "plan_id": null,
+      "started_at": "2026-08-11T10:00:00Z",
+      "duration_sec": 900,
+      "distance_m": 2100,
+      "condition": 3,
+      "completed": true,
+      "memo": "공원에서 가볍게 달림"
+    },
+    "create_plan": {
+      "planned_date": "2026-08-16",
+      "goal_type": "TIME",
+      "goal_value": 1200,
+      "memo": "아침 러닝"
+    }
+  },
+  "auth": {
+    "new_user": {
+      "status": 200,
+      "body": {
+        "access_token": "mock.jwt.new-user",
+        "token_type": "bearer",
+        "is_new_user": true
+      }
+    },
+    "existing_user": {
+      "status": 200,
+      "body": {
+        "access_token": "mock.jwt.existing-user",
+        "token_type": "bearer",
+        "is_new_user": false
+      }
+    }
+  },
+  "users": {
+    "not_onboarded": {
+      "status": 200,
+      "body": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "onboarded": false,
+        "running_purpose": null,
+        "experience_level": null,
+        "max_continuous_min": null,
+        "weekly_goal_count": null,
+        "baseline_cadence": null,
+        "height_cm": null,
+        "weight_kg": null,
+        "birth_year": null,
+        "gender": null
+      }
+    },
+    "onboarded": {
+      "status": 200,
+      "body": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "onboarded": true,
+        "running_purpose": "COMPLETE",
+        "experience_level": 0,
+        "max_continuous_min": 10,
+        "weekly_goal_count": 3,
+        "baseline_cadence": 157,
+        "height_cm": 165,
+        "weight_kg": 54.0,
+        "birth_year": 2004,
+        "gender": "F"
+      }
+    }
+  },
+  "runs": {
+    "created": {
+      "status": 201,
+      "body": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "client_run_id": "20000000-0000-4000-8000-000000000001",
+        "created_at": "2026-08-14T09:21:00Z",
+        "is_analyzable": true,
+        "analysis_limitation": null,
+        "rhythm_score": 0.72,
+        "late_drop_rate": 0.11,
+        "fatigue_index": 0.34
+      }
+    },
+    "idempotent": {
+      "status": 200,
+      "body": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "client_run_id": "20000000-0000-4000-8000-000000000001",
+        "created_at": "2026-08-14T09:21:00Z",
+        "is_analyzable": true,
+        "analysis_limitation": null,
+        "rhythm_score": 0.72,
+        "late_drop_rate": 0.11,
+        "fatigue_index": 0.34
+      }
+    },
+    "list": {
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "started_at": "2026-08-14T09:00:00Z",
+            "duration_sec": 1230,
+            "distance_m": 2840,
+            "avg_cadence": 156,
+            "completed": true,
+            "source": "APP",
+            "rhythm_score": 0.72,
+            "has_report": true
+          },
+          {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "started_at": "2026-08-11T10:00:00Z",
+            "duration_sec": 900,
+            "distance_m": 2100,
+            "avg_cadence": null,
+            "completed": true,
+            "source": "MANUAL",
+            "rhythm_score": null,
+            "has_report": false
+          }
+        ],
+        "next_cursor": null
+      }
+    },
+    "detail": {
+      "status": 200,
+      "body": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "client_run_id": "20000000-0000-4000-8000-000000000001",
+        "source": "APP",
+        "plan_id": "40000000-0000-4000-8000-000000000001",
+        "started_at": "2026-08-14T09:00:00Z",
+        "ended_at": "2026-08-14T09:20:30Z",
+        "goal_type": "TIME",
+        "goal_value": 1200,
+        "condition": 3,
+        "target_cadence_min": 153,
+        "target_cadence_max": 161,
+        "final_target_min": 148,
+        "final_target_max": 156,
+        "duration_sec": 1230,
+        "distance_m": 2840,
+        "avg_cadence": 156,
+        "avg_pace_sec_per_km": 433,
+        "completed": true,
+        "rhythm_score": null,
+        "late_drop_rate": null,
+        "fatigue_index": null,
+        "intervention_count": 2,
+        "downshift_count": 1,
+        "memo": null,
+        "is_analyzable": false,
+        "analysis_limitation": "INSUFFICIENT_SENSOR_DATA",
+        "samples": [
+          { "t": 0, "c": 158, "p": 380, "d": 0.0 },
+          { "t": 5, "c": 161, "p": 372, "d": 13.4 },
+          { "t": 10, "c": 159, "p": 376, "d": 26.7 }
+        ],
+        "events": [
+          { "t": 0, "type": "RUN_START", "payload": { "min": 153, "max": 161 } },
+          { "t": 402, "type": "TARGET_ADJUSTED", "payload": { "min": 148, "max": 156, "reason": "no_recovery" } },
+          { "t": 1230, "type": "RUN_END", "payload": { "completed": true } }
+        ],
+        "report": null
+      }
+    },
+    "too_short": {
+      "status": 201,
+      "body": {
+        "id": "10000000-0000-4000-8000-000000000003",
+        "client_run_id": "20000000-0000-4000-8000-000000000003",
+        "created_at": "2026-08-14T11:02:00Z",
+        "is_analyzable": false,
+        "analysis_limitation": "TOO_SHORT",
+        "rhythm_score": null,
+        "late_drop_rate": null,
+        "fatigue_index": null
+      }
+    },
+    "manual": {
+      "status": 201,
+      "body": {
+        "id": "10000000-0000-4000-8000-000000000004",
+        "client_run_id": "20000000-0000-4000-8000-000000000004",
+        "created_at": "2026-08-14T12:00:00Z",
+        "is_analyzable": false,
+        "analysis_limitation": "MANUAL_RUN",
+        "rhythm_score": null,
+        "late_drop_rate": null,
+        "fatigue_index": null
+      }
+    }
+  },
+  "reports": {
+    "normal": {
+      "status": 201,
+      "body": {
+        "id": "30000000-0000-4000-8000-000000000001",
+        "run_id": "10000000-0000-4000-8000-000000000001",
+        "verdict": "초반 과속 뒤에도 조정한 리듬으로 완주한 러닝이에요",
+        "evidence": ["안정 구간 72%", "후반 리듬 하락 11%", "목표 하향 1회"],
+        "hypothesis": "초반보다 빠른 리듬으로 시작한 영향일 수 있어요",
+        "prescription": "다음 러닝에서는 시작 5분 동안 오늘의 리듬을 편하게 유지해 보세요",
+        "next_goal_text": "다음 목표: 20분 완주, 리듬 157",
+        "next_target_min": 153,
+        "next_target_max": 161,
+        "recovery_note": "다음 러닝 전까지 하루 정도 간격을 두어도 좋아요",
+        "limitation": null,
+        "metrics": {
+          "rhythm_score": 0.72,
+          "late_drop_rate": 0.11,
+          "fatigue_index": 0.34,
+          "in_range_sec": 886
+        },
+        "is_fallback": false,
+        "model": "mock-model",
+        "created_at": "2026-08-14T09:21:05Z"
+      }
+    },
+    "fallback": {
+      "status": 200,
+      "body": {
+        "id": "30000000-0000-4000-8000-000000000002",
+        "run_id": "10000000-0000-4000-8000-000000000001",
+        "verdict": "조정한 리듬으로 러닝을 마쳤어요",
+        "evidence": ["안정 구간 72%", "목표 하향 1회"],
+        "hypothesis": null,
+        "prescription": null,
+        "next_goal_text": "다음 목표: 20분 완주, 리듬 152",
+        "next_target_min": 148,
+        "next_target_max": 156,
+        "recovery_note": null,
+        "limitation": null,
+        "metrics": {
+          "rhythm_score": 0.72,
+          "late_drop_rate": 0.11,
+          "fatigue_index": 0.34,
+          "in_range_sec": 886
+        },
+        "is_fallback": true,
+        "model": null,
+        "created_at": "2026-08-14T09:21:13Z"
+      }
+    },
+    "insufficient_data": {
+      "status": 200,
+      "body": {
+        "id": "30000000-0000-4000-8000-000000000003",
+        "run_id": "10000000-0000-4000-8000-000000000003",
+        "verdict": "오늘의 러닝을 기록했어요",
+        "evidence": ["활동 시간이 3분 미만이에요"],
+        "hypothesis": null,
+        "prescription": null,
+        "next_goal_text": "다음 목표: 10분 동안 편하게 달리기",
+        "next_target_min": 153,
+        "next_target_max": 161,
+        "recovery_note": null,
+        "limitation": "활동 시간이 짧아 리듬 지표를 계산하지 않았어요",
+        "metrics": {
+          "rhythm_score": null,
+          "late_drop_rate": null,
+          "fatigue_index": null,
+          "in_range_sec": null
+        },
+        "is_fallback": true,
+        "model": null,
+        "created_at": "2026-08-14T11:02:01Z"
+      }
+    }
+  },
+  "plans": {
+    "list": {
+      "status": 200,
+      "body": {
+        "items": [
+          {
+            "id": "40000000-0000-4000-8000-000000000001",
+            "planned_date": "2026-08-14",
+            "goal_type": "TIME",
+            "goal_value": 1200,
+            "memo": "저녁 러닝",
+            "status": "DONE",
+            "run_id": "10000000-0000-4000-8000-000000000001"
+          }
+        ]
+      }
+    },
+    "created": {
+      "status": 201,
+      "body": {
+        "id": "40000000-0000-4000-8000-000000000002",
+        "planned_date": "2026-08-16",
+        "goal_type": "TIME",
+        "goal_value": 1200,
+        "memo": "아침 러닝",
+        "status": "PLANNED",
+        "run_id": null
+      }
+    }
+  },
+  "calendar": {
+    "month": {
+      "status": 200,
+      "body": {
+        "days": [
+          {
+            "date": "2026-08-11",
+            "plan": null,
+            "runs": [
+              { "id": "10000000-0000-4000-8000-000000000002", "source": "MANUAL", "duration_sec": 900, "completed": true }
+            ]
+          },
+          {
+            "date": "2026-08-14",
+            "plan": {
+              "id": "40000000-0000-4000-8000-000000000001",
+              "status": "DONE",
+              "goal_type": "TIME",
+              "goal_value": 1200
+            },
+            "runs": [
+              { "id": "10000000-0000-4000-8000-000000000001", "source": "APP", "duration_sec": 1230, "completed": true }
+            ]
+          },
+          {
+            "date": "2026-08-16",
+            "plan": {
+              "id": "40000000-0000-4000-8000-000000000002",
+              "status": "PLANNED",
+              "goal_type": "TIME",
+              "goal_value": 1200
+            },
+            "runs": []
+          }
+        ]
+      }
+    }
+  },
+  "stats": {
+    "with_history": {
+      "status": 200,
+      "body": {
+        "total_run_days": 10,
+        "dalli_days": 5,
+        "this_month_days": 8,
+        "this_week_count": 1,
+        "next_milestone": 20,
+        "recent_run": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "date": "2026-08-14",
+          "duration_sec": 1230,
+          "completed": true
+        }
+      }
+    },
+    "empty": {
+      "status": 200,
+      "body": {
+        "total_run_days": 0,
+        "dalli_days": 0,
+        "this_month_days": 0,
+        "this_week_count": 0,
+        "next_milestone": 10,
+        "recent_run": null
+      }
+    }
+  },
+  "errors": {
+    "unauthorized": {
+      "status": 401,
+      "body": { "detail": { "code": "UNAUTHORIZED", "message": "인증이 필요합니다" } }
+    },
+    "not_found": {
+      "status": 404,
+      "body": { "detail": { "code": "NOT_FOUND", "message": "러닝을 찾을 수 없습니다" } }
+    },
+    "conflict": {
+      "status": 409,
+      "body": { "detail": { "code": "CONFLICT", "message": "해당 날짜에 이미 계획이 있습니다" } }
+    },
+    "validation": {
+      "status": 422,
+      "body": { "detail": { "code": "VALIDATION_ERROR", "message": "goal_value는 1 이상이어야 합니다" } }
+    }
+  }
+}

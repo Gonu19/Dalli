@@ -9,21 +9,22 @@ erDiagram
     users ||--o{ runs : "runs"
     users ||--o{ plans : "plans"
     runs  ||--o| reports : "reports"
-    plans ||--o| runs : "plan to run"
+    plans ||--o| runs : "one plan to one run"
 
     users {
         uuid id PK
         text device_uuid UK
+        text running_purpose
         smallint baseline_cadence
         smallint height_cm
-        smallint weight_kg
-        smallint age
+        numeric weight_kg
+        smallint birth_year
         text gender
     }
     runs {
         uuid id PK
         uuid user_id FK
-        text client_run_id UK
+        text client_run_id
         text source
         uuid plan_id FK
         jsonb samples
@@ -51,6 +52,7 @@ erDiagram
 CREATE TABLE users (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     device_uuid         TEXT NOT NULL UNIQUE,
+    running_purpose     TEXT CHECK (running_purpose IN ('COMPLETE','HABIT','WEIGHT','FITNESS','PERFORMANCE')),
     experience_level    SMALLINT,        -- 0: Beginner, 1: Occasional, 2: Regular
     max_continuous_min  SMALLINT,
     weekly_goal_count   SMALLINT,
@@ -70,9 +72,9 @@ CREATE TABLE users (
 CREATE TABLE runs (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    client_run_id       TEXT NOT NULL UNIQUE,          -- Idempotency key
+    client_run_id       TEXT NOT NULL,                 -- Per-user idempotency key
     source              TEXT NOT NULL CHECK (source IN ('APP','MANUAL')),
-    plan_id             UUID REFERENCES plans(id) ON DELETE SET NULL,
+    plan_id             UUID,                                -- FK는 plans 생성 후 추가
 
     started_at          TIMESTAMPTZ NOT NULL,
     ended_at            TIMESTAMPTZ,
@@ -107,6 +109,8 @@ CREATE TABLE runs (
 );
 
 CREATE INDEX idx_runs_user_started ON runs (user_id, started_at DESC);
+CREATE UNIQUE INDEX uq_runs_user_client_run ON runs (user_id, client_run_id);
+CREATE UNIQUE INDEX uq_runs_plan ON runs (plan_id) WHERE plan_id IS NOT NULL;
 ```
 
 ### `reports`
@@ -116,12 +120,12 @@ CREATE TABLE reports (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id          UUID NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
     verdict         TEXT NOT NULL,                   -- 한 줄 판정 (관찰)
-    evidence        JSONB,                           -- 근거 수치 1~3개, string[]
+    evidence        JSONB NOT NULL,                  -- 근거 수치 1~3개, string[]
     hypothesis      TEXT,                            -- 가능한 원인 (가설)
     prescription    TEXT,
-    next_goal_text  TEXT,
-    next_target_min SMALLINT,
-    next_target_max SMALLINT,
+    next_goal_text  TEXT NOT NULL,
+    next_target_min SMALLINT NOT NULL,
+    next_target_max SMALLINT NOT NULL,
     recovery_note   TEXT,                            -- 비의료성 회복 안내
     limitation      TEXT,                            -- 데이터 누락·품질 고지. 없으면 NULL
     is_fallback     BOOLEAN NOT NULL DEFAULT false,
@@ -152,6 +156,11 @@ CREATE TABLE plans (
 );
 
 CREATE INDEX idx_plans_user_date ON plans (user_id, planned_date);
+CREATE UNIQUE INDEX uq_plans_user_date ON plans (user_id, planned_date);
+
+ALTER TABLE runs
+    ADD CONSTRAINT fk_runs_plan
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL;
 ```
 
 ## 3. JSONB Structures
