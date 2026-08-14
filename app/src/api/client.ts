@@ -52,6 +52,107 @@ export type UserProfilePatch = {
   gender?: 'M' | 'F' | 'O';
 };
 
+export type RunUpload = {
+  clientRunId: string;
+  source: 'APP';
+  planId: string | null;
+  startedAt: string;
+  endedAt: string;
+  goalType: 'TIME' | 'DISTANCE';
+  goalValue: number;
+  condition: 1 | 3 | 5;
+  targetCadenceMin: number;
+  targetCadenceMax: number;
+  finalTargetMin: number;
+  finalTargetMax: number;
+  durationSec: number;
+  distanceM: number | null;
+  avgCadence: number | null;
+  avgPaceSecPerKm: number | null;
+  completed: boolean;
+  interventionCount: number;
+  downshiftCount: number;
+  samples: { t: number; c: number; p?: number | null; d?: number | null }[];
+  events: { t: number; type: string; payload: object }[];
+};
+
+export type RunCreated = {
+  id: string;
+  clientRunId: string;
+  isAnalyzable: boolean;
+  analysisLimitation: string | null;
+  rhythmScore: number | null;
+  lateDropRate: number | null;
+  fatigueIndex: number | null;
+};
+
+export type RunListItem = {
+  id: string;
+  startedAt: string;
+  durationSec: number;
+  distanceM: number | null;
+  avgCadence: number | null;
+  completed: boolean;
+  source: 'APP' | 'MANUAL';
+  rhythmScore: number | null;
+  hasReport: boolean;
+};
+
+export type RunReport = {
+  id: string;
+  runId: string;
+  verdict: string;
+  evidence: string[];
+  hypothesis: string | null;
+  prescription: string | null;
+  nextGoalText: string;
+  nextTargetMin: number;
+  nextTargetMax: number;
+  recoveryNote: string | null;
+  limitation: string | null;
+  metrics: {
+    rhythmScore: number | null;
+    lateDropRate: number | null;
+    fatigueIndex: number | null;
+    inRangeSec: number | null;
+  };
+  isFallback: boolean;
+};
+
+export type CalendarDay = {
+  date: string;
+  plan: null | {
+    id: string;
+    status: 'PLANNED' | 'DONE' | 'SKIPPED';
+    goalType: 'TIME' | 'DISTANCE';
+    goalValue: number;
+  };
+  runs: {
+    id: string;
+    source: 'APP' | 'MANUAL';
+    durationSec: number;
+    completed: boolean;
+  }[];
+};
+
+export type Stats = {
+  totalRunDays: number;
+  dalliDays: number;
+  thisMonthDays: number;
+  thisWeekCount: number;
+  nextMilestone: number;
+};
+
+export type Plan = {
+  id: string;
+  plannedDate: string;
+  goalType: 'TIME' | 'DISTANCE';
+  goalValue: number;
+  memo: string | null;
+  status: 'PLANNED' | 'DONE' | 'SKIPPED';
+  runId: string | null;
+};
+
 type UserProfileResponse = {
   id: string;
   onboarded: boolean;
@@ -92,6 +193,7 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
     );
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -149,4 +251,242 @@ export async function patchUserProfile(token: string, profile: UserProfilePatch)
     }),
   }, token);
   return mapUserProfile(response);
+}
+
+export async function createRun(token: string, run: RunUpload): Promise<RunCreated> {
+  const response = await request<{
+    id: string;
+    client_run_id: string;
+    is_analyzable: boolean;
+    analysis_limitation: string | null;
+    rhythm_score: number | null;
+    late_drop_rate: number | null;
+    fatigue_index: number | null;
+  }>('/runs', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_run_id: run.clientRunId,
+      source: run.source,
+      plan_id: run.planId,
+      started_at: run.startedAt,
+      ended_at: run.endedAt,
+      goal_type: run.goalType,
+      goal_value: run.goalValue,
+      condition: run.condition,
+      target_cadence_min: run.targetCadenceMin,
+      target_cadence_max: run.targetCadenceMax,
+      final_target_min: run.finalTargetMin,
+      final_target_max: run.finalTargetMax,
+      duration_sec: run.durationSec,
+      distance_m: run.distanceM,
+      avg_cadence: run.avgCadence,
+      avg_pace_sec_per_km: run.avgPaceSecPerKm,
+      completed: run.completed,
+      intervention_count: run.interventionCount,
+      downshift_count: run.downshiftCount,
+      memo: null,
+      samples: run.samples,
+      events: run.events,
+    }),
+  }, token);
+
+  return {
+    id: response.id,
+    clientRunId: response.client_run_id,
+    isAnalyzable: response.is_analyzable,
+    analysisLimitation: response.analysis_limitation,
+    rhythmScore: response.rhythm_score,
+    lateDropRate: response.late_drop_rate,
+    fatigueIndex: response.fatigue_index,
+  };
+}
+
+export async function getRuns(token: string): Promise<RunListItem[]> {
+  const response = await request<{ items: {
+    id: string;
+    started_at: string;
+    duration_sec: number;
+    distance_m: number | null;
+    avg_cadence: number | null;
+    completed: boolean;
+    source: 'APP' | 'MANUAL';
+    rhythm_score: number | null;
+    has_report: boolean;
+  }[] }>('/runs?limit=20', {}, token);
+  return response.items.map((item) => ({
+    id: item.id,
+    startedAt: item.started_at,
+    durationSec: item.duration_sec,
+    distanceM: item.distance_m,
+    avgCadence: item.avg_cadence,
+    completed: item.completed,
+    source: item.source,
+    rhythmScore: item.rhythm_score,
+    hasReport: item.has_report,
+  }));
+}
+
+type RunReportResponse = {
+  id: string;
+  run_id: string;
+  verdict: string;
+  evidence: string[];
+  hypothesis: string | null;
+  prescription: string | null;
+  next_goal_text: string;
+  next_target_min: number;
+  next_target_max: number;
+  recovery_note: string | null;
+  limitation: string | null;
+  metrics: {
+    rhythm_score: number | null;
+    late_drop_rate: number | null;
+    fatigue_index: number | null;
+    in_range_sec: number | null;
+  };
+  is_fallback: boolean;
+};
+
+function mapRunReport(response: RunReportResponse): RunReport {
+  return {
+    id: response.id,
+    runId: response.run_id,
+    verdict: response.verdict,
+    evidence: response.evidence,
+    hypothesis: response.hypothesis,
+    prescription: response.prescription,
+    nextGoalText: response.next_goal_text,
+    nextTargetMin: response.next_target_min,
+    nextTargetMax: response.next_target_max,
+    recoveryNote: response.recovery_note,
+    limitation: response.limitation,
+    metrics: {
+      rhythmScore: response.metrics.rhythm_score,
+      lateDropRate: response.metrics.late_drop_rate,
+      fatigueIndex: response.metrics.fatigue_index,
+      inRangeSec: response.metrics.in_range_sec,
+    },
+    isFallback: response.is_fallback,
+  };
+}
+
+export async function createRunReport(token: string, runId: string): Promise<RunReport> {
+  return mapRunReport(await request<RunReportResponse>(`/runs/${runId}/report`, { method: 'POST' }, token));
+}
+
+export async function getRunReport(token: string, runId: string): Promise<RunReport> {
+  return mapRunReport(await request<RunReportResponse>(`/runs/${runId}/report`, {}, token));
+}
+
+export async function deleteRun(token: string, runId: string): Promise<void> {
+  await request<void>(`/runs/${runId}`, { method: 'DELETE' }, token);
+}
+
+export async function getCalendar(token: string, year: number, month: number): Promise<CalendarDay[]> {
+  const response = await request<{ days: {
+    date: string;
+    plan: null | { id: string; status: 'PLANNED' | 'DONE' | 'SKIPPED'; goal_type: 'TIME' | 'DISTANCE'; goal_value: number };
+    runs: { id: string; source: 'APP' | 'MANUAL'; duration_sec: number; completed: boolean }[];
+  }[] }>(`/calendar?year=${year}&month=${month}`, {}, token);
+  return response.days.map((day) => ({
+    date: day.date,
+    plan: day.plan ? {
+      id: day.plan.id,
+      status: day.plan.status,
+      goalType: day.plan.goal_type,
+      goalValue: day.plan.goal_value,
+    } : null,
+    runs: day.runs.map((run) => ({
+      id: run.id,
+      source: run.source,
+      durationSec: run.duration_sec,
+      completed: run.completed,
+    })),
+  }));
+}
+
+export async function getStats(token: string): Promise<Stats> {
+  const response = await request<{
+    total_run_days: number;
+    dalli_days: number;
+    this_month_days: number;
+    this_week_count: number;
+    next_milestone: number;
+  }>('/stats', {}, token);
+  return {
+    totalRunDays: response.total_run_days,
+    dalliDays: response.dalli_days,
+    thisMonthDays: response.this_month_days,
+    thisWeekCount: response.this_week_count,
+    nextMilestone: response.next_milestone,
+  };
+}
+
+export async function createPlan(
+  token: string,
+  input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string },
+): Promise<Plan> {
+  const response = await request<{
+    id: string;
+    planned_date: string;
+    goal_type: 'TIME' | 'DISTANCE';
+    goal_value: number;
+    memo: string | null;
+    status: 'PLANNED' | 'DONE' | 'SKIPPED';
+    run_id: string | null;
+  }>('/plans', {
+    method: 'POST',
+    body: JSON.stringify({
+      planned_date: input.plannedDate,
+      goal_type: input.goalType,
+      goal_value: input.goalValue,
+      memo: input.memo?.trim() || null,
+    }),
+  }, token);
+  return {
+    id: response.id,
+    plannedDate: response.planned_date,
+    goalType: response.goal_type,
+    goalValue: response.goal_value,
+    memo: response.memo,
+    status: response.status,
+    runId: response.run_id,
+  };
+}
+
+export async function createManualRun(
+  token: string,
+  input: { clientRunId: string; startedAt: string; durationSec: number; distanceM?: number; memo?: string },
+): Promise<RunCreated> {
+  const response = await request<{
+    id: string;
+    client_run_id: string;
+    is_analyzable: boolean;
+    analysis_limitation: string | null;
+    rhythm_score: number | null;
+    late_drop_rate: number | null;
+    fatigue_index: number | null;
+  }>('/runs', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_run_id: input.clientRunId,
+      source: 'MANUAL',
+      plan_id: null,
+      started_at: input.startedAt,
+      duration_sec: input.durationSec,
+      distance_m: input.distanceM ?? null,
+      condition: 3,
+      completed: true,
+      memo: input.memo?.trim() || null,
+    }),
+  }, token);
+  return {
+    id: response.id,
+    clientRunId: response.client_run_id,
+    isAnalyzable: response.is_analyzable,
+    analysisLimitation: response.analysis_limitation,
+    rhythmScore: response.rhythm_score,
+    lateDropRate: response.late_drop_rate,
+    fatigueIndex: response.fatigue_index,
+  };
 }

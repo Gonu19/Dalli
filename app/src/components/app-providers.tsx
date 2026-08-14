@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from './auth-provider';
 import { OnboardingProvider } from './onboarding-provider';
+import { PreferencesProvider } from './preferences-provider';
+import { RunResultProvider } from './run-result-provider';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -20,7 +22,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <OnboardingProvider>{children}</OnboardingProvider>
+            <OnboardingProvider>
+              <PreferencesProvider>
+                <RunResultProvider>{children}</RunResultProvider>
+              </PreferencesProvider>
+            </OnboardingProvider>
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
