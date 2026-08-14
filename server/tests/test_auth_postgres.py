@@ -18,6 +18,9 @@ from app.models import User
 from app.services.auth import JWT_ALGORITHM
 
 
+POSTGRES_AUTH_SECRET = "postgres-auth-test-secret-with-32-bytes"
+
+
 @pytest.fixture(scope="module")
 def postgres_auth_environment():
     database_url = os.getenv("TEST_DATABASE_URL")
@@ -30,7 +33,7 @@ def postgres_auth_environment():
     previous_url = os.environ.get("DATABASE_URL")
     previous_secret = os.environ.get("JWT_SECRET")
     os.environ["DATABASE_URL"] = database_url
-    os.environ["JWT_SECRET"] = "postgres-auth-test-secret"
+    os.environ["JWT_SECRET"] = POSTGRES_AUTH_SECRET
     os.environ.setdefault("OPENAI_API_KEY", "")
     clear_settings_cache()
     clear_database_caches()
@@ -72,7 +75,7 @@ def test_concurrent_device_auth_creates_exactly_one_user(
     subjects = {
         jwt.decode(
             body["access_token"],
-            "postgres-auth-test-secret",
+            POSTGRES_AUTH_SECRET,
             algorithms=[JWT_ALGORITHM],
         )["sub"]
         for _, body in results
@@ -84,3 +87,34 @@ def test_concurrent_device_auth_creates_exactly_one_user(
             select(func.count()).select_from(User).where(User.device_uuid == device_uuid)
         )
     assert count == 1
+
+
+@pytest.mark.postgres
+def test_device_auth_reuses_trimmed_uuid_and_distinguishes_other_devices(
+    postgres_auth_environment,
+) -> None:
+    device_uuid = f"trimmed-{uuid4()}"
+    other_uuid = f"other-{uuid4()}"
+    with TestClient(create_app()) as client:
+        first = client.post("/auth/device", json={"device_uuid": f"  {device_uuid}  "})
+        second = client.post("/auth/device", json={"device_uuid": device_uuid})
+        other = client.post("/auth/device", json={"device_uuid": other_uuid})
+
+    subjects = [
+        jwt.decode(
+            response.json()["access_token"],
+            POSTGRES_AUTH_SECRET,
+            algorithms=[JWT_ALGORITHM],
+        )["sub"]
+        for response in (first, second, other)
+    ]
+    assert [first.status_code, second.status_code, other.status_code] == [200, 200, 200]
+    assert first.json()["is_new_user"] is True
+    assert second.json()["is_new_user"] is False
+    assert other.json()["is_new_user"] is True
+    assert subjects[0] == subjects[1] != subjects[2]
+    with Session(postgres_auth_environment) as session:
+        users = session.scalars(
+            select(User).where(User.device_uuid.in_([device_uuid, other_uuid]))
+        ).all()
+    assert sorted(user.device_uuid for user in users) == sorted([device_uuid, other_uuid])

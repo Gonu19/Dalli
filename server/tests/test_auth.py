@@ -148,6 +148,28 @@ def test_new_and_existing_device_authentication_reuse_user() -> None:
     assert claims["sub"] == str(existing_user.id)
     assert claims["exp"] - claims["iat"] == int(ACCESS_TOKEN_TTL.total_seconds())
     assert jwt.get_unverified_header(first.json()["access_token"])["alg"] == "HS256"
+    second_claims = jwt.decode(
+        second.json()["access_token"], TEST_SECRET, algorithms=[JWT_ALGORITHM]
+    )
+    assert second_claims["sub"] == claims["sub"]
+
+
+def test_different_device_uuids_create_different_users_without_case_normalization() -> None:
+    db = FakeSession()
+    client = client_with_session(db)
+
+    upper = client.post("/auth/device", json={"device_uuid": "DEVICE-A"})
+    lower = client.post("/auth/device", json={"device_uuid": "device-a"})
+
+    upper_sub = jwt.decode(
+        upper.json()["access_token"], TEST_SECRET, algorithms=[JWT_ALGORITHM]
+    )["sub"]
+    lower_sub = jwt.decode(
+        lower.json()["access_token"], TEST_SECRET, algorithms=[JWT_ALGORITHM]
+    )["sub"]
+    assert upper.status_code == lower.status_code == 200
+    assert upper_sub != lower_sub
+    assert len(db.users) == 2
 
 
 def test_device_uuid_unique_race_rolls_back_and_reuses_winner() -> None:
