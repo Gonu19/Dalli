@@ -113,6 +113,32 @@ def test_app_create_and_idempotent_repeat_statuses():
     assert first.json()["rhythm_score"] is None
 
 
+@pytest.mark.parametrize(
+    ("changes", "limitation"),
+    [
+        ({"duration_sec": 179}, "TOO_SHORT"),
+        ({"samples": [{"t": 0, "c": 157, "p": None, "d": None}]}, "INSUFFICIENT_SENSOR_DATA"),
+    ],
+)
+def test_unanalyzable_app_run_is_saved_and_idempotent(changes, limitation):
+    current_user = user()
+    first_db = FakeSession([None])
+    payload = app_payload(**changes)
+    first = client_for(current_user, first_db).post("/runs", json=payload)
+    stored = first_db.added[0]
+    stored.rhythm_score = Decimal("0.999")
+    repeated = client_for(current_user, FakeSession([stored])).post(
+        "/runs", json=payload
+    )
+
+    assert first.status_code == 201
+    assert repeated.status_code == 200
+    assert first.json()["id"] == repeated.json()["id"]
+    assert first.json()["is_analyzable"] is False
+    assert repeated.json()["analysis_limitation"] == limitation
+    assert repeated.json()["rhythm_score"] is None
+
+
 def test_manual_fields_are_null_and_analysis_is_limited():
     db = FakeSession([None])
     response = client_for(user(), db).post("/runs", json=manual_payload())

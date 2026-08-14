@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from math import floor
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -9,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.exceptions import ApplicationError
 from app.models import Plan, Run, User
 from app.schemas.runs import AppRunCreate, ManualRunCreate, RunCreate, RunCreateResponse
+from app.services.run_quality import assess_run_quality
 
 
 @dataclass(frozen=True)
@@ -17,51 +17,17 @@ class RunSaveResult:
     created: bool
 
 
-def _analysis(run: Run) -> tuple[bool, str | None]:
-    if run.source == "MANUAL":
-        return False, "MANUAL_RUN"
-
-    duration = run.duration_sec
-    pauses: list[tuple[float, float]] = []
-    pause_start: float | None = None
-    for event in sorted(run.events or [], key=lambda item: item["t"]):
-        t = min(max(float(event["t"]), 0.0), float(duration))
-        if event["type"] == "PAUSE" and pause_start is None:
-            pause_start = t
-        elif event["type"] == "RESUME" and pause_start is not None:
-            pauses.append((pause_start, max(pause_start, t)))
-            pause_start = None
-    if pause_start is not None:
-        pauses.append((pause_start, float(duration)))
-
-    active_duration = max(0.0, duration - sum(end - start for start, end in pauses))
-    if active_duration < 180:
-        return False, "TOO_SHORT"
-
-    valid_times = {
-        float(sample["t"])
-        for sample in run.samples or []
-        if 0 <= float(sample["t"]) <= duration
-        and float(sample["c"]) >= 0
-        and not any(start <= float(sample["t"]) < end for start, end in pauses)
-    }
-    expected = max(1, floor(active_duration / 5))
-    if min(1.0, len(valid_times) / expected) < 0.70:
-        return False, "INSUFFICIENT_SENSOR_DATA"
-    return True, None
-
-
 def run_response(run: Run) -> RunCreateResponse:
-    is_analyzable, limitation = _analysis(run)
+    quality = assess_run_quality(run)
     return RunCreateResponse(
         id=run.id,
         client_run_id=run.client_run_id,
         created_at=run.created_at,
-        is_analyzable=is_analyzable,
-        analysis_limitation=limitation,
-        rhythm_score=run.rhythm_score,
-        late_drop_rate=run.late_drop_rate,
-        fatigue_index=run.fatigue_index,
+        is_analyzable=quality.is_analyzable,
+        analysis_limitation=quality.analysis_limitation,
+        rhythm_score=run.rhythm_score if quality.is_analyzable else None,
+        late_drop_rate=run.late_drop_rate if quality.is_analyzable else None,
+        fatigue_index=run.fatigue_index if quality.is_analyzable else None,
     )
 
 
