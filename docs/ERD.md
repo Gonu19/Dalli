@@ -56,7 +56,7 @@ CREATE TABLE users (
     weekly_goal_count   SMALLINT,
     baseline_cadence    SMALLINT,        -- Onboarding baseline (spm)
     height_cm           SMALLINT,
-	  weight_kg           NUMERIC(4,1),
+    weight_kg           NUMERIC(4,1),
     birth_year          SMALLINT,
     gender              TEXT CHECK (gender IN ('M', 'F', 'O')),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -114,17 +114,26 @@ CREATE INDEX idx_runs_user_started ON runs (user_id, started_at DESC);
 CREATE TABLE reports (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id          UUID NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
-    verdict         TEXT NOT NULL,
-    hypothesis      TEXT,
+    verdict         TEXT NOT NULL,                   -- 한 줄 판정 (관찰)
+    evidence        JSONB,                           -- 근거 수치 1~3개, string[]
+    hypothesis      TEXT,                            -- 가능한 원인 (가설)
     prescription    TEXT,
     next_goal_text  TEXT,
     next_target_min SMALLINT,
     next_target_max SMALLINT,
+    recovery_note   TEXT,                            -- 비의료성 회복 안내
+    limitation      TEXT,                            -- 데이터 누락·품질 고지. 없으면 NULL
     is_fallback     BOOLEAN NOT NULL DEFAULT false,
     model           TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
+
+AI 출력 6요소(판정·근거·가설·다음 목표·회복 안내·신뢰도)는 `CONTRACT.md`의
+`POST /runs/{id}/report` 절이 단일 진실이다. 여기에는 컬럼만 둔다.
+
+`evidence`는 짧은 문장 배열이라 정규화하지 않고 JSONB로 둔다.
+폴백일 때는 `hypothesis`·`recovery_note`를 `NULL`로 남긴다 — 룰베이스로 가설을 지어내지 않는다.
 
 ### `plans`
 
@@ -166,14 +175,20 @@ Time-series data (5-second intervals).
 
 ```json
 [
-  { "t": 0, "type": "RUN_START", "payload": { "min": 154, "max": 160 } },
+  { "t": 0, "type": "RUN_START", "payload": { "min": 153, "max": 161 } },
   { "t": 312, "type": "TOO_FAST", "payload": { "cadence": 171 } },
-  { "t": 402, "type": "TARGET_ADJUSTED", "payload": { "min": 148, "max": 154, "reason": "no_recovery" } },
+  { "t": 402, "type": "TARGET_ADJUSTED", "payload": { "min": 148, "max": 156, "reason": "no_recovery" } },
+  { "t": 900, "type": "RECOVERY_MODE_ON", "payload": { "reason": "downshift_exhausted" } },
   { "t": 1230, "type": "RUN_END", "payload": { "completed": true } }
 ]
 ```
 
-- `type` Enum: `RUN_START`, `TOO_FAST`, `TOO_SLOW`, `STABLE`, `TARGET_ADJUSTED`, `PAUSE`, `RESUME`, `RUN_END`
+- `type` Enum: `RUN_START`, `TOO_FAST`, `TOO_SLOW`, `TARGET_ADJUSTED`, `RECOVERY_MODE_ON`, `PAUSE`, `RESUME`, `RUN_END`
+- `TARGET_ADJUSTED.reason`: `no_recovery` | `severe` | `walking`
+- `RECOVERY_MODE_ON.reason`: `downshift_exhausted` | `floor_reached`
+
+> `STABLE`은 제거됨. Rhythm Score가 같은 정보를 담고, 러닝 중 긍정 피드백은 Silent-by-default와 충돌.
+> 판정 룰과 상수는 `ENGINE.md`가 단일 진실.
 
 ## 4. SQLAlchemy Model Examples
 
@@ -194,3 +209,38 @@ class Sample(BaseModel):
     p: int | None = None
     d: float
 ```
+
+## 5. `source`별 NULL 규칙
+
+| 컬럼 | `APP` | `MANUAL` |
+| --- | --- | --- |
+| `duration_sec` | O | O |
+| `started_at` | O | O (날짜) |
+| `distance_m` | O | 선택 |
+| `condition` | O | 선택 |
+| `memo` | 선택 | 선택 |
+| `goal_type` / `goal_value` | O | **NULL** |
+| `completed` | 판정 결과 | **`true` 고정** |
+| `target_cadence_*` / `final_target_*` | O | **NULL** |
+| `avg_cadence` / `avg_pace_sec_per_km` | O | **NULL** |
+| `rhythm_score` / `late_drop_rate` / `fatigue_index` | O | **NULL** |
+| `intervention_count` / `downshift_count` | O | **NULL** |
+| `samples` / `events` | O | **NULL** |
+| AI 리포트 생성 | O | **안 함** |
+
+**수기 기록에 `goal_type`/`goal_value`는 두지 않는다.** 이미 뛴 것을 사후에 남기는 기능이라
+"목표"라는 개념이 성립하지 않는다. 따라서 완주 판정 기준도 없으므로 `completed`는 `true` 고정이며
+이 값으로 아무 판단도 하지 않는다. 수기 기록 입력 화면에서도 목표를 묻지 않는다.
+
+계획(`plans`)을 수기로 완료 처리하는 경우에도 목표를 복사하지 않는다. `plan_id`로 참조한다.
+
+기획서의 핵심 구분: **수기 기록은 누적 활동일에는 반영되지만 `달리 데이`·AI 분석·목표 달성에는 반영하지 않는다.**
+이 규칙은 서비스 레이어 한 곳(`is_analyzable(run)`)에 모으고 여기저기 흩지 않는다.
+
+## 6. 서버 연산 지표
+
+`rhythm_score` / `late_drop_rate` / `fatigue_index`의 **계산 정의는 `ENGINE.md` §12가 단일 진실**이다.
+여기에는 컬럼 타입만 둔다. 두 곳에 적으면 반드시 어긋난다.
+
+요약만: RS 분모는 `전체 − pause`(워밍업·정지 포함), LDR은 워밍업·정지 제외 후 3등분 중앙값,
+FI는 각 항과 최종값 모두 `clamp(0,1)`, `condition` 미입력 시 기본값 3.

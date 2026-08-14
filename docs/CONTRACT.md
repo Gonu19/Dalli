@@ -24,6 +24,7 @@
 | POST | `/runs` | 러닝 업로드 (멱등) |
 | GET | `/runs` | 목록 (페이지네이션) |
 | GET | `/runs/{run_id}` | 상세 (samples/events 포함) |
+| DELETE | `/runs/{run_id}` | 삭제 (hard delete, reports CASCADE) |
 | POST | `/runs/{run_id}/report` | AI 리포트 생성 |
 | GET | `/runs/{run_id}/report` | 리포트 조회 |
 | GET | `/plans` | 기간별 계획 |
@@ -89,7 +90,9 @@
 }
 ```
 
-`source: "MANUAL"` (수기 기록)은 `duration_sec`·`goal_*`만 필수. `samples`/`events`는 생략, 지표는 `null`.
+`source: "MANUAL"` (수기 기록)은 `started_at`·`duration_sec`만 필수.
+**`goal_type`/`goal_value`는 보내지 않는다** — 사후 기록에는 목표라는 개념이 없다 (`ERD.md` §5).
+`completed`는 `true` 고정, `samples`/`events`·`target_*`·지표는 전부 `null`. AI 리포트도 생성하지 않는다.
 
 ## GET /runs?limit=20&cursor=
 ```json
@@ -111,15 +114,40 @@ LLM 8초 타임아웃. 초과 시 룰베이스 폴백 문구로 **200 응답** (
 {
   "id": "uuid", "run_id": "uuid",
   "verdict": "초반 과속 없이 안정적으로 완주한 러닝이에요",
+  "evidence": [
+    "안정 구간 72% (886초)",
+    "후반 리듬 하락 11%",
+    "개입 2회, 목표 하향 없음"
+  ],
   "hypothesis": "후반 페이스가 낮아진 원인은 초반보다 빠른 리듬으로 시작한 영향일 수 있어요",
   "prescription": "다음 러닝에서는 시작 5분 동안 현재보다 낮은 리듬을 유지해 보세요",
-  "next_goal_text": "다음 목표: 18분 완주, 목표 케이던스 154~160spm",
-  "next_target_min": 154, "next_target_max": 160,
+  "next_goal_text": "다음 목표: 18분 완주, 리듬 157",
+  "next_target_min": 153, "next_target_max": 161,
+  "recovery_note": "오늘처럼 완주한 날은 다음 러닝까지 하루 정도 간격을 두면 리듬이 안정됩니다",
+  "limitation": null,
   "metrics": { "rhythm_score": 0.72, "late_drop_rate": 0.11,
                "fatigue_index": 0.34, "in_range_sec": 886 },
-  "is_fallback": false, "model": "claude-...", "created_at": "..."
+  "is_fallback": false, "model": "...", "created_at": "..."
 }
 ```
+
+### 출력 6요소 (PRD §20.2 — 구조로 강제)
+| 필드 | 내용 | 비고 |
+| --- | --- | --- |
+| `verdict` | 한 줄 판정 — 가장 중요한 **관찰** | 필수 |
+| `evidence` | 근거로 쓴 **핵심 수치 1~3개** | `string[]`, 1~3개 |
+| `hypothesis` | 가능한 원인 — **관찰과 구분된 가설** | nullable |
+| `next_goal_text` + `next_target_min/max` | 다음 목표 추천 | 필수 |
+| `recovery_note` | 일반적·**비의료성** 회복 안내 | nullable |
+| `limitation` | 데이터 누락·품질 저하 고지. 없으면 `null` | nullable |
+
+- **표현 원칙**: *"~때문이다"* 금지, *"~의 영향일 수 있어요"*로 가설임을 명시.
+  의료 진단·통증 원인·치료 처방은 생성하지 않는다. 사용자를 비난하거나 성과를 과장하지 않는다.
+- `limitation`은 GPS 미수신, 6분 미만 러닝, 센서 샘플 70% 미달 시 **반드시 채운다.**
+  수치가 부족하면 분석을 꾸며내지 않고 여기에 사유를 적는다.
+- 폴백(`is_fallback: true`)일 때는 `verdict` `evidence` `next_*`만 채우고
+  `hypothesis` `recovery_note`는 `null`로 둔다. 룰베이스로 가설을 지어내지 않는다.
+
 **다음 목표 추천 전용 API는 없습니다.** 이 응답에 포함.
 
 ## /plans
