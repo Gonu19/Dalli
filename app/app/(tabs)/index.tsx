@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useProfile, useStats } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
@@ -11,7 +11,8 @@ import { Screen } from '@/src/components/screen';
 import { StatePanel } from '@/src/components/state-panel';
 import { CONDITION_VALUE } from '@/src/engine/constants';
 import type { ConditionLevel } from '@/src/engine/types';
-import { useRunStore, type RunGoal } from '@/src/store/runStore';
+import { startTrackedRun } from '@/src/store/runController';
+import type { RunGoal } from '@/src/store/runStore';
 import { useSimulationStore } from '@/src/store/simulation';
 import { colors, radius, shadows, spacing, typography } from '@/src/theme/tokens';
 
@@ -26,7 +27,6 @@ export default function HomeScreen() {
   const { token } = useAuth();
   const profile = useProfile(token);
   const stats = useStats(token);
-  const startRun = useRunStore((state) => state.start);
   const startSimulation = useSimulationStore((state) => state.start);
   const [goalType, setGoalType] = useState<RunGoal['type']>('TIME');
   const [goalValue, setGoalValue] = useState(20 * 60);
@@ -51,11 +51,17 @@ export default function HomeScreen() {
   }
 
   const referenceCadence = profile.data.baselineCadence;
-  const begin = () => {
-    startRun({
+  const begin = async () => {
+    await startTrackedRun({
       referenceCadence,
       condition: CONDITION_VALUE[condition],
       goal: { type: goalType, value: goalValue },
+      onSensorUnavailable: () => {
+        Alert.alert(
+          '리듬을 측정하지 못했어요',
+          '러닝은 계속 기록할 수 있어요. 동작 및 피트니스 권한을 확인해 주세요.',
+        );
+      },
     });
     router.push('/run/active');
   };
@@ -115,7 +121,7 @@ export default function HomeScreen() {
         {!voiceEnabled && !metronomeEnabled ? <Text style={styles.hint}>필요한 순간에는 햅틱으로 한 번 알려드려요.</Text> : null}
       </Section>
 
-      <PrimaryButton onPress={begin}>러닝 시작</PrimaryButton>
+      <PrimaryButton onPress={() => void begin()}>러닝 시작</PrimaryButton>
       {__DEV__ ? <PrimaryButton variant="secondary" onPress={simulate}>시연 모드 · 10배속</PrimaryButton> : null}
 
       <View style={styles.summary}>
