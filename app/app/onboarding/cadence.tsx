@@ -15,31 +15,35 @@ const MAX_BASELINE = INITIAL_BASELINE + 5;
 
 export default function CadenceScreen() {
   const router = useRouter();
-  const { token, markOnboarded } = useAuth();
-  const { draft, updateDraft, persistLocalPurpose } = useOnboarding();
+  const { token, confirmOnboarded } = useAuth();
+  const { draft, updateDraft } = useOnboarding();
   const [cadence, setCadence] = useState(draft.baselineCadence);
   const completeOnboarding = useCompleteOnboarding(token);
 
   const finish = async () => {
-    if (draft.experienceLevel === undefined || draft.maxContinuousMin === undefined || draft.weeklyGoalCount === undefined) {
+    if (draft.purpose === undefined || draft.experienceLevel === undefined || draft.maxContinuousMin === undefined || draft.weeklyGoalCount === undefined) {
       router.replace('/onboarding');
       return;
     }
 
-    await completeOnboarding.mutateAsync({
-      experienceLevel: draft.experienceLevel,
-      maxContinuousMin: draft.maxContinuousMin,
-      weeklyGoalCount: draft.weeklyGoalCount,
-      baselineCadence: cadence,
-      heightCm: draft.heightCm,
-      weightKg: draft.weightKg,
-      birthYear: draft.birthYear,
-      gender: draft.gender,
-    });
-    updateDraft({ baselineCadence: cadence });
-    await persistLocalPurpose();
-    await markOnboarded();
-    router.replace('/');
+    try {
+      const profile = await completeOnboarding.mutateAsync({
+        runningPurpose: draft.purpose,
+        experienceLevel: draft.experienceLevel,
+        maxContinuousMin: draft.maxContinuousMin,
+        weeklyGoalCount: draft.weeklyGoalCount,
+        baselineCadence: cadence,
+        heightCm: draft.heightCm,
+        weightKg: draft.weightKg,
+        birthYear: draft.birthYear,
+        gender: draft.gender,
+      });
+      confirmOnboarded(profile.onboarded);
+      updateDraft({ baselineCadence: cadence });
+      router.replace('/');
+    } catch {
+      // Mutation state renders the recoverable error while preserving the draft.
+    }
   };
 
   return (

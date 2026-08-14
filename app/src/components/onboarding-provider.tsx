@@ -1,7 +1,8 @@
-import * as SecureStore from 'expo-secure-store';
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
 
-export type RunningPurpose = 'FINISH' | 'HABIT' | 'WEIGHT' | 'FITNESS' | 'RECORD';
+import type { RunningPurpose } from '@/src/api/client';
+
+export type { RunningPurpose } from '@/src/api/client';
 export type ExperienceLevel = 0 | 1 | 2;
 export type Gender = 'M' | 'F' | 'O';
 
@@ -20,10 +21,8 @@ export type OnboardingDraft = {
 type ContextValue = {
   draft: OnboardingDraft;
   updateDraft: (next: Partial<OnboardingDraft>) => void;
-  persistLocalPurpose: () => Promise<void>;
 };
 
-const PURPOSE_KEY = 'dalli.runningPurpose';
 const OnboardingContext = createContext<ContextValue | null>(null);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
@@ -33,9 +32,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     () => ({
       draft,
       updateDraft: (next) => setDraft((current) => ({ ...current, ...next })),
-      persistLocalPurpose: async () => {
-        if (draft.purpose) await SecureStore.setItemAsync(PURPOSE_KEY, draft.purpose);
-      },
     }),
     [draft],
   );

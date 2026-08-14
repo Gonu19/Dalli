@@ -8,11 +8,11 @@ import { Screen } from '@/src/components/screen';
 import { colors, spacing, typography } from '@/src/theme/tokens';
 
 const purposes: { value: RunningPurpose; label: string }[] = [
-  { value: 'FINISH', label: '멈추지 않고 완주하기' },
+  { value: 'COMPLETE', label: '멈추지 않고 완주하기' },
   { value: 'HABIT', label: '꾸준한 습관 만들기' },
   { value: 'WEIGHT', label: '체중 관리하기' },
   { value: 'FITNESS', label: '기초 체력 기르기' },
-  { value: 'RECORD', label: '나의 기록 개선하기' },
+  { value: 'PERFORMANCE', label: '나의 기록 개선하기' },
 ];
 
 const experiences: { value: ExperienceLevel; label: string }[] = [
