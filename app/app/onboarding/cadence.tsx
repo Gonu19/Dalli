@@ -7,18 +7,20 @@ import { useAuth } from '@/src/components/auth-provider';
 import { useOnboarding } from '@/src/components/onboarding-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
 import { Screen } from '@/src/components/screen';
+import { computeInitialTargetCadence } from '@/src/engine/target';
 import { colors, radius, spacing, typography } from '@/src/theme/tokens';
-
-const INITIAL_BASELINE = 157;
-const MIN_BASELINE = INITIAL_BASELINE - 5;
-const MAX_BASELINE = INITIAL_BASELINE + 5;
 
 export default function CadenceScreen() {
   const router = useRouter();
   const { token, confirmOnboarded } = useAuth();
   const { draft, updateDraft } = useOnboarding();
-  const [cadence, setCadence] = useState(draft.baselineCadence);
+  const initialCadence = draft.experienceLevel === undefined || draft.purpose === undefined
+    ? draft.baselineCadence
+    : computeInitialTargetCadence(draft.experienceLevel, draft.purpose);
+  const [cadence, setCadence] = useState(initialCadence);
   const completeOnboarding = useCompleteOnboarding(token);
+  const minCadence = initialCadence - 5;
+  const maxCadence = initialCadence + 5;
 
   const finish = async () => {
     if (draft.purpose === undefined || draft.experienceLevel === undefined || draft.maxContinuousMin === undefined || draft.weeklyGoalCount === undefined) {
@@ -61,12 +63,12 @@ export default function CadenceScreen() {
       <View style={styles.cadenceCard}>
         <Text style={styles.cardLabel}>나의 시작 리듬</Text>
         <View style={styles.adjustRow}>
-          <AdjustButton label="−" disabled={cadence <= MIN_BASELINE} onPress={() => setCadence((value) => value - 1)} />
+          <AdjustButton label="−" disabled={cadence <= minCadence} onPress={() => setCadence((value) => value - 1)} />
           <View style={styles.valueGroup}>
             <Text style={styles.value}>{cadence}</Text>
             <Text style={styles.unit}>spm</Text>
           </View>
-          <AdjustButton label="+" disabled={cadence >= MAX_BASELINE} onPress={() => setCadence((value) => value + 1)} />
+          <AdjustButton label="+" disabled={cadence >= maxCadence} onPress={() => setCadence((value) => value + 1)} />
         </View>
         <Text style={styles.hint}>지금은 ±5까지 조절할 수 있어요.</Text>
       </View>
