@@ -17,6 +17,8 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.exceptions import register_exception_handlers
+
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parents[2]
@@ -49,18 +51,21 @@ def create_mock_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    register_exception_handlers(application)
 
     profile = _body(fixtures, "users", "not_onboarded")
     runs_by_client_id: dict[str, dict[str, Any]] = {}
+    reports_by_run_id: dict[str, dict[str, Any]] = {}
 
     def require_auth(authorization: str | None) -> None:
-        if not authorization or not authorization.startswith("Bearer "):
+        scheme, _, token = (authorization or "").partition(" ")
+        if scheme != "Bearer" or not token.strip():
             error = _body(fixtures, "errors", "unauthorized")
             raise HTTPException(status_code=401, detail=error["detail"])
 
     @application.get("/health", tags=["system"])
     def health() -> dict[str, str]:
-        return {"status": "ok", "mode": "mock"}
+        return {"status": "ok"}
 
     @application.post("/auth/device", tags=["auth"])
     def authenticate_device(payload: dict[str, Any]) -> dict[str, Any]:
@@ -148,15 +153,22 @@ def create_mock_app() -> FastAPI:
         x_mock_scenario: str = Header(default="normal"),
     ) -> dict[str, Any]:
         require_auth(authorization)
+        if run_id in reports_by_run_id:
+            response.status_code = status.HTTP_200_OK
+            return deepcopy(reports_by_run_id[run_id])
+
         scenario = x_mock_scenario if x_mock_scenario in fixtures["reports"] else "normal"
         result = _body(fixtures, "reports", scenario)
         result["run_id"] = run_id
+        reports_by_run_id[run_id] = result
         response.status_code = fixtures["reports"][scenario]["status"]
-        return result
+        return deepcopy(result)
 
     @application.get("/runs/{run_id}/report", tags=["reports"])
     def get_report(run_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
         require_auth(authorization)
+        if run_id in reports_by_run_id:
+            return deepcopy(reports_by_run_id[run_id])
         result = _body(fixtures, "reports", "normal")
         result["run_id"] = run_id
         return result
