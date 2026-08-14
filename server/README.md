@@ -33,8 +33,8 @@ uvicorn app.main:app --reload
 python -m pytest -q
 ```
 
-현재는 도메인 모델과 revision이 없으므로 `alembic current`는 revision을 출력하지 않는 것이 정상이다.
-첫 모델 계획에서 모델을 `app/models/__init__.py`에 import하고 migration을 생성한다.
+최초 스키마 revision은 `0001_initial_schema`다. 모델을 추가할 때는
+`app/models/__init__.py`에 import한 뒤 autogenerate 결과를 `docs/ERD.md`와 대조한다.
 
 ## 프론트용 Mock API (화요일 전)
 
