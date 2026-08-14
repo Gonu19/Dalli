@@ -21,6 +21,7 @@
 | [AGENTS.md](AGENTS.md) | **AI 공통 규칙 · 폴더 소유권 (전원 필독)** | 전원 |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | 기획 요약 · 페르소나 · 톤 규칙 | 전원 |
 | [docs/CONTRACT.md](docs/CONTRACT.md) | API 계약 — 단일 진실 | 김은송 |
+| [docs/API_HANDOFF.md](docs/API_HANDOFF.md) | 프론트 전달용 API 요약 · 목 데이터 안내 | 김은송 |
 | [docs/ERD.md](docs/ERD.md) | DB 스키마 | 김은송 |
 | [docs/ENGINE.md](docs/ENGINE.md) | 판정 룰 · 상태머신 · 수치표 | 고은우 |
 | [docs/SCREENS.md](docs/SCREENS.md) | 화면 목록 + 라우팅 | 김민서 |
