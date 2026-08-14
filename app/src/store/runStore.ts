@@ -14,7 +14,7 @@
 
 import { create } from 'zustand';
 
-import { SAMPLE_INTERVAL_SEC } from '../engine/constants';
+import { SAMPLE_INTERVAL_SEC, TICK_SEC } from '../engine/constants';
 import { createJudgeState, judge } from '../engine/judge';
 import type { JudgeState } from '../engine/judge';
 import { computeMeasuredBaseline, computeTargetRange } from '../engine/target';
@@ -113,6 +113,7 @@ type Session = {
   pausedAtSec: number | null;
   lastSourceSec: number;
   lastSampleSec: number | null;
+  lastJudgeSec: number | null;
   cadenceSum: number;
   cadenceCount: number;
 };
@@ -161,6 +162,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
       pausedAtSec: null,
       lastSourceSec: 0,
       lastSampleSec: null,
+      lastJudgeSec: null,
       cadenceSum: 0,
       cadenceCount: 0,
     };
@@ -186,11 +188,21 @@ export const useRunStore = create<RunStore>((set, get) => ({
 
     current.window.push(activeSec, sample.cadence);
     const cadence = current.window.value(activeSec);
+    const previous = get();
+
+    // 센서는 1초마다 오지만 판정은 5초 tick이다 (`ENGINE.md` §4).
+    // 화면에 보이는 숫자는 매 샘플 갱신하고, 판정만 주기를 지킨다.
+    const shouldJudge =
+      current.lastJudgeSec === null || activeSec - current.lastJudgeSec >= TICK_SEC;
+    if (!shouldJudge) {
+      set({ totalSec, activeSec, cadence });
+      return;
+    }
+    current.lastJudgeSec = activeSec;
 
     const result = judge(current.judgeState, { elapsedSec: activeSec, cadence, ...goalProgress(current, sample) });
     current.judgeState = result.state;
 
-    const previous = get();
     const events = [...previous.events, ...result.events.map((event) => ({ ...event, t: totalSec }))];
 
     // samples는 5초 간격 (`ENGINE.md` §1). 소스 tick이 1초여도 저장 주기는 5초다.
