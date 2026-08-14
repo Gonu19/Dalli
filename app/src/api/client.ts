@@ -24,7 +24,24 @@ export type AuthToken = {
   isNewUser: boolean;
 };
 
+export type RunningPurpose = 'COMPLETE' | 'HABIT' | 'WEIGHT' | 'FITNESS' | 'PERFORMANCE';
+
+export type UserProfile = {
+  id: string;
+  onboarded: boolean;
+  runningPurpose: RunningPurpose | null;
+  experienceLevel: 0 | 1 | 2 | null;
+  maxContinuousMin: number | null;
+  weeklyGoalCount: number | null;
+  baselineCadence: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  birthYear: number | null;
+  gender: 'M' | 'F' | 'O' | null;
+};
+
 export type UserProfilePatch = {
+  runningPurpose: RunningPurpose;
   experienceLevel: 0 | 1 | 2;
   maxContinuousMin: number;
   weeklyGoalCount: number;
@@ -33,6 +50,20 @@ export type UserProfilePatch = {
   weightKg?: number;
   birthYear?: number;
   gender?: 'M' | 'F' | 'O';
+};
+
+type UserProfileResponse = {
+  id: string;
+  onboarded: boolean;
+  running_purpose: RunningPurpose | null;
+  experience_level: 0 | 1 | 2 | null;
+  max_continuous_min: number | null;
+  weekly_goal_count: number | null;
+  baseline_cadence: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  birth_year: number | null;
+  gender: 'M' | 'F' | 'O' | null;
 };
 
 function requireApiUrl() {
@@ -81,10 +112,32 @@ export async function authenticateDevice(deviceUuid: string): Promise<AuthToken>
   };
 }
 
-export async function patchUserProfile(token: string, profile: UserProfilePatch) {
-  return request('/users/me', {
+function mapUserProfile(response: UserProfileResponse): UserProfile {
+  return {
+    id: response.id,
+    onboarded: response.onboarded,
+    runningPurpose: response.running_purpose,
+    experienceLevel: response.experience_level,
+    maxContinuousMin: response.max_continuous_min,
+    weeklyGoalCount: response.weekly_goal_count,
+    baselineCadence: response.baseline_cadence,
+    heightCm: response.height_cm,
+    weightKg: response.weight_kg,
+    birthYear: response.birth_year,
+    gender: response.gender,
+  };
+}
+
+export async function getUserProfile(token: string): Promise<UserProfile> {
+  const response = await request<UserProfileResponse>('/users/me', {}, token);
+  return mapUserProfile(response);
+}
+
+export async function patchUserProfile(token: string, profile: UserProfilePatch): Promise<UserProfile> {
+  const response = await request<UserProfileResponse>('/users/me', {
     method: 'PATCH',
     body: JSON.stringify({
+      running_purpose: profile.runningPurpose,
       experience_level: profile.experienceLevel,
       max_continuous_min: profile.maxContinuousMin,
       weekly_goal_count: profile.weeklyGoalCount,
@@ -95,4 +148,5 @@ export async function patchUserProfile(token: string, profile: UserProfilePatch)
       gender: profile.gender ?? null,
     }),
   }, token);
+  return mapUserProfile(response);
 }
