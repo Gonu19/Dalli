@@ -1,7 +1,7 @@
 # app — Expo / iOS
 
 ## 버전
-- **Expo SDK 54** (`expo@~54.0.0`) — 첫 세팅 후 실제 버전으로 갱신
+- **Expo SDK 54** (`expo@~54.0.35`, 설치 버전 `54.0.36`)
 - 오디오는 **`expo-audio`**. `expo-av` 금지 (deprecated)
 
 ## 실행
