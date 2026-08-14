@@ -94,7 +94,7 @@ git pull --rebase && git push
 
 ## 8. 환경변수
 ```
-app/.env      ← 커밋 OK   EXPO_PUBLIC_API_URL=http://<EC2-IP>:8000
+app/.env      ← 커밋 OK   EXPO_PUBLIC_API_URL=https://<api-domain>
 server/.env   ← 커밋 금지  DATABASE_URL / JWT_SECRET / OPENAI_API_KEY
 ```
 - `server/.env.example`만 커밋. 실값은 EC2에 직접 설정.

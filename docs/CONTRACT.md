@@ -2,7 +2,7 @@
 
 **소유: 김은송 (BE)** · 프론트는 읽기만, 변경은 GitHub 이슈로 요청.
 
-- Base URL: `EXPO_PUBLIC_API_URL` (예: `http://<EC2-IP>:8000`)
+- Base URL: `EXPO_PUBLIC_API_URL` (예: `https://<api-domain>`). Mock과 실 API는 같은 외부 HTTPS 주소를 사용한다.
 - 모든 필드 `snake_case`. 시각은 ISO8601 UTC (`2026-08-13T09:00:00Z`).
 - 인증: `Authorization: Bearer <jwt>` (`/auth/device` 제외)
 - 에러: `{"detail": {"code": "...", "message": "..."}}`

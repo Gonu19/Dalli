@@ -5,7 +5,7 @@
 
 ## 1. 공통 규칙
 
-- Base URL: `EXPO_PUBLIC_API_URL`
+- Base URL: `EXPO_PUBLIC_API_URL`. EC2 Mock과 실 API는 같은 외부 HTTPS 주소를 사용한다.
 - JSON: `snake_case`
 - 시각: ISO8601 UTC
 - 인증: `/auth/device`를 제외하고 `Authorization: Bearer <access_token>` 필수
@@ -105,14 +105,19 @@
 
 ## 7. 화요일 전후 연결 방식
 
-화요일 전에는 PostgreSQL·OpenAI에 연결하지 않고 `server/app/mock_main.py`를 실행한다.
-아이폰과 개발 PC를 같은 Wi-Fi에 연결하고 `EXPO_PUBLIC_API_URL=http://<PC-LAN-IP>:8001`을 사용한다.
+화요일 전에는 PostgreSQL·OpenAI에 연결하지 않고 EC2에서 `server/app/mock_main.py`를
+Nginx 뒤에 실행한다. FE에는 외부에서 응답하는 HTTPS Base URL 하나만 전달하며,
+`EXPO_PUBLIC_API_URL`은 Mock에서 실 API로 전환할 때 변경하지 않는다.
+
+EC2 접근 권한이 제공되기 전 로컬 확인에만
+`EXPO_PUBLIC_API_URL=http://<PC-LAN-IP>:8001`을 임시로 사용할 수 있다. 이 주소는
+프론트 통합용 확정 Base URL이 아니다.
 
 화요일부터는 다음 순서로 전환한다.
 
 1. 실제 FastAPI의 인증·사용자·러닝 API와 PostgreSQL 연결
 2. fixture와 실서버 응답 계약 비교
-3. Base URL을 실제 HTTPS 주소로 변경
+3. Nginx의 외부 HTTPS 주소는 유지하고 내부 업스트림을 실 API로 전환
 4. 폴백 리포트 검증
 5. 마지막으로 OpenAI를 연결하고 timeout 시 폴백 200 재검증
 
