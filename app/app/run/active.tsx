@@ -10,6 +10,12 @@ import { usePreferences } from '@/src/components/preferences-provider';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { Screen } from '@/src/components/screen';
 import type { JudgeVerdict } from '@/src/engine/types';
+import {
+  detachSensor,
+  pauseTrackedRun,
+  resumeTrackedRun,
+  stopTrackedRun,
+} from '@/src/store/runController';
 import { useRunStore } from '@/src/store/runStore';
 import { useSimulationStore } from '@/src/store/simulation';
 import { colors, radius, spacing, typography } from '@/src/theme/tokens';
@@ -51,8 +57,13 @@ export default function ActiveRunScreen() {
   }, [metronomeEnabled, run.interventionCount, voiceEnabled]);
 
   const save = async () => {
-    if (simulationActive) stopSimulation();
-    const record = run.finish(simulationActive);
+    let record;
+    if (simulationActive) {
+      stopSimulation();
+      record = run.finish(true);
+    } else {
+      record = await stopTrackedRun(false);
+    }
     if (!record) return;
 
     if (simulationActive) {
@@ -77,8 +88,14 @@ export default function ActiveRunScreen() {
       return;
     }
     if (simulationActive) stopSimulation();
+    else detachSensor();
     run.reset();
     router.replace('/');
+  };
+
+  const togglePause = () => {
+    if (run.runState === 'PAUSED') resumeTrackedRun();
+    else pauseTrackedRun();
   };
 
   const verdictColor = cadenceColor(run.verdict);
@@ -112,7 +129,7 @@ export default function ActiveRunScreen() {
       </View>
 
       <View style={styles.controls}>
-        <PrimaryButton variant="secondary" onPress={run.runState === 'PAUSED' ? run.resume : run.pause}>
+        <PrimaryButton variant="secondary" onPress={togglePause}>
           {run.runState === 'PAUSED' ? '다시 달리기' : '일시정지'}
         </PrimaryButton>
         <PrimaryButton variant="text" onPress={() => setShowEnd(true)}>러닝 종료</PrimaryButton>
@@ -125,7 +142,7 @@ export default function ActiveRunScreen() {
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>{confirmDiscard ? '이 기록을 정말 버릴까요?' : '러닝을 마칠까요?'}</Text>
           <Text style={styles.sheetBody}>{confirmDiscard ? '버린 기록은 복구할 수 없어요.' : '지금까지의 러닝은 종료 후에도 안전하게 저장할 수 있어요.'}</Text>
-          {!confirmDiscard ? <PrimaryButton variant="secondary" onPress={() => { setShowEnd(false); run.resume(); }}>계속 달리기</PrimaryButton> : null}
+          {!confirmDiscard ? <PrimaryButton variant="secondary" onPress={() => { setShowEnd(false); resumeTrackedRun(); }}>계속 달리기</PrimaryButton> : null}
           {!confirmDiscard ? <PrimaryButton loading={upload.isPending} onPress={() => void save()}>종료하고 저장</PrimaryButton> : null}
           <PrimaryButton variant="text" onPress={discard}>{confirmDiscard ? '기록 버리기' : '기록 버리기'}</PrimaryButton>
           {confirmDiscard ? <PrimaryButton variant="secondary" onPress={() => setConfirmDiscard(false)}>돌아가기</PrimaryButton> : null}
