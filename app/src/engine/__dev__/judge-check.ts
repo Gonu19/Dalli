@@ -8,6 +8,7 @@
  */
 
 import { SAMPLE_INTERVAL_SEC } from '../constants';
+import { cueForEvent } from '../cues';
 import { createJudgeState, judge } from '../judge';
 import type { JudgeState } from '../judge';
 import { ReplaySource } from '../sources/replay-source';
@@ -142,6 +143,22 @@ check('DEMO 이벤트 순서', types(demo.events), [
 check('DEMO 하향 중심값 157 → 152', demo.state.target.center, 152);
 check('DEMO 개입 횟수', demo.state.interventionCount, 3);
 check('DEMO 안정 구간은 무음', demo.events.every((event) => event.t < 150 || event.t >= 335), true);
+
+// 11. 개입 문구 — ENGINE.md §7 표
+check('과속 1회차 문구', cueForEvent({ t: 100, type: 'TOO_FAST', payload: { cadence: 175 } }, { fastInterventionCount: 1, target: { center: 157, min: 153, max: 161 } })?.text,
+  '지금 리듬이 조금 빠릅니다. 보폭을 줄이고 편하게 달려볼까요?');
+check('과속 2회차 문구', cueForEvent({ t: 200, type: 'TOO_FAST', payload: { cadence: 175 } }, { fastInterventionCount: 2, target: { center: 157, min: 153, max: 161 } })?.text,
+  '조금만 천천히 가도 괜찮아요.');
+check('하향 안내는 중심값만 말한다', cueForEvent({ t: 440, type: 'TARGET_ADJUSTED', payload: { min: 148, max: 156, reason: 'no_recovery' } }, { fastInterventionCount: 0, target: { center: 152, min: 148, max: 156 } })?.text,
+  '목표를 152로 낮췄어요');
+check('하향 안내에 메트로놈은 붙지 않는다', cueForEvent({ t: 440, type: 'TARGET_ADJUSTED', payload: { min: 148, max: 156, reason: 'no_recovery' } }, { fastInterventionCount: 0, target: { center: 152, min: 148, max: 156 } })?.metronome, false);
+check('리커버리 안내', cueForEvent({ t: 900, type: 'RECOVERY_MODE_ON', payload: { reason: 'downshift_exhausted' } }, { fastInterventionCount: 0, target: { center: 147, min: 143, max: 151 } })?.text,
+  '지금은 회복이 우선이에요. 편하게 걸으셔도 괜찮아요.');
+check('시작·종료는 음성 없음', [
+  cueForEvent({ t: 0, type: 'RUN_START', payload: { min: 153, max: 161 } }, { fastInterventionCount: 0, target: { center: 157, min: 153, max: 161 } }),
+  cueForEvent({ t: 1200, type: 'RUN_END', payload: { completed: true } }, { fastInterventionCount: 0, target: { center: 157, min: 153, max: 161 } }),
+], [null, null]);
+
 
 console.log(failures === 0 ? '\nOK — 전 항목 통과' : `\nFAILED — ${failures}건`);
 if (failures > 0) process.exitCode = 1;
