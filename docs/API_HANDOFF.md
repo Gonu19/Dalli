@@ -27,6 +27,22 @@
 | 수기 기록 | 목표·케이던스·samples/events·AI 리포트 없음 |
 | 삭제 | 러닝 hard delete, 연결 report cascade 삭제 |
 
+### 기존 앱 enum 마이그레이션
+
+- 기존 `FINISH`는 `COMPLETE`로 변경한다.
+- 기존 `RECORD`는 `PERFORMANCE`로 변경한다.
+- 서버와 fixture는 이전 enum을 호환 값으로 받지 않는다. 프론트 상수·로컬 저장값·요청 바디를 함께 변경한다.
+
+### 앱 시작·온보딩 순서
+
+1. 저장된 JWT가 없으면 `POST /auth/device`
+2. JWT 저장 후 `GET /users/me`
+3. `onboarded=false`면 온보딩으로 이동
+4. 온보딩 완료 시 `running_purpose`를 포함해 `PATCH /users/me`
+5. PATCH 응답의 `onboarded=true` 확인 후 홈으로 이동
+
+로컬 온보딩 완료 플래그는 화면 작성 중 임시 상태로만 사용할 수 있으며 최종 분기의 단일 진실은 서버 응답이다.
+
 ## 3. 엔드포인트
 
 | Method | Path | 인증 | 성공 | 프론트 사용처 |
@@ -86,3 +102,18 @@
 - [ ] 업로드 실패 시 같은 `client_run_id`로 재시도한다.
 - [ ] 409 계획 충돌을 중복 생성 성공으로 오인하지 않는다.
 - [ ] OpenAPI 타입은 자동 생성하고 수동 수정하지 않는다.
+
+## 7. 화요일 전후 연결 방식
+
+화요일 전에는 PostgreSQL·OpenAI에 연결하지 않고 `server/app/mock_main.py`를 실행한다.
+아이폰과 개발 PC를 같은 Wi-Fi에 연결하고 `EXPO_PUBLIC_API_URL=http://<PC-LAN-IP>:8001`을 사용한다.
+
+화요일부터는 다음 순서로 전환한다.
+
+1. 실제 FastAPI의 인증·사용자·러닝 API와 PostgreSQL 연결
+2. fixture와 실서버 응답 계약 비교
+3. Base URL을 실제 HTTPS 주소로 변경
+4. 폴백 리포트 검증
+5. 마지막으로 OpenAI를 연결하고 timeout 시 폴백 200 재검증
+
+Mock 전용 `X-Mock-Scenario: normal | fallback | insufficient_data` 헤더는 실서버에 보내지 않는다.
