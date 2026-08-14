@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useCalendar, useCreateManualRun, useCreatePlan, useStats } from '@/src/api/queries';
+import { useCalendar, useCreateManualRun, useCreatePlan, useDeletePlan, useStats, useUpdatePlan } from '@/src/api/queries';
 import type { CalendarDay } from '@/src/api/client';
 import { useAuth } from '@/src/components/auth-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
@@ -22,9 +22,12 @@ export default function RecordScreen() {
   const calendar = useCalendar(token, year, month);
   const stats = useStats(token);
   const createPlan = useCreatePlan(token);
+  const updatePlan = useUpdatePlan(token);
+  const deletePlan = useDeletePlan(token);
   const createManual = useCreateManualRun(token);
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
   const [form, setForm] = useState<'plan' | 'manual' | null>(null);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [minutes, setMinutes] = useState('20');
   const [distance, setDistance] = useState('');
   const [memo, setMemo] = useState('');
@@ -69,7 +72,24 @@ export default function RecordScreen() {
       ) : null}
 
       {savedMessage ? <Text style={styles.saved}>{savedMessage}</Text> : null}
-      <DayDetail date={selectedDate} day={selected} onAddManual={() => setForm('manual')} onAddPlan={() => setForm('plan')} />
+      <DayDetail
+        date={selectedDate}
+        day={selected}
+        onAddManual={() => setForm('manual')}
+        onAddPlan={() => { setEditingPlanId(null); setForm('plan'); }}
+        onCompletePlan={(planId) => void updatePlan.mutateAsync({ planId, status: 'DONE' })
+          .then(() => setSavedMessage(`${Number(selectedDate.slice(-2))}일 계획을 완료했어요.`))
+          .catch(() => setSavedMessage('계획 상태를 바꾸지 못했어요. 다시 시도해 주세요.'))}
+        onDeletePlan={(planId) => void deletePlan.mutateAsync(planId)
+          .then(() => setSavedMessage(`${Number(selectedDate.slice(-2))}일 계획을 삭제했어요.`))
+          .catch(() => setSavedMessage('계획을 삭제하지 못했어요. 다시 시도해 주세요.'))}
+        onEditPlan={(plan) => {
+          setEditingPlanId(plan.id);
+          setMinutes(String(plan.goalType === 'TIME' ? plan.goalValue / 60 : 20));
+          setMemo('');
+          setForm('plan');
+        }}
+      />
 
       <View style={styles.statsCard}>
         <Text style={styles.sectionTitle}>나의 러닝 루틴</Text>
@@ -83,7 +103,7 @@ export default function RecordScreen() {
       <Modal animationType="slide" onRequestClose={() => setForm(null)} transparent visible={form !== null}>
         <Pressable style={styles.backdrop} onPress={() => setForm(null)} />
         <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>{form === 'plan' ? '러닝 계획 추가' : '수기 기록 추가'}</Text>
+          <Text style={styles.sheetTitle}>{form === 'plan' ? editingPlanId ? '러닝 계획 수정' : '러닝 계획 추가' : '수기 기록 추가'}</Text>
           <Text style={styles.body}>{selectedDate}</Text>
           <TextInput
             keyboardType="number-pad"
@@ -104,15 +124,20 @@ export default function RecordScreen() {
             />
           ) : null}
           <TextInput onChangeText={setMemo} placeholder="메모 · 선택" placeholderTextColor={colors.disabled} style={styles.input} value={memo} />
-          {(createPlan.error || createManual.error) ? <Text style={styles.error}>저장하지 못했어요. 입력 내용은 그대로 유지되어 있어요.</Text> : null}
+          {(createPlan.error || updatePlan.error || createManual.error) ? <Text style={styles.error}>저장하지 못했어요. 입력 내용은 그대로 유지되어 있어요.</Text> : null}
           <PrimaryButton
             disabled={!Number.isFinite(Number(minutes)) || Number(minutes) <= 0}
-            loading={createPlan.isPending || createManual.isPending}
+            loading={createPlan.isPending || updatePlan.isPending || createManual.isPending}
             onPress={async () => {
               try {
                 if (form === 'plan') {
-                  await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
-                  setSavedMessage(`${Number(selectedDate.slice(-2))}일 계획을 추가했어요.`);
+                  if (editingPlanId) {
+                    await updatePlan.mutateAsync({ planId: editingPlanId, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
+                    setSavedMessage(`${Number(selectedDate.slice(-2))}일 계획을 수정했어요.`);
+                  } else {
+                    await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
+                    setSavedMessage(`${Number(selectedDate.slice(-2))}일 계획을 추가했어요.`);
+                  }
                 } else {
                   await createManual.mutateAsync({
                     clientRunId: makeClientRunId(),
@@ -124,6 +149,7 @@ export default function RecordScreen() {
                   setSavedMessage(`${Number(selectedDate.slice(-2))}일 수기 기록을 추가했어요.`);
                 }
                 setForm(null);
+                setEditingPlanId(null);
                 setMinutes('20');
                 setDistance('');
                 setMemo('');
@@ -133,7 +159,7 @@ export default function RecordScreen() {
             }}>
             저장
           </PrimaryButton>
-          <PrimaryButton variant="text" onPress={() => setForm(null)}>취소</PrimaryButton>
+          <PrimaryButton variant="text" onPress={() => { setForm(null); setEditingPlanId(null); }}>취소</PrimaryButton>
         </View>
       </Modal>
     </Screen>
@@ -152,7 +178,23 @@ function DayCell({ day, data, selected, onPress }: { day: number; data?: Calenda
   );
 }
 
-function DayDetail({ date, day, onAddPlan, onAddManual }: { date: string; day?: CalendarDay; onAddPlan: () => void; onAddManual: () => void }) {
+function DayDetail({
+  date,
+  day,
+  onAddPlan,
+  onAddManual,
+  onEditPlan,
+  onCompletePlan,
+  onDeletePlan,
+}: {
+  date: string;
+  day?: CalendarDay;
+  onAddPlan: () => void;
+  onAddManual: () => void;
+  onEditPlan: (plan: NonNullable<CalendarDay['plan']>) => void;
+  onCompletePlan: (planId: string) => void;
+  onDeletePlan: (planId: string) => void;
+}) {
   const labels: string[] = [];
   if (day?.plan) labels.push(day.plan.status === 'PLANNED' ? '계획' : day.plan.status === 'DONE' ? '완료한 계획' : '미완료 계획');
   if (day?.runs.some((run) => run.source === 'APP')) labels.push('앱 측정 완료');
@@ -162,9 +204,15 @@ function DayDetail({ date, day, onAddPlan, onAddManual }: { date: string; day?: 
       <Text style={styles.sectionTitle}>{Number(date.slice(-2))}일</Text>
       {labels.length ? labels.map((label) => <Text key={label} style={styles.detailLabel}>{label}</Text>) : <Text style={styles.body}>아직 일정이나 기록이 없어요. 홈에서 다음 러닝을 시작해 보세요.</Text>}
       <View style={styles.actionRow}>
-        <View style={styles.flex}><PrimaryButton variant="secondary" onPress={onAddPlan}>계획 추가</PrimaryButton></View>
+        <View style={styles.flex}><PrimaryButton variant="secondary" onPress={day?.plan ? () => onEditPlan(day.plan!) : onAddPlan}>{day?.plan ? '계획 수정' : '계획 추가'}</PrimaryButton></View>
         <View style={styles.flex}><PrimaryButton variant="secondary" onPress={onAddManual}>수기 기록</PrimaryButton></View>
       </View>
+      {day?.plan ? (
+        <View style={styles.actionRow}>
+          {day.plan.status === 'PLANNED' ? <View style={styles.flex}><PrimaryButton variant="text" onPress={() => onCompletePlan(day.plan!.id)}>완료 처리</PrimaryButton></View> : null}
+          <View style={styles.flex}><PrimaryButton variant="text" onPress={() => onDeletePlan(day.plan!.id)}>계획 삭제</PrimaryButton></View>
+        </View>
+      ) : null}
     </View>
   );
 }
