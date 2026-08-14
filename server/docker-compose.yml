@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16.4-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dalli}
+      POSTGRES_USER: ${POSTGRES_USER:-dalli}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-8}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
