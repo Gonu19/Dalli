@@ -104,6 +104,45 @@ PowerShell에서는 `export NAME=value` 대신 `$env:NAME = "value"`를 사용�
 이후 실제 API E2E까지 모두 통과한 경우에만 `dalli`에 마이그레이션을 적용한다.
 실제 비밀번호는 셸 환경변수나 커밋되지 않는 `server/.env`에만 둔다.
 
+### Day 1 실제 HTTP E2E 게이트
+
+`tests/e2e/test_day1_gate.py`는 TestClient가 아니라 실행 중인 로컬 API에 HTTP
+요청을 보내고 격리 PostgreSQL DB를 직접 조회한다. 안전을 위해 API와 DB는
+`localhost` 또는 `127.0.0.1`만 허용하며 DB 이름에는 `day1` 또는 `test`가
+포함되어야 한다. 완전히 빈 DB에 migration을 적용한 후 실행한다.
+
+```powershell
+$env:POSTGRES_DB = "dalli_day1_test"
+$env:POSTGRES_USER = "dalli"
+$env:POSTGRES_PASSWORD = "day1-local-only-password"
+$env:DATABASE_URL = "postgresql+psycopg://dalli:day1-local-only-password@db:5432/dalli_day1_test"
+$env:JWT_SECRET = "day1-local-only-jwt-secret-with-32-bytes"
+$env:OPENAI_API_KEY = ""
+
+docker compose -p dalli-day1-gate up -d db
+docker compose -p dalli-day1-gate exec -T db psql -U dalli -d dalli_day1_test -tAc `
+  "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public'"
+
+# 위 결과가 0임을 확인한 다음 migration과 API를 시작한다.
+docker compose -p dalli-day1-gate run --rm api alembic upgrade head
+docker compose -p dalli-day1-gate run --rm api alembic current
+docker compose -p dalli-day1-gate run --rm api alembic check
+docker compose -p dalli-day1-gate up -d api
+
+$env:DALLI_E2E_BASE_URL = "http://127.0.0.1:8000"
+$env:DALLI_E2E_DATABASE_URL = "postgresql+psycopg://dalli:day1-local-only-password@127.0.0.1:5432/dalli_day1_test"
+python -m pytest -q -m e2e
+```
+
+검증은 `health → auth → profile 조회·수정 → APP Run 201 → 동일 요청 200 →
+재인증 → 새 token 재확인`을 관통하고 최종 `users=1`, `runs=1`, `plans=0`,
+`reports=0`, Alembic head 및 `pgcrypto`를 확인한다. 운영 DB나 기존 개발 DB에는
+이 환경변수를 지정하지 않는다.
+
+검증 후 자원을 지울 때는 먼저 `docker compose -p dalli-day1-gate ps`로 project
+이름을 재확인한다. 테스트 데이터 보존이 필요 없을 때만
+`docker compose -p dalli-day1-gate down -v`로 해당 project 자원만 제거한다.
+
 ## 구조
 ```
 app/

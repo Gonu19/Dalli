@@ -11,3 +11,6 @@ def app() -> FastAPI:
 
 def pytest_configure(config) -> None:
     config.addinivalue_line("markers", "postgres: requires TEST_DATABASE_URL")
+    config.addinivalue_line(
+        "markers", "e2e: requires an explicit local API and isolated PostgreSQL database"
+    )
