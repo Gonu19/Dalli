@@ -454,6 +454,43 @@ export async function createPlan(
   };
 }
 
+export async function updatePlan(
+  token: string,
+  planId: string,
+  input: { goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; memo?: string; status?: 'PLANNED' | 'DONE' | 'SKIPPED' },
+): Promise<Plan> {
+  const response = await request<{
+    id: string;
+    planned_date: string;
+    goal_type: 'TIME' | 'DISTANCE';
+    goal_value: number;
+    memo: string | null;
+    status: 'PLANNED' | 'DONE' | 'SKIPPED';
+    run_id: string | null;
+  }>(`/plans/${planId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(input.goalType ? { goal_type: input.goalType } : {}),
+      ...(input.goalValue !== undefined ? { goal_value: input.goalValue } : {}),
+      ...(input.memo !== undefined ? { memo: input.memo.trim() || null } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    }),
+  }, token);
+  return {
+    id: response.id,
+    plannedDate: response.planned_date,
+    goalType: response.goal_type,
+    goalValue: response.goal_value,
+    memo: response.memo,
+    status: response.status,
+    runId: response.run_id,
+  };
+}
+
+export async function deletePlan(token: string, planId: string): Promise<void> {
+  await request<void>(`/plans/${planId}`, { method: 'DELETE' }, token);
+}
+
 export async function createManualRun(
   token: string,
   input: { clientRunId: string; startedAt: string; durationSec: number; distanceM?: number; memo?: string },

@@ -6,12 +6,14 @@ import {
   createPlan,
   createRunReport,
   deleteRun,
+  deletePlan,
   getCalendar,
   getRunReport,
   getRuns,
   getStats,
   getUserProfile,
   patchUserProfile,
+  updatePlan,
   type RunUpload,
   type UserProfilePatch,
 } from './client';
@@ -121,6 +123,29 @@ export function useCreatePlan(token: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string }) => createPlan(requireToken(token), input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    },
+  });
+}
+
+export function useUpdatePlan(token: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { planId: string; goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; memo?: string; status?: 'PLANNED' | 'DONE' | 'SKIPPED' }) => {
+      const { planId, ...patch } = input;
+      return updatePlan(requireToken(token), planId, patch);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    },
+  });
+}
+
+export function useDeletePlan(token: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (planId: string) => deletePlan(requireToken(token), planId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['calendar'] });
     },
