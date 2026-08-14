@@ -8,7 +8,7 @@
 ## 1. 버전 고정
 | 항목 | 값 |
 | --- | --- |
-| Expo SDK | **54** (`expo@~54.0.0`) ⚠️ 첫 `create-expo-app` 후 실제 버전으로 갱신 |
+| Expo SDK | **54** (`expo@~54.0.35`, 설치 버전 `54.0.36`) |
 | 라우팅 | `expo-router` |
 | 오디오 | **`expo-audio`** ❌ `expo-av` 금지 (deprecated) |
 | 센서/위치 | `expo-sensors`(Pedometer), `expo-location` |
