@@ -65,6 +65,17 @@ export type CadenceSample = {
 };
 
 /**
+ * 업로드용으로 5초마다 쌓는 샘플. 키 이름은 `CONTRACT.md`의 `samples[]`와 같다.
+ * GPS 미수신 시 `p`·`d`는 `null`이다.
+ */
+export type RunSample = {
+  t: number;
+  c: number;
+  p?: number | null;
+  d?: number | null;
+};
+
+/**
  * 시간을 만드는 유일한 지점. 엔진은 여기서 받은 `elapsedSec`으로만 시간을 판단한다.
  * `PedometerSource`(실센서)와 `ReplaySource`(배열 재생)가 같은 인터페이스를 구현한다.
  */

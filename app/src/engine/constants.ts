@@ -27,6 +27,13 @@ export const TICK_SEC = 5;
 export const SENSOR_TICK_SEC = 1;
 export const SAMPLE_INTERVAL_SEC = 5;
 
+/**
+ * 센서 품질 하한. 미달이면 판정을 멈추고 `UNAVAILABLE`을 노출한다.
+ * 서버의 유효 러닝 판정(`CONTRACT.md` 70%)과 같은 값을 쓴다 — 기준이 갈리면
+ * 앱은 정상 판정했는데 서버는 분석 불가로 답하는 상황이 생긴다.
+ */
+export const SENSOR_COVERAGE_MIN = 0.7;
+
 // 판정 타임라인 (§5)
 export const WARMUP_SEC = 90;
 export const SLOW_JUDGE_START_SEC = 300;
