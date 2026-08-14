@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
 from app.deps import get_current_user, get_db
+from app.config import Settings, get_settings
 from app.main import create_app
 from app.models import Plan, Run, User
 from app.schemas.runs import RunCreate
@@ -95,6 +96,28 @@ def client_for(current_user, db):
     return TestClient(app)
 
 
+def unauthenticated_client(db):
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        database_url="postgresql+psycopg://test:test@localhost:5432/dalli_test",
+        jwt_secret="test-only-jwt-secret-with-sufficient-length",
+        openai_api_key="",
+    )
+    return TestClient(app)
+
+
+def test_runs_requires_bearer_authentication_before_storage():
+    db = FakeSession()
+    response = unauthenticated_client(db).post("/runs", json=app_payload())
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["detail"]["code"] == "UNAUTHORIZED"
+    assert response.json()["detail"]["message"]
+    assert not db.added and db.commits == 0
+
+
 def test_app_create_and_idempotent_repeat_statuses():
     current_user = user()
     first_db = FakeSession([None])
@@ -129,14 +152,48 @@ def test_manual_fields_are_null_and_analysis_is_limited():
         assert getattr(stored, field) is None
 
 
-@pytest.mark.parametrize("extra", [
-    {"completed": False}, {"goal_type": "TIME"}, {"samples": []},
-    {"avg_cadence": 150}, {"rhythm_score": 0.5}, {"user_id": str(uuid4())},
+@pytest.mark.parametrize(("field", "value"), [
+    ("goal_type", "TIME"),
+    ("goal_value", 1200),
+    ("target_cadence_min", 153),
+    ("target_cadence_max", 161),
+    ("final_target_min", 153),
+    ("final_target_max", 161),
+    ("avg_cadence", 157),
+    ("avg_pace_sec_per_km", 430),
+    ("intervention_count", 1),
+    ("downshift_count", 1),
+    ("samples", [{"t": 0, "c": 157, "p": None, "d": 0.0}]),
+    ("events", [{"t": 0, "type": "RUN_START", "payload": {}}]),
+    ("rhythm_score", 0.8),
+    ("late_drop_rate", 0.1),
+    ("fatigue_index", 0.2),
+    ("user_id", str(uuid4())),
 ])
-def test_manual_rejects_app_and_server_owned_fields(extra):
-    response = client_for(user(), FakeSession()).post("/runs", json=manual_payload(**extra))
+def test_manual_rejects_app_and_server_owned_fields(field, value):
+    db = FakeSession()
+    response = client_for(user(), db).post(
+        "/runs", json=manual_payload(**{field: value})
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": {
+            "code": "VALIDATION_ERROR",
+            "message": "요청 값이 올바르지 않습니다.",
+        }
+    }
+    assert not db.added and db.commits == 0
+
+
+def test_manual_rejects_completed_false_without_storage():
+    db = FakeSession()
+    response = client_for(user(), db).post(
+        "/runs", json=manual_payload(completed=False)
+    )
+
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "VALIDATION_ERROR"
+    assert not db.added and db.commits == 0
 
 
 @pytest.mark.parametrize("bad", [

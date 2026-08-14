@@ -102,7 +102,10 @@ def test_users_me_requires_authentication() -> None:
     for method in (client.get, lambda path: client.patch(path, json={})):
         response = method("/users/me")
         assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
         assert response.json()["detail"]["code"] == "UNAUTHORIZED"
+        assert response.json()["detail"]["message"]
+        assert isinstance(response.json()["detail"], dict)
 
 
 def test_users_me_rejects_malformed_token() -> None:

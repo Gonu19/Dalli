@@ -1,8 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import date
+import json
 import os
+from pathlib import Path
 from threading import Barrier
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -47,11 +50,12 @@ def postgres_runs_environment():
         clear_settings_cache()
 
 
-def authenticate(device: str) -> tuple[str, str]:
+def authenticate(device: str) -> tuple[str, UUID]:
     with TestClient(create_app()) as client:
         response = client.post("/auth/device", json={"device_uuid": device})
     token = response.json()["access_token"]
-    return token, decode_access_token(token, "postgres-runs-test-secret-with-32-bytes")["sub"]
+    subject = decode_access_token(token, "postgres-runs-test-secret-with-32-bytes")["sub"]
+    return token, UUID(subject)
 
 
 def manual_payload(client_run_id: str, plan_id: str | None = None) -> dict:
@@ -62,6 +66,16 @@ def manual_payload(client_run_id: str, plan_id: str | None = None) -> dict:
         "started_at": "2026-08-15T00:00:00Z",
         "duration_sec": 900,
     }
+
+
+def app_payload(client_run_id: str) -> dict:
+    fixture_path = (
+        Path(__file__).resolve().parents[2] / "docs" / "mock-data" / "api-fixtures.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    payload = deepcopy(fixture["requests"]["create_app_run_minimum_analyzable"])
+    payload["client_run_id"] = client_run_id
+    return payload
 
 
 def concurrent_posts(token: str, payloads: list[dict]) -> list[tuple[int, str]]:
@@ -77,6 +91,90 @@ def concurrent_posts(token: str, payloads: list[dict]) -> list[tuple[int, str]]:
 
     with ThreadPoolExecutor(max_workers=len(payloads)) as pool:
         return list(pool.map(post, payloads))
+
+
+@pytest.mark.postgres
+def test_app_run_repeat_returns_existing_row_without_applying_changed_body(
+    postgres_runs_environment,
+) -> None:
+    token, user_id = authenticate(f"runs-repeat-{uuid4()}")
+    key = f"repeat-{uuid4()}"
+    first_payload = app_payload(key)
+    with TestClient(create_app()) as client:
+        first = client.post(
+            "/runs", json=first_payload, headers={"Authorization": f"Bearer {token}"}
+        )
+        changed = app_payload(key)
+        changed.update(duration_sec=999, distance_m=9999, memo="must not replace")
+        second = client.post(
+            "/runs", json=changed, headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 200
+    assert first.json()["id"] == second.json()["id"]
+    assert first.json()["client_run_id"] == second.json()["client_run_id"] == key
+    assert first.json()["created_at"] == second.json()["created_at"]
+    with Session(postgres_runs_environment) as session:
+        runs = session.scalars(
+            select(Run).where(Run.user_id == user_id, Run.client_run_id == key)
+        ).all()
+    assert len(runs) == 1
+    assert runs[0].duration_sec == first_payload["duration_sec"]
+    assert runs[0].distance_m == first_payload["distance_m"]
+    assert runs[0].memo == first_payload["memo"]
+    assert runs[0].samples == first_payload["samples"]
+    assert runs[0].events == first_payload["events"]
+
+
+@pytest.mark.postgres
+def test_same_client_run_id_is_scoped_per_user(postgres_runs_environment) -> None:
+    key = f"per-user-{uuid4()}"
+    token_a, user_a = authenticate(f"runs-user-a-{uuid4()}")
+    token_b, user_b = authenticate(f"runs-user-b-{uuid4()}")
+    with TestClient(create_app()) as client:
+        response_a = client.post(
+            "/runs", json=manual_payload(key), headers={"Authorization": f"Bearer {token_a}"}
+        )
+        response_b = client.post(
+            "/runs", json=manual_payload(key), headers={"Authorization": f"Bearer {token_b}"}
+        )
+
+    assert response_a.status_code == response_b.status_code == 201
+    assert response_a.json()["id"] != response_b.json()["id"]
+    with Session(postgres_runs_environment) as session:
+        runs = session.scalars(select(Run).where(Run.client_run_id == key)).all()
+    assert len(runs) == 2
+    assert {run.user_id for run in runs} == {user_a, user_b}
+
+
+@pytest.mark.postgres
+def test_manual_run_defaults_completed_and_persists_nullable_contract(
+    postgres_runs_environment,
+) -> None:
+    token, user_id = authenticate(f"runs-manual-{uuid4()}")
+    key = f"manual-{uuid4()}"
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/runs", json=manual_payload(key), headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 201
+    assert response.json()["is_analyzable"] is False
+    assert response.json()["analysis_limitation"] == "MANUAL_RUN"
+    assert response.json()["rhythm_score"] is None
+    with Session(postgres_runs_environment) as session:
+        run = session.scalar(
+            select(Run).where(Run.user_id == user_id, Run.client_run_id == key)
+        )
+    assert run is not None and run.completed is True
+    for field in (
+        "goal_type", "goal_value", "target_cadence_min", "target_cadence_max",
+        "final_target_min", "final_target_max", "avg_cadence", "avg_pace_sec_per_km",
+        "rhythm_score", "late_drop_rate", "fatigue_index", "intervention_count",
+        "downshift_count", "samples", "events",
+    ):
+        assert getattr(run, field) is None
 
 
 @pytest.mark.postgres
@@ -106,6 +204,6 @@ def test_plan_concurrency_has_no_orphan_run(postgres_runs_environment):
     assert sorted(status for status, _ in results) == [201, 409]
     with Session(postgres_runs_environment) as session:
         runs = session.scalars(select(Run).where(Run.client_run_id.in_(keys))).all()
-        stored_plan = session.get(Plan, plan_id)
+        stored_plan = session.get(Plan, UUID(plan_id))
     assert len(runs) == 1 and runs[0].plan_id is not None
     assert stored_plan is not None and stored_plan.status == "DONE"
