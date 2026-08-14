@@ -80,6 +80,7 @@ CREATE TABLE runs (
     goal_type           TEXT CHECK (goal_type IN ('TIME','DISTANCE')),
     goal_value          INTEGER,                        -- sec or meter
     condition           SMALLINT CHECK (condition BETWEEN 1 AND 5),
+                                        -- UI 3단계 매핑: 피곤함 1 / 보통 3 / 가벼움 5 (2·4 미사용)
 
     target_cadence_min  SMALLINT,
     target_cadence_max  SMALLINT,
@@ -129,8 +130,8 @@ CREATE TABLE reports (
 );
 ```
 
-AI 출력 6요소(판정·근거·가설·다음 목표·회복 안내·신뢰도)는 `CONTRACT.md`의
-`POST /runs/{id}/report` 절이 단일 진실이다. 여기에는 컬럼만 둔다.
+AI 리포트 출력 필드는 `CONTRACT.md`의 `POST /runs/{run_id}/report` 절이 단일 진실이다.
+여기에는 컬럼만 둔다. **`신뢰도`라는 이름은 쓰지 않는다 — 필드는 `limitation` 하나다.**
 
 `evidence`는 짧은 문장 배열이라 정규화하지 않고 JSONB로 둔다.
 폴백일 때는 `hypothesis`·`recovery_note`를 `NULL`로 남긴다 — 룰베이스로 가설을 지어내지 않는다.
@@ -216,13 +217,14 @@ class Sample(BaseModel):
 | --- | --- | --- |
 | `duration_sec` | O | O |
 | `started_at` | O | O (날짜) |
-| `distance_m` | O | 선택 |
+| `distance_m` | **nullable** (GPS 미수신 시 NULL) | 선택 |
 | `condition` | O | 선택 |
 | `memo` | 선택 | 선택 |
 | `goal_type` / `goal_value` | O | **NULL** |
 | `completed` | 판정 결과 | **`true` 고정** |
 | `target_cadence_*` / `final_target_*` | O | **NULL** |
-| `avg_cadence` / `avg_pace_sec_per_km` | O | **NULL** |
+| `avg_cadence` | O | **NULL** |
+| `avg_pace_sec_per_km` | **nullable** (GPS 미수신 시 NULL) | **NULL** |
 | `rhythm_score` / `late_drop_rate` / `fatigue_index` | O | **NULL** |
 | `intervention_count` / `downshift_count` | O | **NULL** |
 | `samples` / `events` | O | **NULL** |

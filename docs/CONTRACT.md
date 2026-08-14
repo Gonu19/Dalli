@@ -70,11 +70,13 @@
   "ended_at":   "2026-08-13T09:20:30Z",
   "goal_type": "TIME",                   // TIME | DISTANCE
   "goal_value": 1200,                    // sec | meter
-  "condition": 3,                        // 1~5
+  "condition": 3,                        // 피곤함 1 / 보통 3 / 가벼움 5 (2·4 미사용)
   "target_cadence_min": 154, "target_cadence_max": 162,
   "final_target_min": 148,  "final_target_max": 156,
-  "duration_sec": 1230, "distance_m": 2840,
-  "avg_cadence": 156, "avg_pace_sec_per_km": 433,
+  "duration_sec": 1230,
+  "distance_m": 2840,                    // GPS 미수신 시 null
+  "avg_cadence": 156,
+  "avg_pace_sec_per_km": 433,            // GPS 미수신 시 null
   "completed": true,
   "intervention_count": 2, "downshift_count": 1,
   "memo": null,
@@ -131,15 +133,21 @@ LLM 8초 타임아웃. 초과 시 룰베이스 폴백 문구로 **200 응답** (
 }
 ```
 
-### 출력 6요소 (PRD §20.2 — 구조로 강제)
-| 필드 | 내용 | 비고 |
-| --- | --- | --- |
-| `verdict` | 한 줄 판정 — 가장 중요한 **관찰** | 필수 |
-| `evidence` | 근거로 쓴 **핵심 수치 1~3개** | `string[]`, 1~3개 |
-| `hypothesis` | 가능한 원인 — **관찰과 구분된 가설** | nullable |
-| `next_goal_text` + `next_target_min/max` | 다음 목표 추천 | 필수 |
-| `recovery_note` | 일반적·**비의료성** 회복 안내 | nullable |
-| `limitation` | 데이터 누락·품질 저하 고지. 없으면 `null` | nullable |
+### 출력 필드 7개 (LLM JSON schema는 이 표가 전부)
+| 필드 | 타입 | 내용 | 필수 |
+| --- | --- | --- | --- |
+| `verdict` | `string` | 한 줄 판정 — 가장 중요한 **관찰** | **필수** |
+| `evidence` | `string[]` | 근거로 쓴 **핵심 수치 1~3개** | **필수** (1~3개) |
+| `hypothesis` | `string \| null` | 가능한 원인 — **관찰과 구분된 가설** | nullable |
+| `prescription` | `string \| null` | 다음 러닝에서 실천할 한 가지 | nullable |
+| `next_goal_text` | `string` | 다음 목표 문장 | **필수** |
+| `next_target_min` / `max` | `int` | 다음 목표 케이던스 범위 | **필수** |
+| `recovery_note` | `string \| null` | 일반적·**비의료성** 회복 안내 | nullable |
+| `limitation` | `string \| null` | 데이터 누락·품질 저하 고지 | nullable |
+
+> 다른 문서에서 *"6요소"*로 부르던 것과 같은 대상이다. **실제 필드는 위 7개(+`next_target_*`)**이고,
+> `신뢰도`라는 이름은 쓰지 않는다 — 필드명은 `limitation` 하나뿐이다.
+> LLM 스키마를 만들 때 이 표 외의 필드를 추가하지 않는다.
 
 - **표현 원칙**: *"~때문이다"* 금지, *"~의 영향일 수 있어요"*로 가설임을 명시.
   의료 진단·통증 원인·치료 처방은 생성하지 않는다. 사용자를 비난하거나 성과를 과장하지 않는다.

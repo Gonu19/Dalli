@@ -31,23 +31,56 @@
 | 최대 하향 | 2회 | `MAX_DOWNSHIFT` |
 | 하향 쿨타임 | 5분 | `DOWNSHIFT_INTERVAL_SEC` |
 | 하향 하한 | **130** | `DOWNSHIFT_FLOOR` |
+| **1회당 최대 하향폭** | **5 spm** | `MAX_DOWNSHIFT_STEP` |
 | 하향 후 안정화 | 새 범위 30초 유지 | `RESTABILIZE_SEC` |
+| **컨디션 매핑** | 피곤함 **1** / 보통 **3** / 가벼움 **5** | `CONDITION_VALUE` |
 | **리커버리 진입** | **3번째 하향 조건 충족** 또는 **하한 130 도달** | — |
 
 `RECOVERY(±3) < TARGET(±4)` — 경계 깜빡임 방지 히스테리시스. 뒤집지 말 것.
+
+**회복 판정은 언제나 `중심 ±3`이다.** 이탈 진입은 `±4 초과`, 회복 복귀는 `±3 이내`로
+기준이 서로 다르다. 쿨다운 종료 시점의 성공/실패 판정도 **`±3` 기준**을 쓴다
+(`±4`로 재면 경계값에서 성공/실패가 뒤집힌다).
 
 **비대칭 원칙**: `TOO_FAST`는 개입만 하고 downshift 경로가 없다. `TOO_SLOW`·걷기만 downshift로 간다.
 근거는 §7.
 
 ## 2. Baseline
+
 - 초기 추천: Rule-based (경험 수준 × 목표). **LLM 미사용.**
 - 온보딩 수동 조절: ±5 spm 범위, 1 spm 단위.
-- 확정: 첫 러닝 워밍업 후 3분 실측 **중앙값**.
-- 2회차 이후: `users.baseline_cadence` 사용.
 - 로직 반영 입력: 경험 수준·목표만. 신체 정보 제외.
 - 러닝 중 수동 조절: 불가.
-- **세션 간 업시프트**: 러닝 종료 후 서버가 판정 — `상단(중심~+4) 유지 60% 이상` + `downshift 0회` + `완주`
-  → 다음 목표 `+2` 제안. `reports.next_target_min/max`로 전달. **러닝 중 업시프트는 없다.**
+
+### 실측 baseline은 러닝 중이 아니라 **종료 후**에 산출한다
+
+**러닝 중 캘리브레이션 구간은 없다.** 첫 러닝도 다른 러닝과 완전히 동일하게 동작한다.
+
+```
+러닝 시작 → 온보딩 추천값으로 목표를 잡고 정상 판정 (첫 러닝도 예외 없음)
+러닝 종료 → samples에서 실측 baseline 산출 → 리포트에서 확정 제안
+다음 러닝 → 확정된 baseline 사용
+```
+
+산출 규칙 — 클라이언트가 종료 시점에 계산해 `PATCH /users/me`로 보낸다.
+
+```
+구간   t = 90 ~ 270초 (워밍업 직후 3분)
+제외   정지(< 50 spm) 샘플
+값     중앙값
+조건   유효 샘플 30개 미만이거나 duration < 360초면 확정하지 않는다
+```
+
+**러닝 중에 측정할 이유가 없다.** 어차피 `samples`가 5초 간격으로 전부 남고,
+확정값을 그 러닝에 적용하면 도중에 목표가 바뀌어 혼란만 생긴다.
+(러닝 중 목표 상향은 §7에서 금지한 동작이기도 하다.)
+
+이 결정으로 사라지는 것: `CALIBRATING` 상태, "기준 리듬 측정 중" 화면,
+그리고 *"워밍업 90초가 3분에 포함되는가"* 하는 시간축 모호성 전부.
+
+### 세션 간 업시프트
+러닝 종료 후 서버가 판정 — `상단(중심~+4) 유지 60% 이상` + `downshift 0회` + `완주`
+→ 다음 목표 `+2` 제안. `reports.next_target_min/max`로 전달. **러닝 중 업시프트는 없다.**
 
 ### 노출 규칙
 | 대상 | 노출 |
@@ -65,6 +98,19 @@ targetMin = center - 4
 targetMax = center + 4
 ```
 클램프는 center에만 적용 (min/max 각각에 걸면 범위 폭이 찌그러짐).
+
+### 컨디션 — UI 3단계, 저장값 1/3/5
+UI는 3단계지만 DB·API·FI는 `1~5` 정수를 쓴다. **매핑을 여기서 고정한다.**
+
+| UI | `condition` 저장값 | `conditionAdjust` | FI 기여 `(5−c)/4×0.2` |
+| --- | --- | --- | --- |
+| 피곤함 | **1** | −3 | 0.20 |
+| 보통 | **3** | 0 | 0.10 |
+| 가벼움 | **5** | +2 | 0.00 |
+
+- 2·4는 **사용하지 않는다.** DB `CHECK (condition BETWEEN 1 AND 5)`는 확장 여지로 남겨둔다
+- 미입력(수기 기록 등)은 **3(보통)** 으로 간주 (§12 FI 참조)
+- 이 매핑이 없으면 FE가 보낸 값과 BE의 FI 계산이 바로 어긋난다
 
 ### 화면에는 범위를 노출하지 않는다
 사용자에게는 **중심값 하나**만 보여준다. 메트로놈도 center BPM으로 울린다.
@@ -113,15 +159,41 @@ DB·API는 `target_cadence_min/max`가 원본. center는 표시 시 `(min+max)/2
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE
-    IDLE --> CALIBRATING : 시작(baseline 없음)
-    IDLE --> RUNNING : 시작(baseline 있음)
-    CALIBRATING --> RUNNING : 3분 측정 완료
+    IDLE --> RUNNING : 시작
     RUNNING --> PAUSED
     PAUSED --> RUNNING
     RUNNING --> [*] : 수동 종료
     PAUSED --> [*] : 수동 종료
 ```
+**`CALIBRATING` 상태는 없다.** 첫 러닝도 `RUNNING`으로 바로 들어간다 (§2).
 완주해도 자동 종료 없음(알림만). `PAUSED` 중 타이머·판정·샘플링 정지, `PAUSE`/`RESUME` 이벤트 기록.
+
+### 시간은 wall-clock을 쓰지 않는다 ⚠️
+엔진 안에서 **`Date.now()` / `setTimeout` / `setInterval`로 시간을 재지 않는다.**
+모든 시간 판정은 tick으로 전달된 **경과 초(`elapsedSec`)** 기준으로만 한다.
+
+```ts
+// ✗ 금지
+setTimeout(() => endCooldown(), 60_000)
+
+// ○ 이렇게
+judge({ elapsedSec, cadence })   // 내부에서 elapsedSec - cooldownStartedAt >= 60 판정
+```
+
+이유가 둘이다.
+- **`ReplaySource`가 배속으로 돌 때 판정 시간이 같이 배속되어야 한다.** wall-clock을 쓰면
+  샘플만 빨리 흐르고 쿨다운·이탈 지속·하향 간격은 현실 시간으로 남아 시뮬레이션이 깨진다
+- 백그라운드에서 타이머가 지연·병합되어도 경과 초는 정확하다
+
+시간을 만드는 곳은 `CadenceSource` **한 곳뿐**이다. 엔진은 받은 숫자로만 판단한다.
+
+```ts
+interface CadenceSample { elapsedSec: number; cadence: number; pace?: number; dist?: number }
+interface CadenceSource { start(cb: (s: CadenceSample) => void): void; stop(): void }
+```
+
+`ReplaySource(samples, speed)`는 `speed`만큼 빠르게 같은 `elapsedSec`을 흘려보낸다.
+엔진 코드는 한 줄도 바뀌지 않는다.
 
 ### 판정 (`judge`)
 ```mermaid
@@ -132,8 +204,8 @@ stateDiagram-v2
     DEVIATING --> IN_RANGE : 회복(±3)
     DEVIATING --> INTERVENED : 20초(일반) / 10초(급격)
     INTERVENED --> COOLDOWN : 오디오 종료
-    COOLDOWN --> IN_RANGE : 60초 후 범위 안
-    COOLDOWN --> FAILED : 60초 후 범위 밖
+    COOLDOWN --> IN_RANGE : 60초 후 중심 ±3 진입
+    COOLDOWN --> FAILED : 60초 후 중심 ±3 밖
     FAILED --> DEVIATING : 트리거 미만
     FAILED --> DOWNSHIFT : 트리거 충족 & 하향 잔여 있음
     FAILED --> RECOVERY : 트리거 충족 & 하향 소진
@@ -191,16 +263,46 @@ stateDiagram-v2
 | 급격 이탈(느림) | 실패 1회 |
 | 걷기 60초 지속 | 즉시 |
 
+### 하향폭 계산 — 1회당 최대 −5
+
 ```
-newCenter = median(직전 60초 실측 cadence)
-newCenter = max(newCenter, 130)
+runSamples = 직전 60초 샘플 중 cadence > 120 인 것만   ← 걷기·정지 제외
+candidate  = runSamples.length >= 4 ? median(runSamples) : currentCenter - 5
+newCenter  = clamp(candidate, currentCenter - 5, currentCenter)   ← 한 번에 최대 −5
+newCenter  = max(newCenter, 130)
 newMin/Max = newCenter ∓ 4
 ```
+
+| 상수 | 값 |
+| --- | --- |
+| `MAX_DOWNSHIFT_STEP` | **5 spm** (1회당) |
+| `DOWNSHIFT_MEDIAN_MIN_SAMPLES` | 4개 (60초 / 5초 tick의 절반) |
+
+**두 가지 장치가 함께 작동한다.**
+
+**① 걷기·정지 샘플을 median에서 뺀다 — 변동이 큰 사용자 대응의 핵심.**
+걷다 뛰다 반복하면 60초 중앙값이 걷기 쪽(100 근처)으로 끌려간다.
+그 값으로 목표를 잡으면 걷는 것이 "목표 달성"이 되어 판정이 무너진다.
+**"이 사람이 달릴 때 유지하는 리듬"**만 봐야 하므로 러닝 샘플(`> 120`)만 쓴다.
+
+**② 1회당 −5 상한.** median이 아무리 낮게 나와도 한 번에 5 이상 떨어지지 않는다.
+`165 → 132`처럼 한 번에 무너지지 않고 `165 → 160 → 155`로 단계적으로 내려간다.
+
+걷기 60초로 트리거된 경우엔 러닝 샘플이 거의 없으므로 **고정 −5**가 적용된다.
+이 장치가 없으면 *걷기 = 즉시 130 = 리커버리 진입 버튼*이 되어,
+한 번 걷는 순간 러닝이 사실상 종료되는 동작이 된다.
+
+### 실행 규칙
 - **세션당 최대 2회 실행.** 2회를 모두 쓴 뒤 3번째 하향 조건이 충족되면 downshift 대신 **리커버리 진입**.
 - 하한 130에 도달한 경우 횟수와 무관하게 **즉시 리커버리 진입**.
 - 하향 후 5분 금지, 새 범위 30초 유지 시 안정화.
 - **원래 목표 복귀 없음.** 하향 범위가 최종 목표.
 - 기록: `TARGET_ADJUSTED` 이벤트 + `runs.final_target_min/max` 갱신.
+
+> 세션당 최대 −10이므로 하한 130에 실제로 닿으려면 시작 목표가 140 이하여야 한다.
+> 즉 **대부분의 러닝에서 리커버리는 "하향 2회 소진" 경로로 진입**하고,
+> 하한 도달 경로는 애초에 목표가 매우 낮았던 예외 상황에서만 발생한다.
+> 변동이 극심한 사용자는 2회를 빠르게 소진하고 리커버리로 가는데, **그게 의도된 귀결이다.**
 
 ## 9. 리커버리 모드
 ```
