@@ -1,13 +1,23 @@
+from collections.abc import Mapping
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 
 class ApplicationError(Exception):
-    def __init__(self, *, code: str, message: str, status_code: int) -> None:
+    def __init__(
+        self,
+        *,
+        code: str,
+        message: str,
+        status_code: int,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         self.code = code
         self.message = message
         self.status_code = status_code
+        self.headers = headers
         super().__init__(message)
 
 
@@ -22,6 +32,7 @@ async def application_error_handler(
     return JSONResponse(
         status_code=exc.status_code,
         content=_error_body(exc.code, exc.message),
+        headers=exc.headers,
     )
 
 

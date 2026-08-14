@@ -33,8 +33,8 @@ uvicorn app.main:app --reload
 python -m pytest -q
 ```
 
-현재는 도메인 모델과 revision이 없으므로 `alembic current`는 revision을 출력하지 않는 것이 정상이다.
-첫 모델 계획에서 모델을 `app/models/__init__.py`에 import하고 migration을 생성한다.
+최초 스키마 revision은 `0001_initial_schema`다. 모델을 추가할 때는
+`app/models/__init__.py`에 import한 뒤 autogenerate 결과를 `docs/ERD.md`와 대조한다.
 
 ## 프론트용 Mock API (화요일 전)
 
@@ -47,10 +47,15 @@ python -m uvicorn app.mock_main:app --host 0.0.0.0 --port 8001
 ```
 
 - Swagger: `http://localhost:8001/docs`
-- 아이폰 Base URL: `http://<개발-PC-LAN-IP>:8001`
+- 로컬 아이폰 임시 확인: `http://<개발-PC-LAN-IP>:8001`
+- 프론트 통합 Base URL: EC2 Nginx의 `https://<api-domain>` (Mock과 실 API에서 동일)
 - 데이터: `../docs/mock-data/api-fixtures.json`
 - DB와 OpenAI를 호출하지 않으며 재시작 시 상태가 초기화된다.
-- 화요일 실서버 전환 시 실행 모듈을 `app.main:app`으로 바꾸고 HTTPS Base URL을 전달한다.
+- EC2 접근 권한이 제공되면 BE가 swap 2GB, Nginx, Certbot과 Mock 배포를 함께
+  구성한다. 접근 전에는 실제 서버 설정이나 비밀값 입력을 수행하지 않는다.
+- 화요일 실서버 전환 시 외부 HTTPS 주소는 유지하고 Nginx 내부 업스트림만
+  `app.mock_main:app`에서 `app.main:app`으로 바꾼다.
+- EC2 배포와 전환 절차: [deploy/README.md](deploy/README.md)
 
 ## .env
 ```
@@ -68,6 +73,36 @@ alembic upgrade head
 alembic downgrade -1
 ```
 스키마 변경 시 [../docs/ERD.md](../docs/ERD.md)를 같은 커밋에서 갱신.
+
+### PostgreSQL 통합 검증 게이트
+
+PostgreSQL 서버가 제공되기 전에는 DB 없는 단위 테스트와 Mock API 개발을
+진행한다. `TEST_DATABASE_URL`이 없을 때 PostgreSQL 통합 테스트가 skip되는 것은
+의도된 동작이며, PostgreSQL 전용 타입·제약·마이그레이션이 검증됐다는 의미가
+아니다.
+
+서버 제공 후 운영·기존 개발 DB와 분리된 `dalli_test`를 만들고 다음 검증을
+필수 게이트로 실행한다. 테스트 코드가 DB 이름에 `test`가 포함됐는지 확인하므로
+`dalli`를 `TEST_DATABASE_URL`로 지정할 수 없다.
+
+```bash
+cd server
+export TEST_DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:5432/dalli_test
+export DATABASE_URL="$TEST_DATABASE_URL"
+
+alembic upgrade head
+alembic current
+alembic check
+python -m pytest -q
+alembic downgrade base
+alembic upgrade head
+alembic current
+alembic check
+```
+
+PowerShell에서는 `export NAME=value` 대신 `$env:NAME = "value"`를 사용한다.
+이후 실제 API E2E까지 모두 통과한 경우에만 `dalli`에 마이그레이션을 적용한다.
+실제 비밀번호는 셸 환경변수나 커밋되지 않는 `server/.env`에만 둔다.
 
 ## 구조
 ```

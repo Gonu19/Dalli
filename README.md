@@ -12,7 +12,7 @@
 | | |
 | --- | --- |
 | Figma | `<링크 넣기>` |
-| API 문서 (Swagger) | `http://<EC2-IP>:8000/docs` |
+| API 문서 (Swagger) | `https://<api-domain>/docs` |
 | 이슈 | GitHub Issues |
 
 ## 문서

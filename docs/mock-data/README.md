@@ -21,10 +21,11 @@ python -m uvicorn app.mock_main:app --host 0.0.0.0 --port 8001
 ```
 
 - PC 확인: `http://localhost:8001/docs`
-- 아이폰: `http://<PC-LAN-IP>:8001`
-- 아이폰과 PC는 같은 Wi-Fi에 연결한다.
-- Windows 방화벽에서 Python/8001 인바운드 허용이 필요할 수 있다.
-- 앱의 `EXPO_PUBLIC_API_URL`을 위 아이폰용 주소로 설정하고 Expo 캐시를 비운다.
+- 로컬 아이폰 임시 확인: `http://<PC-LAN-IP>:8001`
+- 로컬 확인 시 아이폰과 PC는 같은 Wi-Fi에 연결하고 Windows 방화벽에서
+  Python/8001 인바운드를 허용해야 할 수 있다.
+- 프론트 통합용 확정 `EXPO_PUBLIC_API_URL`은 EC2 Nginx가 제공하는 HTTPS 주소다.
+  Mock과 실 API 전환 시 이 주소를 바꾸지 않는다.
 - 이 서버는 메모리 상태만 사용하며 재시작하면 초기화된다.
 - PostgreSQL과 OpenAI를 전혀 호출하지 않는다.
 
@@ -36,4 +37,5 @@ X-Mock-Scenario: fallback
 X-Mock-Scenario: insufficient_data
 ```
 
-화요일 실서버 연결 이후에는 `app.mock_main` 대신 `app.main`을 실행하고 이 헤더를 제거한다.
+화요일 실서버 연결 이후에는 같은 HTTPS 진입점의 내부 업스트림을
+`app.mock_main`에서 `app.main`으로 전환하고 이 헤더를 제거한다.
