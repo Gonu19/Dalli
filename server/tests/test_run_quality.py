@@ -63,6 +63,19 @@ def test_open_pause_uses_run_end_then_duration_fallback():
     assert compute_active_duration_sec(180, without_end) == 60
 
 
+def test_open_pause_at_120_uses_first_run_end_at_200():
+    intervals = compute_pause_intervals(
+        [
+            {"t": 120, "type": "PAUSE"},
+            {"t": 200, "type": "RUN_END"},
+            {"t": 220, "type": "RUN_END"},
+        ],
+        240,
+    )
+    assert intervals == (PauseInterval(120, 200),)
+    assert compute_active_duration_sec(240, intervals) == 160
+
+
 def test_active_duration_unions_overlapping_and_bounds_intervals():
     intervals = (
         PauseInterval(-10, 30),
@@ -169,6 +182,14 @@ def test_sensor_coverage_uses_exact_ratio_and_clamps(valid_count, expected_count
     assert compute_sensor_coverage(valid_count, expected_count) == coverage
 
 
+@pytest.mark.parametrize(
+    ("valid_count", "expected_count", "coverage"),
+    [(0, 10, 0.0), (10, 10, 1.0), (15, 10, 1.0), (7, 0, 0.0)],
+)
+def test_sensor_coverage_additional_clamp_boundaries(valid_count, expected_count, coverage):
+    assert compute_sensor_coverage(valid_count, expected_count) == coverage
+
+
 def test_limitation_priority_and_coverage_boundaries():
     manual = assess_run_quality(
         run(source="MANUAL", duration_sec=900, samples="bad", events="bad")
@@ -209,6 +230,28 @@ def test_active_duration_boundary(duration, events, active, limitation):
     result = assess_run_quality(run(duration_sec=duration, events=events, samples=samples))
     assert result.active_duration_sec == active
     assert result.pause_duration_sec == duration - active
+    assert result.analysis_limitation == limitation
+
+
+@pytest.mark.parametrize(
+    ("pause_duration", "active", "limitation"),
+    [(61, 179, "TOO_SHORT"), (60, 180, None), (59, 181, None)],
+)
+def test_pause_duration_sets_exact_179_180_181_active_boundary(
+    pause_duration,
+    active,
+    limitation,
+):
+    events = [
+        {"t": 0, "type": "PAUSE"},
+        {"t": pause_duration, "type": "RESUME"},
+    ]
+    enough_samples = [{"t": t, "c": 157} for t in range(pause_duration, 241)]
+    result = assess_run_quality(
+        run(duration_sec=240, events=events, samples=enough_samples)
+    )
+    assert result.pause_duration_sec == pause_duration
+    assert result.active_duration_sec == active
     assert result.analysis_limitation == limitation
 
 
