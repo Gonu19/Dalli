@@ -8,6 +8,7 @@ import {
   deleteRun,
   deletePlan,
   getCalendar,
+  getRunDetail,
   getRunReport,
   getRuns,
   getStats,
@@ -72,6 +73,14 @@ export function useRunReport(token: string | null, runId: string | null) {
     queryFn: () => getRunReport(requireToken(token), runId!),
     enabled: Boolean(token && runId),
     retry: false,
+  });
+}
+
+export function useRunDetail(token: string | null, runId: string | null) {
+  return useQuery({
+    queryKey: ['run', runId],
+    queryFn: () => getRunDetail(requireToken(token), runId!),
+    enabled: Boolean(token && runId),
   });
 }
 

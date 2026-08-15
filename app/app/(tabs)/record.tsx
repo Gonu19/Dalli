@@ -93,11 +93,20 @@ export default function RecordScreen() {
 
       <View style={styles.statsCard}>
         <Text style={styles.sectionTitle}>나의 러닝 루틴</Text>
-        <View style={styles.statRow}>
-          <Stat label="누적 활동일" value={`${stats.data?.totalRunDays ?? 0}일`} />
-          <Stat label="앱 측정" value={`${stats.data?.dalliDays ?? 0}일`} />
-          <Stat label="이번 달" value={`${stats.data?.thisMonthDays ?? 0}일`} />
-        </View>
+        {stats.isLoading ? <Text style={styles.body}>활동일을 불러오는 중이에요.</Text> : stats.error ? (
+          <StatePanel
+            title="활동일을 불러오지 못했어요"
+            body="저장된 기록은 유지돼요. 연결을 확인하고 다시 시도해 주세요."
+            actionLabel="다시 시도"
+            onAction={() => void stats.refetch()}
+          />
+        ) : (
+          <View style={styles.statRow}>
+            <Stat label="누적 활동일" value={`${stats.data?.totalRunDays ?? 0}일`} />
+            <Stat label="앱 측정" value={`${stats.data?.dalliDays ?? 0}일`} />
+            <Stat label="이번 달" value={`${stats.data?.thisMonthDays ?? 0}일`} />
+          </View>
+        )}
       </View>
 
       <Modal animationType="slide" onRequestClose={() => setForm(null)} transparent visible={form !== null}>

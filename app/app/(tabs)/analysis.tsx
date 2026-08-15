@@ -20,7 +20,16 @@ export default function AnalysisScreen() {
       '캘린더와 누적 활동일에서도 함께 사라져요.',
       [
         { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: () => void remove.mutateAsync(run.id) },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: () => void remove.mutateAsync(run.id).catch(() => {
+            Alert.alert(
+              '러닝을 삭제하지 못했어요',
+              '기록은 그대로 보존됐어요. 연결을 확인한 뒤 다시 시도해 주세요.',
+            );
+          }),
+        },
       ],
     );
   };

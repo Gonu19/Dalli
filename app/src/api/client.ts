@@ -98,6 +98,21 @@ export type RunListItem = {
   hasReport: boolean;
 };
 
+export type RunDetail = {
+  id: string;
+  startedAt: string;
+  goalType: 'TIME' | 'DISTANCE' | null;
+  goalValue: number | null;
+  durationSec: number;
+  distanceM: number | null;
+  avgCadence: number | null;
+  avgPaceSecPerKm: number | null;
+  completed: boolean;
+  interventionCount: number | null;
+  rhythmScore: number | null;
+  report: RunReport | null;
+};
+
 export type RunReport = {
   id: string;
   runId: string;
@@ -324,6 +339,38 @@ export async function getRuns(token: string): Promise<RunListItem[]> {
     rhythmScore: item.rhythm_score,
     hasReport: item.has_report,
   }));
+}
+
+export async function getRunDetail(token: string, runId: string): Promise<RunDetail> {
+  const response = await request<{
+    id: string;
+    started_at: string;
+    goal_type: 'TIME' | 'DISTANCE' | null;
+    goal_value: number | null;
+    duration_sec: number;
+    distance_m: number | null;
+    avg_cadence: number | null;
+    avg_pace_sec_per_km: number | null;
+    completed: boolean;
+    intervention_count: number | null;
+    rhythm_score: number | null;
+    report: RunReportResponse | null;
+  }>(`/runs/${runId}`, {}, token);
+
+  return {
+    id: response.id,
+    startedAt: response.started_at,
+    goalType: response.goal_type,
+    goalValue: response.goal_value,
+    durationSec: response.duration_sec,
+    distanceM: response.distance_m,
+    avgCadence: response.avg_cadence,
+    avgPaceSecPerKm: response.avg_pace_sec_per_km,
+    completed: response.completed,
+    interventionCount: response.intervention_count,
+    rhythmScore: response.rhythm_score,
+    report: response.report ? mapRunReport(response.report) : null,
+  };
 }
 
 type RunReportResponse = {

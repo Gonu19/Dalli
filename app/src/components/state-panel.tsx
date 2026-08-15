@@ -19,7 +19,7 @@ export function StatePanel({ title, body, actionLabel, onAction, loading = false
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {actionLabel && onAction ? (
-        <PrimaryButton variant="secondary" onPress={onAction} style={styles.action}>
+        <PrimaryButton loading={loading} variant="secondary" onPress={onAction} style={styles.action}>
           {actionLabel}
         </PrimaryButton>
       ) : null}
