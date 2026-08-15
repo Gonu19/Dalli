@@ -128,13 +128,14 @@ def _target_at(
     return target
 
 
-def compute_in_range_sec(
+def _compute_target_range_sec(
     *,
     samples: object,
     duration_sec: object,
     pause_intervals: Sequence[PauseInterval],
     initial_target: tuple[object, object],
     events: object,
+    upper_half_only: bool,
 ) -> float | None:
     duration = _duration(duration_sec)
     target_min = _finite_number(initial_target[0])
@@ -168,9 +169,48 @@ def compute_in_range_sec(
             if _inside_pause(start, pause_intervals):
                 continue
             current_min, current_max = _target_at(start, (target_min, target_max), adjustments)
+            if upper_half_only:
+                current_min = (current_min + current_max) / 2.0
             if current_min <= sample.cadence <= current_max:
                 in_range_sec += end - start
     return max(0.0, in_range_sec)
+
+
+def compute_in_range_sec(
+    *,
+    samples: object,
+    duration_sec: object,
+    pause_intervals: Sequence[PauseInterval],
+    initial_target: tuple[object, object],
+    events: object,
+) -> float | None:
+    return _compute_target_range_sec(
+        samples=samples,
+        duration_sec=duration_sec,
+        pause_intervals=pause_intervals,
+        initial_target=initial_target,
+        events=events,
+        upper_half_only=False,
+    )
+
+
+def compute_upper_range_sec(
+    *,
+    samples: object,
+    duration_sec: object,
+    pause_intervals: Sequence[PauseInterval],
+    initial_target: tuple[object, object],
+    events: object,
+) -> float | None:
+    """Time held in the current target's center-to-upper-bound segment."""
+    return _compute_target_range_sec(
+        samples=samples,
+        duration_sec=duration_sec,
+        pause_intervals=pause_intervals,
+        initial_target=initial_target,
+        events=events,
+        upper_half_only=True,
+    )
 
 
 def compute_rhythm_score(in_range_sec: object, active_duration_sec: object) -> float | None:
