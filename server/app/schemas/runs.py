@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
+from app.schemas.reports import ReportResponse
+
 
 FiniteNumber = Annotated[float, Field(allow_inf_nan=False)]
 SmallIntegerValue = Annotated[int, Field(strict=True, ge=-32768, le=32767)]
@@ -95,4 +97,61 @@ class RunCreateResponse(BaseModel):
 
     @field_serializer("rhythm_score", "late_drop_rate", "fatigue_index", when_used="json")
     def serialize_metric(self, value: Decimal | None) -> float | None:
+        return None if value is None else float(value)
+
+
+class RunListItem(BaseModel):
+    id: UUID
+    started_at: datetime
+    duration_sec: int
+    distance_m: int | None
+    avg_cadence: int | None
+    completed: bool
+    source: Literal["APP", "MANUAL"]
+    rhythm_score: Decimal | None
+    has_report: bool
+
+    @field_serializer("rhythm_score", when_used="json")
+    def serialize_rhythm_score(self, value: Decimal | None) -> float | None:
+        return None if value is None else float(value)
+
+
+class RunListResponse(BaseModel):
+    items: list[RunListItem]
+    next_cursor: str | None
+
+
+class RunDetailResponse(BaseModel):
+    id: UUID
+    client_run_id: str
+    source: Literal["APP", "MANUAL"]
+    plan_id: UUID | None
+    started_at: datetime
+    ended_at: datetime | None
+    goal_type: Literal["TIME", "DISTANCE"] | None
+    goal_value: int | None
+    condition: int | None
+    target_cadence_min: int | None
+    target_cadence_max: int | None
+    final_target_min: int | None
+    final_target_max: int | None
+    duration_sec: int
+    distance_m: int | None
+    avg_cadence: int | None
+    avg_pace_sec_per_km: int | None
+    completed: bool
+    rhythm_score: Decimal | None
+    late_drop_rate: Decimal | None
+    fatigue_index: Decimal | None
+    intervention_count: int | None
+    downshift_count: int | None
+    memo: str | None
+    is_analyzable: bool
+    analysis_limitation: AnalysisLimitation | None
+    samples: list[dict[str, Any]] | None
+    events: list[dict[str, Any]] | None
+    report: ReportResponse | None
+
+    @field_serializer("rhythm_score", "late_drop_rate", "fatigue_index", when_used="json")
+    def serialize_detail_metric(self, value: Decimal | None) -> float | None:
         return None if value is None else float(value)
