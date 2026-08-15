@@ -106,7 +106,7 @@ def test_run_queries_cursor_ownership_report_and_hard_delete(bep14_postgres_engi
         ]
         run_id = created[0].json()["id"]
         report = client.post(f"/runs/{run_id}/report", headers=_headers(token))
-        assert report.status_code in (200, 201)
+        assert report.status_code == 200
 
         seen: list[str] = []
         cursor = None

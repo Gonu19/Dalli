@@ -8,6 +8,7 @@ from app.config import Settings, get_settings
 from app.deps import get_current_user, get_db
 from app.main import create_app
 from app.models import Report, Run, User
+from app.services.llm import LLMReportContent
 
 
 NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
@@ -94,10 +95,18 @@ class FakeSession:
         self.rollbacks += 1
 
 
-def client_for(owner: User, db: FakeSession) -> TestClient:
+def client_for(
+    owner: User,
+    db: FakeSession,
+    report_settings: Settings | None = None,
+) -> TestClient:
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: owner
     app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_settings] = lambda: report_settings or Settings(
+        database_url="postgresql+psycopg://test:test@localhost:5432/dalli_test",
+        jwt_secret="test-only-jwt-secret-with-sufficient-length",
+    )
     return TestClient(app)
 
 
@@ -165,6 +174,44 @@ def test_first_analyzable_post_creates_fallback_report_with_200():
     assert body["is_fallback"] is True and body["model"] is None
 
 
+def test_valid_llm_report_is_saved_with_server_metrics_and_200(monkeypatch):
+    owner = user()
+    run = app_run(owner)
+    db = FakeSession([run, None])
+    llm_content = LLMReportContent(
+        verdict="오늘은 안정적인 리듬을 이어간 러닝이에요.",
+        evidence=["안정 구간 100%"],
+        hypothesis="일정한 리듬의 영향일 수 있어요.",
+        prescription="다음에도 같은 리듬으로 시작해 보세요.",
+        next_goal_text="다음 목표: 3분 완주, 리듬 159",
+        next_target_min=155,
+        next_target_max=163,
+        recovery_note=None,
+        limitation="위치 정보가 없어 거리와 페이스는 분석하지 않았어요.",
+    )
+    monkeypatch.setattr(
+        "app.services.reports.generate_llm_report",
+        lambda *_: llm_content,
+    )
+    llm_settings = Settings(
+        database_url="postgresql+psycopg://test:test@localhost:5432/dalli_test",
+        jwt_secret="test-only-jwt-secret-with-sufficient-length",
+        openai_api_key="test-key",
+        llm_enabled=True,
+        openai_model="gpt-4o-mini",
+    )
+
+    response = client_for(owner, db, llm_settings).post(f"/runs/{run.id}/report")
+
+    assert response.status_code == 200
+    assert response.json()["is_fallback"] is False
+    assert response.json()["model"] == "gpt-4o-mini"
+    assert response.json()["metrics"]["rhythm_score"] == 1.0
+    assert db.added[0].is_fallback is False
+    assert db.added[0].model == "gpt-4o-mini"
+    assert run.rhythm_score == Decimal("1.000")
+
+
 def test_first_unanalyzable_app_post_creates_report_but_returns_200():
     owner = user()
     run = app_run(
@@ -202,11 +249,15 @@ def test_post_corrupted_app_run_without_target_range_returns_422():
     assert not db.added and db.commits == 0
 
 
-def test_duplicate_post_returns_existing_report_unchanged_without_write():
+def test_duplicate_post_returns_existing_report_unchanged_without_write(monkeypatch):
     owner = user()
     run = app_run(owner)
     existing = report(run)
     db = FakeSession([run, existing])
+    monkeypatch.setattr(
+        "app.services.reports.generate_llm_report",
+        lambda *_: (_ for _ in ()).throw(AssertionError("LLM must not be called")),
+    )
     response = client_for(owner, db).post(f"/runs/{run.id}/report")
     assert response.status_code == 200
     assert response.json()["id"] == str(existing.id)
@@ -240,4 +291,5 @@ def test_openapi_registers_report_post_and_get_contract():
     assert {"post", "get"} <= set(path)
     assert path["post"]["security"] == [{"HTTPBearer": []}]
     assert path["get"]["security"] == [{"HTTPBearer": []}]
-    assert {"200", "201", "401", "404", "422"} <= set(path["post"]["responses"])
+    assert {"200", "401", "404", "422"} <= set(path["post"]["responses"])
+    assert "201" not in path["post"]["responses"]

@@ -1,14 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.config import Settings, get_settings
 from app.deps import get_current_user, get_db
 from app.models import User
 from app.schemas.reports import ReportResponse
 from app.schemas.errors import error_response
 from app.services.reports import (
-    create_fallback_report,
+    create_report as create_report_service,
     get_report,
     report_response,
 )
@@ -24,22 +25,20 @@ router = APIRouter(
 @router.post(
     "/{run_id}/report",
     response_model=ReportResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_200_OK,
     responses={
-        200: {"model": ReportResponse, "description": "폴백 또는 기존 리포트"},
+        200: {"model": ReportResponse, "description": "생성 또는 기존 리포트"},
         404: error_response("러닝 없음 또는 소유권 불일치"),
         422: error_response("수기 러닝 또는 잘못된 목표 범위"),
     },
 )
 def create_report(
     run_id: UUID,
-    response: Response,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> ReportResponse:
-    result = create_fallback_report(db, current_user, run_id)
-    if not result.created or result.report.is_fallback or not result.is_analyzable:
-        response.status_code = status.HTTP_200_OK
+    result = create_report_service(db, current_user, run_id, settings)
     return report_response(result.report, result.run)
 
 
