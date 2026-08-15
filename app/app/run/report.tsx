@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { useCreateReport, useRunReport } from '@/src/api/queries';
+import { useCreateReport, useRunDetail } from '@/src/api/queries';
 import type { RunReport } from '@/src/api/client';
 import { useAuth } from '@/src/components/auth-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
@@ -16,22 +16,26 @@ export default function RunReportScreen() {
   const params = useLocalSearchParams<{ runId?: string }>();
   const { token } = useAuth();
   const { result, setReport } = useRunResult();
-  const runId = params.runId ?? result?.uploaded?.id ?? null;
-  const existing = useRunReport(token, params.runId ?? null);
+  const localResult = params.runId ? null : result;
+  const runId = params.runId ?? localResult?.uploaded?.id ?? null;
+  const detail = useRunDetail(token, params.runId ?? null);
   const create = useCreateReport(token);
   const requested = useRef(false);
 
   useEffect(() => {
-    if (params.runId || !runId || result?.report || requested.current) return;
+    if (!runId || localResult?.report || detail.data?.report || requested.current) return;
+    if (params.runId && !detail.data) return;
     requested.current = true;
-    create.mutateAsync(runId).then(setReport).catch(() => undefined);
-  }, [create, params.runId, result?.report, runId, setReport]);
+    create.mutateAsync(runId).then((created) => {
+      if (!params.runId) setReport(created);
+    }).catch(() => undefined);
+  }, [create, detail.data?.report, detail.isLoading, localResult?.report, params.runId, runId, setReport]);
 
-  const report = params.runId ? existing.data : result?.report ?? create.data;
-  const loading = params.runId ? existing.isLoading : Boolean(runId && create.isPending);
-  const error = params.runId ? existing.error : create.error;
+  const report = localResult?.report ?? detail.data?.report ?? create.data;
+  const loading = detail.isLoading || Boolean(runId && create.isPending);
+  const error = detail.error ?? create.error;
 
-  if (!result && !params.runId) {
+  if (!localResult && !params.runId) {
     return <Screen><StatePanel title="표시할 리포트가 없어요" body="러닝을 마치면 기본 기록과 다음 행동을 볼 수 있어요." actionLabel="홈으로" onAction={() => router.replace('/')} /></Screen>;
   }
 
@@ -42,11 +46,19 @@ export default function RunReportScreen() {
         <Text style={styles.title}>{report?.verdict ?? '오늘의 러닝을 마쳤어요'}</Text>
       </View>
 
-      {result ? (
+      {localResult || detail.data ? (
         <View style={styles.metrics}>
-          <Metric label="시간" value={`${Math.floor(result.record.durationSec / 60)}분`} />
-          <Metric label="평균 리듬" value={result.record.avgCadence === null ? '—' : `${result.record.avgCadence}`} unit="spm" />
-          <Metric label="개입" value={`${result.record.interventionCount}회`} />
+          <Metric label="시간" value={`${Math.floor((localResult?.record.durationSec ?? detail.data!.durationSec) / 60)}분`} />
+          <Metric label="평균 리듬" value={formatCadence(localResult?.record.avgCadence ?? detail.data?.avgCadence ?? null)} unit="spm" />
+          <Metric label="개입" value={`${localResult?.record.interventionCount ?? detail.data?.interventionCount ?? 0}회`} />
+        </View>
+      ) : null}
+
+      {detail.data ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>목표와 결과</Text>
+          <Text style={styles.body}>목표 {formatGoal(detail.data.goalType, detail.data.goalValue)} · 실제 {formatDuration(detail.data.durationSec)} · {detail.data.completed ? '완주' : '중도 종료'}</Text>
+          <Text style={styles.body}>거리 {detail.data.distanceM === null ? '측정되지 않음' : `${(detail.data.distanceM / 1000).toFixed(2)} km`} · 페이스 {formatPace(detail.data.avgPaceSecPerKm)}</Text>
         </View>
       ) : null}
 
@@ -63,15 +75,26 @@ export default function RunReportScreen() {
           body="기본 러닝 기록은 안전하게 보존됐어요. 잠시 후 다시 시도해 주세요."
           actionLabel="다시 시도"
           onAction={() => {
-            if (params.runId) void existing.refetch();
-            else if (runId) void create.mutateAsync(runId).then(setReport);
+            if (params.runId && detail.error) void detail.refetch();
+            else if (runId) void create.mutateAsync(runId).then((created) => {
+              if (!params.runId) setReport(created);
+            });
           }}
         />
       ) : null}
 
       {report ? <ReportContent report={report} /> : null}
       {!runId && !loading ? (
-        <StatePanel title="시연 러닝이에요" body="화면과 판정은 실제 경로로 동작했고, 시연 결과는 서버에 올리지 않았어요." />
+        localResult?.simulated ? (
+          <StatePanel title="시연 러닝이에요" body="화면과 판정은 실제 경로로 동작했고, 시연 결과는 서버에 올리지 않았어요." />
+        ) : (
+          <StatePanel
+            title="기본 기록을 먼저 보여드려요"
+            body="서버 저장이 끝나면 안정 구간과 다음 행동을 확인할 수 있어요."
+            actionLabel="저장 화면으로"
+            onAction={() => router.back()}
+          />
+        )
       ) : null}
     </Screen>
   );
@@ -112,6 +135,26 @@ function fatigueLabel(value: number | null) {
   if (value < 0.35) return '여유로움';
   if (value >= 0.6) return '부담됨';
   return '보통';
+}
+
+function formatGoal(type: 'TIME' | 'DISTANCE' | null, value: number | null) {
+  if (type === null || value === null) return '없음';
+  return type === 'TIME' ? formatDuration(value) : `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)} km`;
+}
+
+function formatDuration(value: number) {
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.round(value % 60);
+  return seconds === 0 ? `${minutes}분` : `${minutes}분 ${seconds}초`;
+}
+
+function formatPace(value: number | null) {
+  if (value === null) return '측정되지 않음';
+  return `${Math.floor(value / 60)}′${String(Math.round(value % 60)).padStart(2, '0')}″/km`;
+}
+
+function formatCadence(value: number | null) {
+  return value === null ? '—' : String(value);
 }
 
 const styles = StyleSheet.create({

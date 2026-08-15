@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useProfile, useStats } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
@@ -60,6 +60,10 @@ export default function HomeScreen() {
         Alert.alert(
           '리듬을 측정하지 못했어요',
           '러닝은 계속 기록할 수 있어요. 동작 및 피트니스 권한을 확인해 주세요.',
+          [
+            { text: '제한 모드로 계속', style: 'cancel' },
+            { text: '설정 열기', onPress: () => void Linking.openSettings().catch(() => undefined) },
+          ],
         );
       },
     });
@@ -126,7 +130,14 @@ export default function HomeScreen() {
 
       <View style={styles.summary}>
         <Text style={styles.summaryTitle}>나의 러닝 루틴</Text>
-        {stats.isLoading ? <Text style={styles.description}>기록을 불러오는 중이에요.</Text> : (
+        {stats.isLoading ? <Text style={styles.description}>기록을 불러오는 중이에요.</Text> : stats.error ? (
+          <StatePanel
+            title="러닝 요약을 불러오지 못했어요"
+            body="저장된 기록은 유지돼요. 연결을 확인하고 다시 시도해 주세요."
+            actionLabel="다시 시도"
+            onAction={() => void stats.refetch()}
+          />
+        ) : (
           <View style={styles.row}>
             <SummaryValue label="누적 활동일" value={`${stats.data?.totalRunDays ?? 0}일`} />
             <SummaryValue label="이번 주" value={`${stats.data?.thisWeekCount ?? 0}회`} />
