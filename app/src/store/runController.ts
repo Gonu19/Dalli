@@ -7,16 +7,21 @@
  */
 
 import { startBackgroundAudio, stopBackgroundAudio } from '../native/audio-session';
+import { LocationTracker } from '../native/location';
 import { PedometerSource } from '../native/pedometer';
+import { ensureLocationPermission, ensureMotionPermission } from '../native/permissions';
 import { useRunStore } from './runStore';
 import type { RunRecord, StartOptions } from './runStore';
 
 export type TrackedRunOptions = StartOptions & {
   /** 센서를 못 쓰는 기기·권한 거부 상황을 화면에 알린다 (`F1-09` 제한 모드). */
   onSensorUnavailable?: () => void;
+  /** 위치 권한이 없거나 GPS가 안 잡히는 경우. 러닝은 계속된다. */
+  onLocationUnavailable?: () => void;
 };
 
 let source: PedometerSource | null = null;
+let tracker: LocationTracker | null = null;
 
 /**
  * 러닝 시작 — 오디오 세션을 먼저 열고 센서를 붙인다.
@@ -25,20 +30,41 @@ let source: PedometerSource | null = null;
  * 화면이 "측정할 수 없음"을 보여줄 수 있어야 하기 때문이다.
  */
 export async function startTrackedRun(options: TrackedRunOptions): Promise<void> {
-  const { onSensorUnavailable, ...startOptions } = options;
+  const { onSensorUnavailable, onLocationUnavailable, ...startOptions } = options;
 
   stopSource();
   await startBackgroundAudio();
   useRunStore.getState().start(startOptions);
 
-  const available = await PedometerSource.isAvailable().catch(() => false);
-  if (!available) {
-    onSensorUnavailable?.();
-    return;
+  // 권한은 시점별로 따로 묻는다 (`F1-09`). 모션이 없으면 케이던스를,
+  // 위치가 없으면 거리를 잃을 뿐 러닝 자체는 멈추지 않는다.
+  const motion = await ensureMotionPermission();
+  const available = motion.granted && (await PedometerSource.isAvailable().catch(() => false));
+  if (!available) onSensorUnavailable?.();
+
+  const location = await ensureLocationPermission();
+  if (location.granted) {
+    tracker = new LocationTracker();
+    const started = await tracker.start();
+    if (!started) {
+      tracker = null;
+      onLocationUnavailable?.();
+    }
+  } else {
+    onLocationUnavailable?.();
   }
 
+  if (!available) return;
+
   source = new PedometerSource({ onError: () => onSensorUnavailable?.() });
-  source.start((sample) => useRunStore.getState().ingest(sample));
+  source.start((sample) =>
+    // GPS는 곁가지다. 값이 없으면 그대로 비워 보내고 판정은 케이던스로만 돈다.
+    useRunStore.getState().ingest({
+      ...sample,
+      dist: tracker?.distance ?? undefined,
+      pace: tracker?.paceSecPerKm ?? undefined,
+    }),
+  );
 }
 
 /**
@@ -71,4 +97,6 @@ export function detachSensor(): void {
 function stopSource(): void {
   source?.stop();
   source = null;
+  tracker?.stop();
+  tracker = null;
 }
