@@ -18,6 +18,7 @@
 ## 엔드포인트 요약
 | Method | Path | 설명 |
 | --- | --- | --- |
+| GET | `/health` | API 프로세스 liveness (`{ "status": "ok" }`, 인증·DB 검사 없음) |
 | POST | `/auth/device` | 기기 UUID 로그인/가입 → JWT |
 | GET | `/users/me` | 프로필 조회 |
 | PATCH | `/users/me` | 프로필·baseline 수정 |
@@ -33,6 +34,11 @@
 | DELETE | `/plans/{plan_id}` | 삭제 |
 | GET | `/calendar` | 월별 계획+기록 통합 |
 | GET | `/stats` | 누적 러닝 데이 · 요약 |
+
+`/health`와 `/auth/device`만 공개 endpoint다. 나머지 endpoint는 OpenAPI에
+`HTTPBearer` security requirement가 표시되어야 한다. 오류 응답은 상태 코드와
+관계없이 공통 `detail.code`·`detail.message` 스키마를 사용하며, 요청·path·query
+검증 실패 422도 같은 형태다.
 
 ---
 

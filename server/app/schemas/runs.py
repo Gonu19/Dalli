@@ -148,8 +148,8 @@ class RunDetailResponse(BaseModel):
     memo: str | None
     is_analyzable: bool
     analysis_limitation: AnalysisLimitation | None
-    samples: list[dict[str, Any]] | None
-    events: list[dict[str, Any]] | None
+    samples: list[RunSample] | None
+    events: list[RunEvent] | None
     report: ReportResponse | None
 
     @field_serializer("rhythm_score", "late_drop_rate", "fatigue_index", when_used="json")

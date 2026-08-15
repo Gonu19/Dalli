@@ -4,13 +4,18 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.deps import get_db
 from app.schemas.auth import DeviceAuthRequest, DeviceAuthResponse
+from app.schemas.errors import error_response
 from app.services.auth import create_access_token, get_or_create_user
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/device", response_model=DeviceAuthResponse)
+@router.post(
+    "/device",
+    response_model=DeviceAuthResponse,
+    responses={422: error_response("요청 검증 실패")},
+)
 def authenticate_device(
     payload: DeviceAuthRequest,
     db: Session = Depends(get_db),

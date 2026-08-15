@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models import User
 from app.schemas.reports import ReportResponse
+from app.schemas.errors import error_response
 from app.services.reports import (
     create_fallback_report,
     get_report,
@@ -13,7 +14,11 @@ from app.services.reports import (
 )
 
 
-router = APIRouter(prefix="/runs", tags=["reports"])
+router = APIRouter(
+    prefix="/runs",
+    tags=["reports"],
+    responses={401: error_response("인증 필요")},
+)
 
 
 @router.post(
@@ -22,9 +27,8 @@ router = APIRouter(prefix="/runs", tags=["reports"])
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": ReportResponse, "description": "폴백 또는 기존 리포트"},
-        401: {"description": "인증 필요"},
-        404: {"description": "러닝 없음 또는 소유권 불일치"},
-        422: {"description": "수기 러닝 또는 잘못된 목표 범위"},
+        404: error_response("러닝 없음 또는 소유권 불일치"),
+        422: error_response("수기 러닝 또는 잘못된 목표 범위"),
     },
 )
 def create_report(
@@ -43,8 +47,8 @@ def create_report(
     "/{run_id}/report",
     response_model=ReportResponse,
     responses={
-        401: {"description": "인증 필요"},
-        404: {"description": "러닝 또는 리포트 없음"},
+        404: error_response("러닝 또는 리포트 없음"),
+        422: error_response("path 검증 실패"),
     },
 )
 def read_report(

@@ -122,3 +122,25 @@ EC2 접근 권한이 제공되기 전 로컬 확인에만
 5. 마지막으로 OpenAI를 연결하고 timeout 시 폴백 200 재검증
 
 Mock 전용 `X-Mock-Scenario: normal | fallback | insufficient_data` 헤더는 실서버에 보내지 않는다.
+
+## 8. OpenAPI 타입 생성
+
+타입 생성의 입력은 실행 중인 실제 FastAPI의 `/openapi.json`이다. 먼저 서버가
+`http://localhost:8000`에서 실행 중이고 `GET /openapi.json`이 200인지 확인한다.
+
+저장소 루트(`Dalli/`)에서 프론트 담당자가 다음 명령을 실행한다.
+
+```bash
+npx openapi-typescript http://localhost:8000/openapi.json -o app/src/types/api.ts
+```
+
+예상 결과는 `app/src/types/api.ts`가 현재 OpenAPI의 `paths`와 `components` 타입으로
+재생성되는 것이다. 이 파일은 자동 생성물이므로 직접 편집하지 않는다. 생성 후에는
+`git diff -- app/src/types/api.ts`로 변경 내용을 확인하고 프론트 담당자가 소유권
+범위에서 반영한다.
+
+백엔드 계약 검증에서는 실제 파일을 덮어쓰지 않는다. 임시 디렉터리에 출력해 명령의
+종료 코드가 0인지, 생성물에 `/auth/device`, `/runs`, `/plans`, `/calendar`, `/stats`와
+핵심 schema가 포함되는지만 확인한 뒤 임시 파일을 폐기한다. 프로젝트에 도구가
+설치되어 있으면 해당 버전을 우선 사용하고, 없으면 `npx`가 임시로 내려받은 버전을
+사용한다. 이를 위해 최초 실행 시 npm registry 네트워크 접근이 필요할 수 있다.
