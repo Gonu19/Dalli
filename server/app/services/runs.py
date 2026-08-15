@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.exceptions import ApplicationError
 from app.models import Plan, Run, User
 from app.schemas.runs import AppRunCreate, ManualRunCreate, RunCreate, RunCreateResponse
+from app.services.metrics import compute_run_metrics
 from app.services.run_quality import assess_run_quality
 
 
@@ -15,6 +17,10 @@ from app.services.run_quality import assess_run_quality
 class RunSaveResult:
     run: Run
     created: bool
+
+
+def _metric_decimal(value: float | None) -> Decimal | None:
+    return None if value is None else Decimal(str(value))
 
 
 def run_response(run: Run) -> RunCreateResponse:
@@ -70,6 +76,11 @@ def save_run(db: Session, user: User, payload: RunCreate) -> RunSaveResult:
             downshift_count=None, samples=None, events=None,
         )
     run = Run(**common)
+    quality = assess_run_quality(run)
+    metrics = compute_run_metrics(run, quality)
+    run.rhythm_score = _metric_decimal(metrics.rhythm_score)
+    run.late_drop_rate = _metric_decimal(metrics.late_drop_rate)
+    run.fatigue_index = _metric_decimal(metrics.fatigue_index)
     db.add(run)
     if plan is not None:
         plan.status = "DONE"
