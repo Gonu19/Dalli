@@ -12,6 +12,8 @@ import { PedometerSource } from '../native/pedometer';
 import { ensureLocationPermission, ensureMotionPermission } from '../native/permissions';
 import { useRunStore } from './runStore';
 import type { RunRecord, StartOptions } from './runStore';
+import { clearSnapshot, saveSnapshot, SNAPSHOT_INTERVAL_SEC } from './session-recovery';
+import { enqueueRun } from './upload-queue';
 
 export type TrackedRunOptions = StartOptions & {
   /** 센서를 못 쓰는 기기·권한 거부 상황을 화면에 알린다 (`F1-09` 제한 모드). */
@@ -56,15 +58,23 @@ export async function startTrackedRun(options: TrackedRunOptions): Promise<void>
 
   if (!available) return;
 
+  let lastSnapshotSec = 0;
   source = new PedometerSource({ onError: () => onSensorUnavailable?.() });
-  source.start((sample) =>
+  source.start((sample) => {
     // GPS는 곁가지다. 값이 없으면 그대로 비워 보내고 판정은 케이던스로만 돈다.
     useRunStore.getState().ingest({
       ...sample,
       dist: tracker?.distance ?? undefined,
       pace: tracker?.paceSecPerKm ?? undefined,
-    }),
-  );
+    });
+
+    // 30초마다 디스크에 남긴다. 앱이 죽어도 여기까지는 살아남는다 (`F1-10`).
+    if (sample.elapsedSec - lastSnapshotSec >= SNAPSHOT_INTERVAL_SEC) {
+      lastSnapshotSec = sample.elapsedSec;
+      const snapshot = useRunStore.getState().snapshot();
+      if (snapshot !== null) saveSnapshot(snapshot);
+    }
+  });
 }
 
 /**
@@ -80,10 +90,17 @@ export function resumeTrackedRun(): void {
   useRunStore.getState().resume();
 }
 
-/** 종료 — 소스와 오디오 세션을 놓고 업로드 재료를 돌려준다. */
+/**
+ * 종료 — 소스와 오디오 세션을 놓고 업로드 재료를 돌려준다.
+ *
+ * **업로드보다 먼저 기기에 저장한다.** 서버가 죽어 있든 비행기 모드든
+ * 러닝은 이미 남아 있고, 큐가 나중에 올린다 (`F1-10`).
+ */
 export async function stopTrackedRun(completed: boolean): Promise<RunRecord | null> {
   stopSource();
   const record = useRunStore.getState().finish(completed);
+  clearSnapshot();
+  if (record !== null) enqueueRun(record);
   await stopBackgroundAudio();
   return record;
 }

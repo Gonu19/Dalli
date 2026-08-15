@@ -72,6 +72,28 @@ export type RunRecord = {
   measuredBaseline: number | null;
 };
 
+/**
+ * 러닝 도중 주기적으로 디스크에 남기는 상태 (`F1-10` 세션 복구).
+ * 앱이 죽어도 여기까지는 살아남는다.
+ */
+export type RunSnapshot = {
+  clientRunId: string;
+  planId: string | null;
+  startedAt: string;
+  goal: RunGoal;
+  condition: ConditionValue;
+  initialTarget: TargetRange;
+  finalTarget: TargetRange;
+  totalSec: number;
+  distanceM: number | null;
+  paceSecPerKm: number | null;
+  avgCadence: number | null;
+  interventionCount: number;
+  downshiftCount: number;
+  samples: RunSample[];
+  events: RunEvent[];
+};
+
 type RunStore = {
   runState: RunState;
   verdict: JudgeVerdict;
@@ -95,6 +117,8 @@ type RunStore = {
   pause: () => void;
   resume: () => void;
   finish: (completed: boolean, endedAt?: string) => RunRecord | null;
+  /** 진행 중인 러닝의 현재 상태. 러닝 중이 아니면 `null`. */
+  snapshot: () => RunSnapshot | null;
   reset: () => void;
 };
 
@@ -272,41 +296,17 @@ export const useRunStore = create<RunStore>((set, get) => ({
       { t: totalSec, type: 'RUN_END', payload: { completed } },
     ];
 
-    // 실측 baseline은 러닝 중이 아니라 여기서 산출한다 (`ENGINE.md` §2).
-    const measuredBaseline = computeMeasuredBaseline(
-      previous.samples.map<CadenceSample>((s) => ({ elapsedSec: s.t, cadence: s.c })),
-      totalSec,
-    );
-
-    const record: RunRecord = {
-      clientRunId: current.clientRunId,
-      source: 'APP',
-      planId: current.planId,
-      startedAt: current.startedAt,
-      endedAt: endedAt ?? new Date().toISOString(),
-      goalType: current.goal.type,
-      goalValue: current.goal.value,
-      condition: current.condition,
-      targetCadenceMin: current.initialTarget.min,
-      targetCadenceMax: current.initialTarget.max,
-      finalTargetMin: previous.target.min,
-      finalTargetMax: previous.target.max,
-      durationSec: Math.round(totalSec),
-      distanceM: previous.distanceM,
-      avgCadence:
-        current.cadenceCount > 0 ? Math.round(current.cadenceSum / current.cadenceCount) : null,
-      avgPaceSecPerKm: previous.paceSecPerKm,
-      completed,
-      interventionCount: previous.interventionCount,
-      downshiftCount: previous.downshiftCount,
-      samples: previous.samples,
-      events,
-      measuredBaseline,
-    };
+    const record = buildRecord(snapshotOf(current, previous, totalSec), completed, events, endedAt);
 
     session = null;
     set({ ...idleState, runState: 'IDLE', target: previous.target, events });
     return record;
+  },
+
+  snapshot: () => {
+    const current = session;
+    if (current === null) return null;
+    return snapshotOf(current, get(), current.lastSourceSec);
   },
 
   reset: () => {
@@ -314,6 +314,77 @@ export const useRunStore = create<RunStore>((set, get) => ({
     set({ ...idleState });
   },
 }));
+
+function snapshotOf(current: Session, state: RunStore, totalSec: number): RunSnapshot {
+  return {
+    clientRunId: current.clientRunId,
+    planId: current.planId,
+    startedAt: current.startedAt,
+    goal: current.goal,
+    condition: current.condition,
+    initialTarget: current.initialTarget,
+    finalTarget: state.target,
+    totalSec,
+    distanceM: state.distanceM,
+    paceSecPerKm: state.paceSecPerKm,
+    avgCadence:
+      current.cadenceCount > 0 ? Math.round(current.cadenceSum / current.cadenceCount) : null,
+    interventionCount: state.interventionCount,
+    downshiftCount: state.downshiftCount,
+    samples: state.samples,
+    events: state.events,
+  };
+}
+
+/**
+ * 스냅샷을 업로드 재료로 바꾼다.
+ *
+ * 정상 종료와 **비정상 종료 복구가 같은 코드를 탄다.** 복구 경로만 따로 조립하면
+ * 필드가 조용히 어긋나고, 그건 실제로 데이터를 잃었을 때에야 드러난다.
+ */
+export function buildRecord(
+  snapshot: RunSnapshot,
+  completed: boolean,
+  events?: RunEvent[],
+  endedAt?: string,
+): RunRecord {
+  const finalEvents = events ?? [
+    ...snapshot.events,
+    { t: snapshot.totalSec, type: 'RUN_END' as const, payload: { completed } },
+  ];
+
+  return {
+    clientRunId: snapshot.clientRunId,
+    source: 'APP',
+    planId: snapshot.planId,
+    startedAt: snapshot.startedAt,
+    endedAt: endedAt ?? new Date().toISOString(),
+    goalType: snapshot.goal.type,
+    goalValue: snapshot.goal.value,
+    condition: snapshot.condition,
+    targetCadenceMin: snapshot.initialTarget.min,
+    targetCadenceMax: snapshot.initialTarget.max,
+    finalTargetMin: snapshot.finalTarget.min,
+    finalTargetMax: snapshot.finalTarget.max,
+    durationSec: Math.round(snapshot.totalSec),
+    distanceM: snapshot.distanceM,
+    avgCadence: snapshot.avgCadence,
+    avgPaceSecPerKm: snapshot.paceSecPerKm,
+    completed,
+    interventionCount: snapshot.interventionCount,
+    downshiftCount: snapshot.downshiftCount,
+    samples: snapshot.samples,
+    events: finalEvents,
+    // 실측 baseline은 러닝 중이 아니라 종료 후에 산출한다 (`ENGINE.md` §2).
+    measuredBaseline: computeMeasuredBaseline(
+      snapshot.samples.map<CadenceSample>((sample) => ({
+        elapsedSec: sample.t,
+        cadence: sample.c,
+      })),
+      snapshot.totalSec,
+    ),
+  };
+}
 
 /** 목표 진행률 — 90% 이후 `TOO_FAST`가 멈춘다 (`ENGINE.md` §10 막판 스퍼트 허용). */
 function goalProgress(current: Session, sample: CadenceSample): { goalProgress: number } {
