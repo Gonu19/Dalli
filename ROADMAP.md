@@ -216,7 +216,7 @@ Mock을 배포한다. 8/18에는 Nginx의 외부 HTTPS 주소를 유지한 채 �
 | `IN-03` | Expo 프로젝트 + infoPlist + **팀 기기 일괄 설치** | F2 | 8/14 | 팀 아이폰 전부에 dev build 설치 |
 | `IN-04` | OpenAPI → `types/api.ts` 자동 생성 | F2 | 8/18 | 실서버 스키마로 타입 갱신 |
 | `IN-05` | docker compose + Alembic | BE | 8/18 | `dalli_test`에서 upgrade/downgrade/re-upgrade와 통합 테스트 통과 |
-| `IN-06` | **실기기 스파이크** (Pedometer + 무음루프 + `expo-speech` 각 1줄) | F2 | **8/14** | §6 확인 3가지 통과. 30분 |
+| `IN-06` | ✅ **실기기 스파이크 확인 완료** (Pedometer + 무음루프 + `expo-speech` 각 1줄) | F2 | **8/14** | §6 확인 3가지 통과. 30분 |
 
 ### 엔진 (Core FE)
 
