@@ -21,16 +21,14 @@ class PlanCreate(BaseModel):
 class PlanUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    status: PlanStatus | None = None
-    goal_type: GoalType | None = None
-    goal_value: int | None = Field(default=None, strict=True, ge=1)
+    status: PlanStatus = Field(default=None)  # type: ignore[assignment]
+    goal_type: GoalType = Field(default=None)  # type: ignore[assignment]
+    goal_value: int = Field(default=None, strict=True, ge=1)  # type: ignore[assignment]
 
     @model_validator(mode="after")
     def require_a_field(self) -> "PlanUpdate":
         if not self.model_fields_set:
             raise ValueError("at least one field is required")
-        if any(getattr(self, name) is None for name in self.model_fields_set):
-            raise ValueError("updated fields cannot be null")
         return self
 
 

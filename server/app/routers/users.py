@@ -4,10 +4,15 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models import User
 from app.schemas.users import UserMeResponse, UserMeUpdate
+from app.schemas.errors import error_response
 from app.services.users import update_user_profile, user_me_response
 
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(
+    prefix="/users",
+    tags=["users"],
+    responses={401: error_response("인증 필요")},
+)
 
 
 @router.get("/me", response_model=UserMeResponse)
@@ -15,7 +20,11 @@ def get_me(current_user: User = Depends(get_current_user)) -> UserMeResponse:
     return user_me_response(current_user)
 
 
-@router.patch("/me", response_model=UserMeResponse)
+@router.patch(
+    "/me",
+    response_model=UserMeResponse,
+    responses={422: error_response("요청 검증 실패")},
+)
 def patch_me(
     payload: UserMeUpdate,
     current_user: User = Depends(get_current_user),

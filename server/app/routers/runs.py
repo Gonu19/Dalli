@@ -8,13 +8,22 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models import User
 from app.schemas.runs import RunCreate, RunCreateResponse, RunDetailResponse, RunListResponse
+from app.schemas.errors import error_response
 from app.services.runs import delete_run, get_owned_run, list_runs, run_detail_response, run_response, save_run
 
 
-router = APIRouter(prefix="/runs", tags=["runs"])
+router = APIRouter(
+    prefix="/runs",
+    tags=["runs"],
+    responses={401: error_response("인증 필요")},
+)
 
 
-@router.get("", response_model=RunListResponse)
+@router.get(
+    "",
+    response_model=RunListResponse,
+    responses={422: error_response("query 검증 실패")},
+)
 def get_runs(
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = None,
@@ -24,7 +33,14 @@ def get_runs(
     return list_runs(db, current_user, limit, cursor)
 
 
-@router.get("/{run_id}", response_model=RunDetailResponse)
+@router.get(
+    "/{run_id}",
+    response_model=RunDetailResponse,
+    responses={
+        404: error_response("러닝 없음 또는 소유권 불일치"),
+        422: error_response("path 검증 실패"),
+    },
+)
 def get_run(
     run_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -33,7 +49,14 @@ def get_run(
     return run_detail_response(get_owned_run(db, current_user, run_id))
 
 
-@router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{run_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        404: error_response("러닝 없음 또는 소유권 불일치"),
+        422: error_response("path 검증 실패"),
+    },
+)
 def remove_run(
     run_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -49,10 +72,9 @@ def remove_run(
     status_code=status.HTTP_201_CREATED,
     responses={
         200: {"model": RunCreateResponse, "description": "멱등 재요청"},
-        401: {"description": "인증 필요"},
-        404: {"description": "계획 없음 또는 소유권 불일치"},
-        409: {"description": "계획 연결 충돌"},
-        422: {"description": "요청 검증 실패"},
+        404: error_response("계획 없음 또는 소유권 불일치"),
+        409: error_response("계획 연결 충돌"),
+        422: error_response("요청 검증 실패"),
     },
 )
 def create_run(
