@@ -133,7 +133,27 @@ def test_app_create_and_idempotent_repeat_statuses():
     assert stored.duration_sec == 180
     assert stored.user_id == current_user.id
     assert first.json()["is_analyzable"] is True
-    assert first.json()["rhythm_score"] is None
+    assert first.json()["rhythm_score"] == 1.0
+    assert first.json()["late_drop_rate"] is None
+    assert first.json()["fatigue_index"] is None
+
+
+def test_new_analyzable_run_stores_metrics_and_repeat_keeps_existing_values():
+    current_user = user()
+    first_db = FakeSession([None])
+    first = client_for(current_user, first_db).post("/runs", json=app_payload())
+    stored = first_db.added[0]
+    stored.rhythm_score = Decimal("0.321")
+    repeat_db = FakeSession([stored])
+    repeated = client_for(current_user, repeat_db).post(
+        "/runs", json=app_payload(samples=[{"t": 0, "c": 0}])
+    )
+
+    assert first.status_code == 201
+    assert stored.late_drop_rate is None and stored.fatigue_index is None
+    assert repeated.status_code == 200
+    assert repeated.json()["rhythm_score"] == 0.321
+    assert repeat_db.commits == 0 and not repeat_db.added
 
 
 @pytest.mark.parametrize(

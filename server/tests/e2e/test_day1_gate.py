@@ -86,6 +86,11 @@ def test_day1_auth_profile_app_run_idempotency_gate() -> None:
         assert first_run["client_run_id"] == client_run_id
         assert first_run["created_at"]
         assert set(first_run) == {"id", "client_run_id", "created_at", "is_analyzable", "analysis_limitation", "rhythm_score", "late_drop_rate", "fatigue_index"}
+        assert first_run["is_analyzable"] is True
+        assert first_run["analysis_limitation"] is None
+        assert first_run["rhythm_score"] == 0.722
+        assert first_run["late_drop_rate"] is None
+        assert first_run["fatigue_index"] is None
         repeated_run = assert_status(client.post("/runs", headers=headers, json=run_request), 200, "idempotent APP run upload")
         assert repeated_run == first_run
 
@@ -120,5 +125,8 @@ def test_day1_auth_profile_app_run_idempotency_gate() -> None:
     assert run["source"] == "APP"
     assert run["samples"] == run_request["samples"]
     assert run["events"] == run_request["events"]
+    assert float(run["rhythm_score"]) == first_run["rhythm_score"]
+    assert run["late_drop_rate"] is None
+    assert run["fatigue_index"] is None
     assert revision == ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
     assert pgcrypto == 1

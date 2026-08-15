@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 import json
 import os
 from pathlib import Path
@@ -113,6 +114,9 @@ def test_app_run_repeat_returns_existing_row_without_applying_changed_body(
     assert first.status_code == 201
     assert second.status_code == 200
     assert first.json()["id"] == second.json()["id"]
+    assert first.json()["rhythm_score"] == second.json()["rhythm_score"] == 0.722
+    assert first.json()["late_drop_rate"] is second.json()["late_drop_rate"] is None
+    assert first.json()["fatigue_index"] is second.json()["fatigue_index"] is None
     assert first.json()["client_run_id"] == second.json()["client_run_id"] == key
     assert first.json()["created_at"] == second.json()["created_at"]
     with Session(postgres_runs_environment) as session:
@@ -125,6 +129,46 @@ def test_app_run_repeat_returns_existing_row_without_applying_changed_body(
     assert runs[0].memo == first_payload["memo"]
     assert runs[0].samples == first_payload["samples"]
     assert runs[0].events == first_payload["events"]
+    assert runs[0].rhythm_score == Decimal("0.722")
+    assert runs[0].late_drop_rate is None
+    assert runs[0].fatigue_index is None
+
+
+@pytest.mark.postgres
+def test_six_minute_app_run_persists_numeric_metrics(postgres_runs_environment) -> None:
+    token, user_id = authenticate(f"runs-metrics-{uuid4()}")
+    key = f"metrics-{uuid4()}"
+    payload = app_payload(key)
+    payload["duration_sec"] = 360
+    payload["goal_value"] = 360
+    payload["ended_at"] = "2026-08-14T09:06:00Z"
+    payload["samples"] = [
+        {"t": t, "c": 160 if t < 240 else 144, "p": None, "d": None}
+        for t in range(0, 360, 5)
+    ]
+    payload["events"] = [
+        {"t": 0, "type": "RUN_START", "payload": {"min": 153, "max": 161}},
+        {"t": 240, "type": "TARGET_ADJUSTED", "payload": {"min": 140, "max": 148, "reason": "no_recovery"}},
+        {"t": 360, "type": "RUN_END", "payload": {"completed": True}},
+    ]
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/runs", json=payload, headers={"Authorization": f"Bearer {token}"}
+        )
+
+    assert response.status_code == 201
+    assert response.json()["rhythm_score"] == 1.0
+    assert response.json()["late_drop_rate"] == 0.1
+    assert response.json()["fatigue_index"] == 0.14
+    with Session(postgres_runs_environment) as session:
+        stored = session.scalar(
+            select(Run).where(Run.user_id == user_id, Run.client_run_id == key)
+        )
+    assert stored is not None
+    assert stored.rhythm_score == Decimal("1.000")
+    assert stored.late_drop_rate == Decimal("0.100")
+    assert stored.fatigue_index == Decimal("0.140")
 
 
 @pytest.mark.postgres
