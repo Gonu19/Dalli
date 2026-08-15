@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import json
 import os
@@ -169,6 +169,59 @@ def test_six_minute_app_run_persists_numeric_metrics(postgres_runs_environment) 
     assert stored.rhythm_score == Decimal("1.000")
     assert stored.late_drop_rate == Decimal("0.100")
     assert stored.fatigue_index == Decimal("0.140")
+
+
+@pytest.mark.postgres
+def test_metric_numeric_columns_store_zero_one_middle_and_null_boundaries(
+    postgres_runs_environment,
+) -> None:
+    _, user_id = authenticate(f"runs-metric-boundaries-{uuid4()}")
+    metric_sets = [
+        (Decimal("0"), Decimal("0"), Decimal("0")),
+        (Decimal("1"), Decimal("1"), Decimal("1")),
+        (Decimal("0.5555"), Decimal("0.4444"), Decimal("0.3333")),
+        (None, None, None),
+    ]
+    run_ids = []
+    with Session(postgres_runs_environment) as session:
+        for rhythm, late_drop, fatigue in metric_sets:
+            stored = Run(
+                user_id=user_id,
+                client_run_id=f"metric-boundary-{uuid4()}",
+                source="APP",
+                started_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+                duration_sec=600,
+                completed=True,
+                rhythm_score=rhythm,
+                late_drop_rate=late_drop,
+                fatigue_index=fatigue,
+                samples=[],
+                events=[],
+            )
+            session.add(stored)
+            session.flush()
+            run_ids.append(stored.id)
+        session.commit()
+
+    with Session(postgres_runs_environment) as session:
+        rows = [session.get(Run, run_id) for run_id in run_ids]
+
+    assert rows[0] is not None
+    assert (rows[0].rhythm_score, rows[0].late_drop_rate, rows[0].fatigue_index) == (
+        Decimal("0.000"), Decimal("0.000"), Decimal("0.000")
+    )
+    assert rows[1] is not None
+    assert (rows[1].rhythm_score, rows[1].late_drop_rate, rows[1].fatigue_index) == (
+        Decimal("1.000"), Decimal("1.000"), Decimal("1.000")
+    )
+    assert rows[2] is not None
+    assert (rows[2].rhythm_score, rows[2].late_drop_rate, rows[2].fatigue_index) == (
+        Decimal("0.556"), Decimal("0.444"), Decimal("0.333")
+    )
+    assert rows[3] is not None
+    assert (rows[3].rhythm_score, rows[3].late_drop_rate, rows[3].fatigue_index) == (
+        None, None, None
+    )
 
 
 @pytest.mark.postgres
