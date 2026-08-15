@@ -2,8 +2,11 @@ from fastapi import FastAPI
 
 from app.exceptions import register_exception_handlers
 from app.routers.auth import router as auth_router
+from app.routers.calendar import router as calendar_router
+from app.routers.plans import router as plans_router
 from app.routers.reports import router as reports_router
 from app.routers.runs import router as runs_router
+from app.routers.stats import router as stats_router
 from app.routers.system import router as system_router
 from app.routers.users import router as users_router
 
@@ -20,6 +23,9 @@ def create_app() -> FastAPI:
     application.include_router(users_router)
     application.include_router(runs_router)
     application.include_router(reports_router)
+    application.include_router(plans_router)
+    application.include_router(calendar_router)
+    application.include_router(stats_router)
 
     return application
 
