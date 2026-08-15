@@ -7,10 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.config import Settings
 from app.exceptions import ApplicationError
 from app.models import Report, Run, User
 from app.schemas.reports import ReportMetricsResponse, ReportResponse
 from app.services.fallback import build_fallback_report
+from app.services.llm import generate_llm_report, llm_values
 from app.services.metrics import compute_run_metrics
 from app.services.run_quality import assess_run_quality
 
@@ -31,8 +33,17 @@ def _not_found() -> ApplicationError:
     )
 
 
-def _owned_run(db: Session, user: User, run_id: UUID) -> Run:
-    run = db.scalar(select(Run).where(Run.id == run_id, Run.user_id == user.id))
+def _owned_run(
+    db: Session,
+    user: User,
+    run_id: UUID,
+    *,
+    for_update: bool = False,
+) -> Run:
+    statement = select(Run).where(Run.id == run_id, Run.user_id == user.id)
+    if for_update:
+        statement = statement.with_for_update()
+    run = db.scalar(statement)
     if run is None:
         raise _not_found()
     return run
@@ -42,12 +53,13 @@ def _constraint_name(exc: IntegrityError) -> str | None:
     return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
 
 
-def create_fallback_report(
+def create_report(
     db: Session,
     user: User,
     run_id: UUID,
+    settings: Settings,
 ) -> ReportSaveResult:
-    run = _owned_run(db, user, run_id)
+    run = _owned_run(db, user, run_id, for_update=True)
     if run.source == "MANUAL":
         raise ApplicationError(
             code="VALIDATION_ERROR",
@@ -61,15 +73,23 @@ def create_fallback_report(
 
     metrics = compute_run_metrics(run, quality)
     try:
-        content = build_fallback_report(run, quality, metrics)
+        fallback = build_fallback_report(run, quality, metrics)
     except ValueError:
         raise ApplicationError(
             code="VALIDATION_ERROR",
             message="러닝의 목표 범위를 확인할 수 없습니다.",
             status_code=422,
         ) from None
-    values = asdict(content)
-    values["evidence"] = list(content.evidence)
+    content = (
+        generate_llm_report(run, quality, metrics, fallback, settings)
+        if quality.is_analyzable
+        else None
+    )
+    if content is None:
+        values = asdict(fallback)
+        values["evidence"] = list(fallback.evidence)
+    else:
+        values = llm_values(content, settings.openai_model)
     report = Report(run_id=run.id, **values)
     db.add(report)
     try:

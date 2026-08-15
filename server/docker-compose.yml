@@ -25,6 +25,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_ENABLED: ${LLM_ENABLED:-false}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       LLM_TIMEOUT_SEC: ${LLM_TIMEOUT_SEC:-8}
     ports:
       - "127.0.0.1:8000:8000"

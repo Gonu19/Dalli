@@ -1,0 +1,173 @@
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+import json
+import logging
+from typing import Annotated, Callable
+
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    OpenAI,
+    RateLimitError,
+)
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from app.config import Settings
+from app.models import Run
+from app.services.fallback import FallbackReportContent
+from app.services.metrics import RunMetrics
+from app.services.run_quality import RunQualityAssessment
+
+
+logger = logging.getLogger(__name__)
+NonEmptyText = Annotated[str, Field(min_length=1)]
+
+
+class LLMReportContent(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    verdict: NonEmptyText
+    evidence: list[NonEmptyText] = Field(min_length=1, max_length=3)
+    hypothesis: NonEmptyText | None
+    prescription: NonEmptyText | None
+    next_goal_text: NonEmptyText
+    next_target_min: int
+    next_target_max: int
+    recovery_note: NonEmptyText | None
+    limitation: NonEmptyText | None
+
+
+def _safe_summary(
+    run: Run,
+    quality: RunQualityAssessment,
+    metrics: RunMetrics,
+    fallback: FallbackReportContent,
+) -> dict[str, object]:
+    return {
+        "duration_sec": run.duration_sec,
+        "distance_m": run.distance_m,
+        "goal_type": run.goal_type,
+        "goal_value": run.goal_value,
+        "condition": run.condition,
+        "completed": run.completed,
+        "avg_cadence": run.avg_cadence,
+        "avg_pace_sec_per_km": run.avg_pace_sec_per_km,
+        "intervention_count": run.intervention_count,
+        "downshift_count": run.downshift_count,
+        "rhythm_score": float(run.rhythm_score) if run.rhythm_score is not None else None,
+        "late_drop_rate": float(run.late_drop_rate) if run.late_drop_rate is not None else None,
+        "fatigue_index": float(run.fatigue_index) if run.fatigue_index is not None else None,
+        "in_range_sec": metrics.in_range_sec,
+        "active_duration_sec": quality.active_duration_sec,
+        "next_target_min": fallback.next_target_min,
+        "next_target_max": fallback.next_target_max,
+        "required_limitation": fallback.limitation,
+    }
+
+
+def _call_with_deadline(call: Callable[[], object], timeout_sec: float) -> object:
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dalli-llm")
+    future = executor.submit(call)
+    try:
+        return future.result(timeout=timeout_sec)
+    except FutureTimeoutError:
+        future.cancel()
+        raise TimeoutError("LLM deadline exceeded") from None
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _validated_content(
+    parsed: object,
+    fallback: FallbackReportContent,
+) -> LLMReportContent:
+    if parsed is None:
+        raise ValueError("empty structured response")
+    content = LLMReportContent.model_validate(parsed)
+    if (
+        content.next_target_min != fallback.next_target_min
+        or content.next_target_max != fallback.next_target_max
+    ):
+        raise ValueError("LLM changed server next target")
+    if content.limitation != fallback.limitation:
+        raise ValueError("LLM changed required limitation")
+    return content
+
+
+def _failure_reason(exc: Exception) -> str:
+    if isinstance(exc, (TimeoutError, APITimeoutError)):
+        return "timeout"
+    if isinstance(exc, AuthenticationError):
+        return "authentication"
+    if isinstance(exc, RateLimitError):
+        return "rate_limit"
+    if isinstance(exc, APIConnectionError):
+        return "connection"
+    if isinstance(exc, APIStatusError):
+        return "provider_status"
+    if isinstance(exc, (ValidationError, ValueError)):
+        return "invalid_response"
+    return "sdk_error"
+
+
+def generate_llm_report(
+    run: Run,
+    quality: RunQualityAssessment,
+    metrics: RunMetrics,
+    fallback: FallbackReportContent,
+    settings: Settings,
+    *,
+    client_factory: Callable[..., object] = OpenAI,
+) -> LLMReportContent | None:
+    api_key = settings.openai_api_key.get_secret_value()
+    if not settings.llm_enabled:
+        logger.info("llm_report_fallback", extra={"llm_reason": "disabled"})
+        return None
+    if not api_key:
+        logger.warning("llm_report_fallback", extra={"llm_reason": "missing_api_key"})
+        return None
+
+    summary = _safe_summary(run, quality, metrics, fallback)
+    def request() -> object:
+        client = client_factory(
+            api_key=api_key,
+            timeout=settings.llm_timeout_sec,
+            max_retries=0,
+        )
+        response = client.responses.parse(
+            model=settings.openai_model,
+            instructions=(
+                "당신은 초보 러너의 차분한 러닝메이트입니다. 관찰과 가설을 구분하고, "
+                "의료 진단이나 과장 없이 다음 행동 한 가지를 제안하세요. cadence, baseline, "
+                "Fatigue Index 같은 내부 용어 대신 리듬, 나의 기준 리듬, 오늘의 부담을 사용하세요. "
+                "제공된 수치와 next_target, required_limitation을 바꾸거나 새 수치를 만들지 마세요."
+            ),
+            input=json.dumps(summary, ensure_ascii=False, separators=(",", ":")),
+            text_format=LLMReportContent,
+            max_output_tokens=600,
+            store=False,
+        )
+        return response.output_parsed
+
+    try:
+        parsed = _call_with_deadline(request, settings.llm_timeout_sec)
+        content = _validated_content(parsed, fallback)
+    except Exception as exc:
+        logger.warning(
+            "llm_report_fallback",
+            extra={"llm_reason": _failure_reason(exc), "llm_fallback": True},
+        )
+        return None
+
+    logger.info(
+        "llm_report_success",
+        extra={"llm_model": settings.openai_model, "llm_fallback": False},
+    )
+    return content
+
+
+def llm_values(content: LLMReportContent, model: str) -> dict[str, object]:
+    return {**content.model_dump(), "is_fallback": False, "model": model}

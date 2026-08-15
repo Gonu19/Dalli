@@ -1,14 +1,16 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     database_url: str
     jwt_secret: SecretStr
-    openai_api_key: SecretStr
-    llm_timeout_sec: int = 8
+    openai_api_key: SecretStr = SecretStr("")
+    llm_enabled: bool = False
+    openai_model: str = "gpt-4o-mini"
+    llm_timeout_sec: int = Field(default=8, ge=1, le=8)
     app_env: str | None = None
 
     model_config = SettingsConfigDict(

@@ -151,8 +151,8 @@
 `POST /runs` 요청 바디 + 서버 계산 지표 전체 + `report`(있으면).
 
 ## POST /runs/{run_id}/report
-최초 비-fallback 리포트 생성은 201을 반환한다. fallback 리포트는 최초 생성이어도 200이며,
-이미 리포트가 있으면 LLM을 다시 호출하지 않고 기존 리포트를 200으로 반환한다.
+정상 LLM, fallback, 기존 리포트 재조회 모두 200을 반환한다.
+이미 리포트가 있으면 LLM을 다시 호출하지 않고 기존 리포트를 반환한다.
 LLM 8초 타임아웃. 초과·실패·쿼터 초과 시 룰베이스 폴백 문구로 **200 응답** (`is_fallback: true`).
 `source=MANUAL`은 422 `VALIDATION_ERROR`, 분석 불가 APP 러닝은 수치를 꾸미지 않은 폴백 리포트를 200으로 반환한다.
 

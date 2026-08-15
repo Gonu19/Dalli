@@ -63,9 +63,45 @@ APP_ENV=development
 DATABASE_URL=postgresql+psycopg://dalli:<pw>@db:5432/dalli
 JWT_SECRET=<random-32-bytes>
 OPENAI_API_KEY=<key>
+LLM_ENABLED=false
+OPENAI_MODEL=gpt-4o-mini
 LLM_TIMEOUT_SEC=8
 ```
 **절대 커밋 금지.** `.env.example`만 커밋, 실값은 EC2에 직접 설정.
+
+### 선택적 LLM 리포트
+
+LLM은 기본적으로 꺼져 있다. `LLM_ENABLED=false`이거나 `OPENAI_API_KEY`가 비어
+있어도 서버는 정상 시작하고 결정적인 fallback 리포트를 200으로 반환한다. 실제
+LLM을 사용할 환경에서만 커밋되지 않는 `server/.env`에 다음 값을 설정한다.
+
+```dotenv
+LLM_ENABLED=true
+OPENAI_API_KEY=<실제 키>
+OPENAI_MODEL=gpt-4o-mini
+LLM_TIMEOUT_SEC=8
+```
+
+`OPENAI_MODEL` 기본값은 Structured Outputs를 지원하는 저비용 모델이며 코드에
+분산해 하드코딩하지 않는다. OpenAI Responses API의 Pydantic structured output을
+사용하고 SDK 재시도는 0회다. SDK timeout과 서버 측 전체 deadline을 모두 8초
+이하로 적용한다. 외부 호출에는 집계 지표와 허용된 러닝 요약만 전달하며 원본
+`samples`·`events`는 보내지 않는다.
+
+timeout, 연결·인증·rate limit·공급자 오류, 빈 응답, JSON/schema/Pydantic 검증
+실패 시 기존 fallback을 저장하고 200을 반환한다. 이미 저장된 리포트는 외부 호출
+없이 그대로 반환한다. 로그에는 실행 결과와 안전한 분류만 남고 API key, 전체
+prompt, 원본 센서 데이터와 공급자 오류 원문은 남기지 않는다.
+
+선택적 실제 호출 테스트는 명시적으로 허용했을 때 한 건만 실행된다. 계정 정책에
+따라 비용이 발생할 수 있으며 기본 pytest와 CI에서는 항상 skip된다.
+
+```powershell
+$env:RUN_OPENAI_LIVE_TEST = "1"
+$env:OPENAI_API_KEY = "<server/.env의 키>"
+$env:OPENAI_MODEL = "gpt-4o-mini"
+python -m pytest -q -m openai_live
+```
 
 ## 개발·데모 시드
 

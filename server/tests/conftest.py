@@ -14,3 +14,6 @@ def pytest_configure(config) -> None:
     config.addinivalue_line(
         "markers", "e2e: requires an explicit local API and isolated PostgreSQL database"
     )
+    config.addinivalue_line(
+        "markers", "openai_live: makes one explicitly enabled OpenAI API request"
+    )
