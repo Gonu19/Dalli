@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr
     openai_api_key: SecretStr
     llm_timeout_sec: int = 8
+    app_env: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
