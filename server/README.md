@@ -15,7 +15,7 @@ cd server
 cp .env.example .env      # 값 채우기
 docker compose up -d      # db(5432 루프백) + api
 alembic upgrade head
-python seed.py            # 데모용 과거 기록
+python -m app.seed        # 개발·데모용 고정 기록
 ```
 - Swagger: `http://localhost:8000/docs`
 - OpenAPI: `http://localhost:8000/openapi.json`
@@ -59,12 +59,43 @@ python -m uvicorn app.mock_main:app --host 0.0.0.0 --port 8001
 
 ## .env
 ```
+APP_ENV=development
 DATABASE_URL=postgresql+psycopg://dalli:<pw>@db:5432/dalli
 JWT_SECRET=<random-32-bytes>
 OPENAI_API_KEY=<key>
 LLM_TIMEOUT_SEC=8
 ```
 **절대 커밋 금지.** `.env.example`만 커밋, 실값은 EC2에 직접 설정.
+
+## 개발·데모 시드
+
+시드는 `APP_ENV=development` 또는 `APP_ENV=test`에서만 실행된다. 값이 없거나
+그 외 값(`production` 포함)이면 DB에 연결하기 전에 종료한다. 실행 전 Alembic
+revision이 현재 코드의 head와 정확히 일치해야 하며, migration을 자동 실행하지 않는다.
+
+```powershell
+cd server
+$env:APP_ENV = "development"
+python -m app.seed
+```
+
+Docker Compose 안에서는 `.env`의 `APP_ENV=development`를 설정한 뒤 다음처럼 실행한다.
+
+```bash
+docker compose run --rm api python -m app.seed
+```
+
+고정 날짜는 `2026-08-14`~`2026-09-01`이며 다음 데이터를 만든다.
+
+- 전용 사용자 2명: `dalli-seed-demo-device`, `dalli-seed-ownership-device`
+- `DONE`·`PLANNED`·`SKIPPED` 계획
+- 계획 연결 APP, 계획 없는 APP, 미완료 APP, 같은 날 MANUAL, KST 월 경계 APP
+- 고정 폴백 리포트 1개와 리포트 없는 러닝
+
+고정 UUID·device UUID·`client_run_id`로 기존 seed 행을 갱신하므로 반복 실행해도
+개수가 늘지 않는다. seed 전용 식별자가 일반 데이터와 충돌하면 덮어쓰지 않고
+실패한다. 기존 데이터를 삭제하거나 DB를 초기화하지 않으며 OpenAI·외부 HTTP를
+호출하지 않는다. 운영·공유 DB에서는 실행하지 않는다.
 
 ## 마이그레이션
 ```bash
