@@ -38,7 +38,7 @@ def create_report(
     db: Session = Depends(get_db),
 ) -> ReportResponse:
     result = create_fallback_report(db, current_user, run_id)
-    if not result.created or not result.is_analyzable:
+    if not result.created or result.report.is_fallback or not result.is_analyzable:
         response.status_code = status.HTTP_200_OK
     return report_response(result.report, result.run)
 

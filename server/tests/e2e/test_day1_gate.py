@@ -44,8 +44,17 @@ def e2e_environment() -> tuple[str, str]:
 
 
 def assert_status(response: httpx.Response, expected: int, step: str) -> dict:
-    assert response.status_code == expected, f"{step}: expected HTTP {expected}, got {response.status_code}"
-    return response.json()
+    try:
+        diagnostic = response.json()
+        if isinstance(diagnostic, dict) and "access_token" in diagnostic:
+            diagnostic = {**diagnostic, "access_token": "<redacted>"}
+    except ValueError:
+        diagnostic = response.text[:1000]
+    assert response.status_code == expected, (
+        f"{step}: expected HTTP {expected}, got {response.status_code}; "
+        f"body={diagnostic}"
+    )
+    return {} if response.status_code == 204 else response.json()
 
 
 @pytest.mark.e2e
@@ -106,7 +115,27 @@ def test_day1_auth_profile_app_run_idempotency_gate() -> None:
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            counts = {table: connection.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one() for table in ("users", "runs", "plans", "reports")}
+            counts = {
+                "users": connection.execute(
+                    text("SELECT COUNT(*) FROM users WHERE id = CAST(:id AS uuid)"),
+                    {"id": user_id},
+                ).scalar_one(),
+                "runs": connection.execute(
+                    text("SELECT COUNT(*) FROM runs WHERE user_id = CAST(:id AS uuid)"),
+                    {"id": user_id},
+                ).scalar_one(),
+                "plans": connection.execute(
+                    text("SELECT COUNT(*) FROM plans WHERE user_id = CAST(:id AS uuid)"),
+                    {"id": user_id},
+                ).scalar_one(),
+                "reports": connection.execute(
+                    text(
+                        "SELECT COUNT(*) FROM reports r JOIN runs x ON x.id = r.run_id "
+                        "WHERE x.user_id = CAST(:id AS uuid)"
+                    ),
+                    {"id": user_id},
+                ).scalar_one(),
+            }
             user = connection.execute(text("SELECT * FROM users WHERE id = CAST(:id AS uuid)"), {"id": user_id}).mappings().one()
             run = connection.execute(text("SELECT * FROM runs WHERE user_id = CAST(:user_id AS uuid) AND client_run_id = :client_run_id"), {"user_id": user_id, "client_run_id": client_run_id}).mappings().one()
             revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
