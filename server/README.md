@@ -174,6 +174,75 @@ python -m pytest -q -m e2e
 이름을 재확인한다. 테스트 데이터 보존이 필요 없을 때만
 `docker compose -p dalli-day1-gate down -v`로 해당 project 자원만 제거한다.
 
+### 전체 로컬 HTTP E2E 게이트 (BE-P17)
+
+`tests/e2e/test_backend_http.py`는 실제 FastAPI 프로세스에 네트워크 요청을 보내
+`auth → profile → plan → run → report → calendar → stats`와 인증·검증·소유권·
+충돌 실패 경로를 검증한다. 동시 Run 요청도 PostgreSQL unique 제약을 실제로
+통과시킨다. 운영·공유 DB 대신 아래 전용 Compose project와 DB만 사용한다.
+
+```powershell
+cd server
+$env:POSTGRES_DB = "dalli_bep17_test"
+$env:POSTGRES_USER = "dalli"
+$env:POSTGRES_PASSWORD = "bep17-local-only-password"
+$env:APP_ENV = "test"
+$env:DATABASE_URL = "postgresql+psycopg://dalli:bep17-local-only-password@db:5432/dalli_bep17_test"
+$env:JWT_SECRET = "bep17-local-only-jwt-secret-with-32-bytes"
+$env:OPENAI_API_KEY = ""
+
+docker compose -p dalli-bep17-e2e config
+docker compose -p dalli-bep17-e2e up -d db
+docker compose -p dalli-bep17-e2e run --rm api alembic upgrade head
+docker compose -p dalli-bep17-e2e run --rm api alembic current
+docker compose -p dalli-bep17-e2e run --rm api alembic check
+docker compose -p dalli-bep17-e2e run --rm api python -m app.seed
+docker compose -p dalli-bep17-e2e up -d api
+
+$deadline = (Get-Date).AddSeconds(60)
+do {
+  try {
+    $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2
+  } catch {
+    $health = $null
+  }
+  if ($health.status -eq "ok") { break }
+  if ((Get-Date) -ge $deadline) { throw "FastAPI readiness timeout" }
+  Start-Sleep -Seconds 1
+} while ($true)
+
+$env:DALLI_E2E_BASE_URL = "http://127.0.0.1:8000"
+$env:DALLI_E2E_DATABASE_URL = "postgresql+psycopg://dalli:bep17-local-only-password@127.0.0.1:5432/dalli_bep17_test"
+$env:DALLI_E2E_JWT_SECRET = "bep17-local-only-jwt-secret-with-32-bytes"
+$env:TEST_DATABASE_URL = $env:DALLI_E2E_DATABASE_URL
+python -m pytest -q -m e2e
+```
+
+E2E 뒤 전체 테스트는 실행 중인 API와 PostgreSQL fixture가 같은 schema를 동시에
+변경하지 않도록 API를 먼저 멈추고 실행한다. 전체 테스트가 migration을 내렸다
+올릴 수 있으므로 끝난 뒤 head와 schema 차이를 다시 확인한다.
+
+```powershell
+docker compose -p dalli-bep17-e2e stop api
+Remove-Item Env:DALLI_E2E_BASE_URL, Env:DALLI_E2E_DATABASE_URL, Env:DALLI_E2E_JWT_SECRET
+$env:DATABASE_URL = $env:TEST_DATABASE_URL
+python -m pytest -q
+alembic upgrade head
+alembic current
+alembic check
+```
+
+실패 진단에는 단계·status code·응답 본문이 표시되지만 access token은 마스킹된다.
+위 비밀번호와 JWT secret은 로컬 테스트 전용 예시이며 실제 비밀값으로 바꾸거나
+커밋하지 않는다. 종료 시 project 이름을 확인한 뒤 이번 실행의 자원만 정리한다.
+
+```powershell
+docker compose -p dalli-bep17-e2e ps
+docker compose -p dalli-bep17-e2e down -v
+```
+
+실제 Expo 앱 연결과 배포 서버 검증은 이 로컬 게이트가 아니라 3B 범위다.
+
 ## 구조
 ```
 app/

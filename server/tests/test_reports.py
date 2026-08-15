@@ -140,13 +140,13 @@ def test_post_manual_run_returns_422_without_report_creation():
     assert not db.added and db.commits == 0
 
 
-def test_first_analyzable_post_creates_fallback_report_with_201():
+def test_first_analyzable_post_creates_fallback_report_with_200():
     owner = user()
     run = app_run(owner)
     db = FakeSession([run, None])
     response = client_for(owner, db).post(f"/runs/{run.id}/report")
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert db.commits == 1 and len(db.added) == 1
     body = response.json()
     assert set(body) == {

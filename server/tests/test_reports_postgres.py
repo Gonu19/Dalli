@@ -74,7 +74,7 @@ def app_payload(client_run_id: str) -> dict:
 
 
 @pytest.mark.postgres
-def test_concurrent_report_posts_create_one_row_and_return_201_then_200(
+def test_concurrent_fallback_report_posts_create_one_row_and_return_200(
     postgres_reports_environment,
 ) -> None:
     token, user_id = authenticate(f"reports-concurrent-{uuid4()}")
@@ -98,7 +98,7 @@ def test_concurrent_report_posts_create_one_row_and_return_201_then_200(
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: post_report(), range(2)))
 
-    assert sorted(status for status, _, _ in results) == [200, 201]
+    assert [status for status, _, _ in results] == [200, 200]
     assert len({report_id for _, report_id, _ in results}) == 1
     assert results[0][2] == results[1][2]
     with Session(postgres_reports_environment) as session:
@@ -127,7 +127,7 @@ def test_report_post_get_persistence_and_run_delete_cascade(
         created = client.post(f"/runs/{run_id}/report", headers=headers)
         fetched = client.get(f"/runs/{run_id}/report", headers=headers)
 
-    assert created.status_code == 201
+    assert created.status_code == 200
     assert fetched.status_code == 200
     assert fetched.json() == created.json()
     with Session(postgres_reports_environment) as session:
