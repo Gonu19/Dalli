@@ -21,7 +21,14 @@ Pedometer(만보계), 백그라운드 오디오, GPS는 **시뮬레이터에서 
 ```
 EXPO_PUBLIC_API_URL=http://<EC2-IP>:8000
 ```
-커밋 OK. **비밀값 금지** (번들에 그대로 박힘).
+처음 받은 뒤 아래처럼 로컬 파일을 만들고 실제 API 주소를 채우세요.
+
+```bash
+cp .env.example .env
+```
+
+`.env`는 **커밋 금지**이며 `.env.example`만 커밋합니다. `EXPO_PUBLIC_*` 값은 번들에
+그대로 노출되므로 비밀값을 넣지 마세요.
 
 ## app.json 필수 설정
 ```jsonc
