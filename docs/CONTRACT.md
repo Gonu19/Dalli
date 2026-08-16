@@ -214,6 +214,18 @@ LLM 8초 타임아웃. 초과·실패·쿼터 초과 시 룰베이스 폴백 문
 `GET /plans?from=2026-08-01&to=2026-08-31`는 `{ "items": [ ... ] }`를 반환한다.
 `PATCH`로 `status`(`PLANNED|DONE|SKIPPED`)·목표를 수정한다.
 
+`status` 컬럼은 유지하지만 `GET /plans`와 `GET /calendar`의 응답 status는 조회 시
+파생 계산한다. `PATCH`로 사용자가 직접 지정한 `DONE`·`SKIPPED`는 저장값을 우선한다.
+그 외에는 다음 순서를 적용한다.
+
+1. 연결된 러닝이 있으면 `DONE`
+2. 연결된 러닝이 없고 `planned_date`가 KST 오늘보다 이르면 `SKIPPED`
+3. 그 외에는 `PLANNED`
+
+계획 상태를 자정에 갱신하는 배치·cron은 두지 않는다. `POST /plans`와
+`PATCH /plans/{plan_id}`의 응답은 저장된 status를 반환하며, 파생 status는 위 GET
+응답에만 적용한다.
+
 - 사용자별 하루 계획은 최대 1개다. 같은 날짜에 생성하면 409 `CONFLICT`를 반환한다.
 - 계획 하나에는 최대 1개의 러닝만 연결할 수 있다. 이미 연결된 계획을 다른 러닝에 지정하면 409 `CONFLICT`다.
 - 연결된 러닝이 생성되면 계획 상태를 같은 트랜잭션에서 `DONE`으로 변경한다.

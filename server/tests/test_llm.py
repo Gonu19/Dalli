@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 from types import SimpleNamespace
@@ -17,7 +17,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import Settings
-from app.models import Run, User
+from app.models import Plan, Run, User
 from app.services.fallback import build_fallback_report
 from app.services.llm import (
     LLMReportContent,
@@ -140,7 +140,10 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     summary = json.loads(fake.kwargs["input"])
     assert summary["running_purpose"] == "COMPLETE"
     assert summary["weekly_goal_count"] is None
+    assert summary["this_week_run_count"] == 0
     assert summary["days_since_last_run"] is None
+    assert summary["this_week_plan_done"] == 0
+    assert summary["this_week_plan_total"] == 0
 
 
 def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:
@@ -172,6 +175,52 @@ def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:
     assert summary["running_purpose"] == "HABIT"
     assert summary["weekly_goal_count"] == 4
     assert summary["days_since_last_run"] == 3
+
+
+def test_safe_summary_reuses_kst_week_counts_for_runs_and_plans() -> None:
+    reference = datetime(2026, 8, 18, 3, tzinfo=timezone.utc)
+    owner = User(
+        id=uuid4(),
+        device_uuid="weekly-summary-user",
+        weekly_goal_count=3,
+        created_at=reference,
+        updated_at=reference,
+    )
+    current = run()
+    current.started_at = reference
+    current.user = owner
+    previous = run()
+    previous.started_at = reference - timedelta(days=1)
+    previous.user = owner
+    owner.runs = [previous, current]
+    done_plan = Plan(
+        id=uuid4(),
+        user_id=owner.id,
+        planned_date=reference.date(),
+        goal_type="TIME",
+        goal_value=600,
+        status="PLANNED",
+        run=previous,
+    )
+    planned_plan = Plan(
+        id=uuid4(),
+        user_id=owner.id,
+        planned_date=reference.date() + timedelta(days=1),
+        goal_type="TIME",
+        goal_value=600,
+        status="PLANNED",
+    )
+    owner.plans = [done_plan, planned_plan]
+
+    quality = assess_run_quality(current)
+    metrics = compute_run_metrics(current, quality)
+    fallback = build_fallback_report(current, quality, metrics)
+    summary = _safe_summary(current, quality, metrics, fallback, now=reference)
+
+    assert summary["this_week_run_count"] == 2
+    assert summary["days_since_last_run"] == 1
+    assert summary["this_week_plan_done"] == 1
+    assert summary["this_week_plan_total"] == 2
 
 
 def test_evaluation_observer_receives_only_in_memory_response_metadata() -> None:

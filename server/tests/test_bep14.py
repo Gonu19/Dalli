@@ -8,6 +8,7 @@ from app.main import create_app
 from app.models import Run
 from app.schemas.plans import PlanCreate, PlanUpdate
 from app.services.calendar import month_bounds_utc
+from app.services.plans import effective_plan_status
 from app.services.runs import _decode_cursor, _encode_cursor
 from app.services.stats import _utc_boundaries
 
@@ -61,6 +62,30 @@ def test_kst_month_and_monday_week_boundaries() -> None:
     assert month_start == datetime(2026, 7, 31, 15, tzinfo=timezone.utc)
     assert week_start == datetime(2026, 8, 9, 15, tzinfo=timezone.utc)
     assert current == datetime(2026, 8, 15, 3, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize(
+    ("stored_status", "planned_date", "has_run", "expected"),
+    [
+        ("PLANNED", date(2026, 8, 14), False, "SKIPPED"),
+        ("PLANNED", date(2026, 8, 14), True, "DONE"),
+        ("PLANNED", date(2026, 8, 17), False, "PLANNED"),
+        ("DONE", date(2026, 8, 14), False, "DONE"),
+        ("SKIPPED", date(2026, 8, 17), True, "SKIPPED"),
+    ],
+)
+def test_plan_status_derivation_preserves_explicit_done_or_skipped(
+    stored_status, planned_date, has_run, expected
+) -> None:
+    assert (
+        effective_plan_status(
+            stored_status=stored_status,
+            planned_date=planned_date,
+            has_run=has_run,
+            today=date(2026, 8, 17),
+        )
+        == expected
+    )
 
 
 def test_plan_contract_rejects_invalid_goal_and_undocumented_patch_fields() -> None:

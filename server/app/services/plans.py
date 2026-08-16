@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -8,6 +9,25 @@ from sqlalchemy.orm import Session, selectinload
 from app.exceptions import ApplicationError
 from app.models import Plan, User
 from app.schemas.plans import PlanCreate, PlanListResponse, PlanResponse, PlanUpdate
+
+
+KST = ZoneInfo("Asia/Seoul")
+
+
+def effective_plan_status(
+    *,
+    stored_status: str,
+    planned_date: date,
+    has_run: bool,
+    today: date | None = None,
+) -> str:
+    if stored_status in {"DONE", "SKIPPED"}:
+        return stored_status
+    if has_run:
+        return "DONE"
+    if planned_date < (today or datetime.now(KST).date()):
+        return "SKIPPED"
+    return "PLANNED"
 
 
 def _not_found() -> ApplicationError:
@@ -22,14 +42,24 @@ def _constraint_name(exc: IntegrityError) -> str | None:
     return getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
 
 
-def plan_response(plan: Plan) -> PlanResponse:
+def plan_response(plan: Plan, *, derive_status: bool = False, today: date | None = None) -> PlanResponse:
+    response_status = (
+        effective_plan_status(
+            stored_status=plan.status,
+            planned_date=plan.planned_date,
+            has_run=plan.run is not None,
+            today=today,
+        )
+        if derive_status
+        else plan.status
+    )
     return PlanResponse(
         id=plan.id,
         planned_date=plan.planned_date,
         goal_type=plan.goal_type,
         goal_value=plan.goal_value,
         memo=plan.memo,
-        status=plan.status,
+        status=response_status,
         run_id=plan.run.id if plan.run is not None else None,
     )
 
@@ -59,7 +89,10 @@ def list_plans(db: Session, user: User, date_from, date_to) -> PlanListResponse:
         .options(selectinload(Plan.run))
         .order_by(Plan.planned_date, Plan.id)
     ).all()
-    return PlanListResponse(items=[plan_response(plan) for plan in plans])
+    today = datetime.now(KST).date()
+    return PlanListResponse(
+        items=[plan_response(plan, derive_status=True, today=today) for plan in plans]
+    )
 
 
 def get_owned_plan(db: Session, user: User, plan_id: UUID) -> Plan:

@@ -1,4 +1,5 @@
-from datetime import datetime, time, timedelta, timezone
+from collections.abc import Iterable
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, distinct, func, select
@@ -11,11 +12,36 @@ from app.schemas.stats import RecentRunResponse, StatsResponse
 KST = ZoneInfo("Asia/Seoul")
 
 
+def week_start_date(value: date) -> date:
+    return value - timedelta(days=value.weekday())
+
+
+def current_week_bounds(now: datetime | None = None) -> tuple[date, date, date]:
+    current = (now or datetime.now(timezone.utc)).astimezone(KST)
+    start = week_start_date(current.date())
+    return start, start + timedelta(days=7), current.date()
+
+
+def count_this_week_run_days(
+    runs: Iterable[object],
+    now: datetime | None = None,
+) -> int:
+    start, _, today = current_week_bounds(now)
+    current = now or datetime.now(timezone.utc)
+    dates = {
+        started_at.astimezone(KST).date()
+        for run in runs
+        if (started_at := getattr(run, "started_at", None)) is not None
+        and started_at <= current
+        and start <= started_at.astimezone(KST).date() <= today
+    }
+    return len(dates)
+
+
 def _utc_boundaries(now: datetime) -> tuple[datetime, datetime, datetime]:
     local_now = now.astimezone(KST)
     month_start_local = datetime.combine(local_now.date().replace(day=1), time.min, KST)
-    week_start_date = local_now.date() - timedelta(days=local_now.weekday())
-    week_start_local = datetime.combine(week_start_date, time.min, KST)
+    week_start_local = datetime.combine(week_start_date(local_now.date()), time.min, KST)
     return (
         month_start_local.astimezone(timezone.utc),
         week_start_local.astimezone(timezone.utc),

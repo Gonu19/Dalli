@@ -11,13 +11,16 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.exceptions import register_exception_handlers
+from app.services.plans import effective_plan_status
 
 
 FIXTURE_PATH = (
@@ -176,7 +179,16 @@ def create_mock_app() -> FastAPI:
     @application.get("/plans", tags=["plans"])
     def list_plans(authorization: str | None = Header(default=None)) -> dict[str, Any]:
         require_auth(authorization)
-        return _body(fixtures, "plans", "list")
+        result = _body(fixtures, "plans", "list")
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+        for plan in result["items"]:
+            plan["status"] = effective_plan_status(
+                stored_status=plan["status"],
+                planned_date=date.fromisoformat(plan["planned_date"]),
+                has_run=plan["run_id"] is not None,
+                today=today,
+            )
+        return result
 
     @application.post("/plans", status_code=201, tags=["plans"])
     def create_plan(
@@ -207,7 +219,19 @@ def create_mock_app() -> FastAPI:
     @application.get("/calendar", tags=["calendar"])
     def get_calendar(authorization: str | None = Header(default=None)) -> dict[str, Any]:
         require_auth(authorization)
-        return _body(fixtures, "calendar", "month")
+        result = _body(fixtures, "calendar", "month")
+        today = datetime.now(ZoneInfo("Asia/Seoul")).date()
+        for day in result["days"]:
+            plan = day.get("plan")
+            if plan is None:
+                continue
+            plan["status"] = effective_plan_status(
+                stored_status=plan["status"],
+                planned_date=date.fromisoformat(day["date"]),
+                has_run=bool(day["runs"]),
+                today=today,
+            )
+        return result
 
     @application.get("/stats", tags=["stats"])
     def get_stats(authorization: str | None = Header(default=None)) -> dict[str, Any]:

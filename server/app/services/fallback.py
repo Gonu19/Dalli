@@ -49,6 +49,26 @@ def running_purpose(run: Run) -> str:
     return purpose if purpose in RUNNING_PURPOSES else "COMPLETE"
 
 
+def days_since_last_app_run(run: Run) -> int | None:
+    user = getattr(run, "user", None)
+    if user is None or run.started_at is None:
+        return None
+
+    previous_runs = (
+        candidate
+        for candidate in (getattr(user, "runs", None) or [])
+        if candidate is not run
+        and candidate.id != run.id
+        and candidate.source == "APP"
+        and candidate.started_at is not None
+        and candidate.started_at < run.started_at
+    )
+    previous = max(previous_runs, key=lambda candidate: candidate.started_at, default=None)
+    if previous is None:
+        return None
+    return (run.started_at.date() - previous.started_at.date()).days
+
+
 def _ended_in_recovery(run: Run) -> bool:
     return any(
         isinstance(event, dict) and event.get("type") == "RECOVERY_MODE_ON"
@@ -56,8 +76,15 @@ def _ended_in_recovery(run: Run) -> bool:
     )
 
 
-def _prescription(run: Run) -> str:
+def _recovery_priority(run: Run) -> bool:
     if _ended_in_recovery(run):
+        return True
+    days = days_since_last_app_run(run)
+    return days is not None and days <= 1 and fatigue_label(run.fatigue_index) == "부담됨"
+
+
+def _prescription(run: Run) -> str:
+    if _recovery_priority(run):
         return "지금은 회복을 우선하고, 편하게 이어가 보세요."
 
     return {

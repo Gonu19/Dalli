@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from datetime import datetime, timezone
 import json
 import logging
 from typing import Callable
@@ -17,7 +18,11 @@ from pydantic import ValidationError
 
 from app.config import Settings
 from app.models import Run
-from app.services.fallback import FallbackReportContent, running_purpose
+from app.services.fallback import (
+    FallbackReportContent,
+    days_since_last_app_run,
+    running_purpose,
+)
 from app.services.metrics import RunMetrics
 from app.services.report_quality import (
     HardGateReason,
@@ -26,9 +31,14 @@ from app.services.report_quality import (
     evaluate_report_output,
 )
 from app.services.run_quality import RunQualityAssessment
+from app.services.plans import effective_plan_status
+from app.services.stats import count_this_week_run_days, current_week_bounds
 
 
 logger = logging.getLogger(__name__)
+
+
+_days_since_last_app_run = days_since_last_app_run
 
 
 class HardGateViolation(ValueError):
@@ -37,33 +47,23 @@ class HardGateViolation(ValueError):
         self.reasons = reasons
 
 
-def _days_since_last_app_run(run: Run) -> int | None:
-    user = getattr(run, "user", None)
-    if user is None or run.started_at is None:
-        return None
-
-    previous_runs = (
-        candidate
-        for candidate in (getattr(user, "runs", None) or [])
-        if candidate is not run
-        and candidate.id != run.id
-        and candidate.source == "APP"
-        and candidate.started_at is not None
-        and candidate.started_at < run.started_at
-    )
-    previous = max(previous_runs, key=lambda candidate: candidate.started_at, default=None)
-    if previous is None:
-        return None
-    return (run.started_at.date() - previous.started_at.date()).days
-
-
 def _safe_summary(
     run: Run,
     quality: RunQualityAssessment,
     metrics: RunMetrics,
     fallback: FallbackReportContent,
+    *,
+    now: datetime | None = None,
 ) -> dict[str, object]:
     user = getattr(run, "user", None)
+    current = now or datetime.now(timezone.utc)
+    week_start, week_end, today = current_week_bounds(current)
+    user_runs = getattr(user, "runs", None) or []
+    week_plans = [
+        plan
+        for plan in (getattr(user, "plans", None) or [])
+        if week_start <= plan.planned_date < week_end
+    ]
     return {
         "duration_sec": run.duration_sec,
         "distance_m": run.distance_m,
@@ -73,7 +73,19 @@ def _safe_summary(
         "completed": run.completed,
         "running_purpose": running_purpose(run),
         "weekly_goal_count": getattr(user, "weekly_goal_count", None),
-        "days_since_last_run": _days_since_last_app_run(run),
+        "this_week_run_count": count_this_week_run_days(user_runs, current),
+        "days_since_last_run": days_since_last_app_run(run),
+        "this_week_plan_done": sum(
+            effective_plan_status(
+                stored_status=plan.status,
+                planned_date=plan.planned_date,
+                has_run=plan.run is not None,
+                today=today,
+            )
+            == "DONE"
+            for plan in week_plans
+        ),
+        "this_week_plan_total": len(week_plans),
         "avg_cadence": run.avg_cadence,
         "avg_pace_sec_per_km": run.avg_pace_sec_per_km,
         "intervention_count": run.intervention_count,
@@ -187,7 +199,11 @@ def generate_llm_report(
                 "이번 주 루틴을 이어가는 점을 강조하세요. WEIGHT는 active_duration_sec을 먼저 보고 "
                 "강도가 아니라 편안한 지속 시간에 집중하세요. FITNESS는 late_drop_rate를 먼저 보고 "
                 "후반 유지력과 안정 구간을 강조하세요. PERFORMANCE는 안정 구간과 평균 페이스를 보고 "
-                "리듬 일관성을 강조하세요. 체중, 칼로리, 감량 수치는 만들지 말고 더 빨리 또는 더 자주 달리라고 재촉하지 마세요. "
+                "리듬 일관성을 강조하세요. this_week_run_count와 this_week_plan_done/total은 모든 목적의 판단 근거로 사용하되, "
+                "evidence에 루틴 숫자를 넣는 것은 HABIT일 때만 허용하세요. 다른 목적에서는 recovery_note와 prescription의 근거로만 쓰세요. "
+                "days_since_last_run이 null이면 간격을 언급하는 문장을 생략하세요. days_since_last_run이 1 이하이고 "
+                "fatigue_index가 0.6 이상이면 recovery_note는 회복을 우선하는 방향으로 쓰고, 5일 이상처럼 간격이 충분하면 "
+                "짧은 간격을 전제로 한 회복 문구를 쓰지 마세요. 체중, 칼로리, 감량 수치는 만들지 말고 더 빨리 또는 더 자주 달리라고 재촉하지 마세요. "
                 "RECOVERY_MODE_ON으로 끝난 러닝은 목적과 무관하게 회복을 우선하며 실패로 표현하지 마세요."
             ),
             input=json.dumps(summary, ensure_ascii=False, separators=(",", ":")),

@@ -60,6 +60,19 @@ def test_mock_protected_route_requires_bearer_token() -> None:
     assert empty_bearer.status_code == 401
 
 
+def test_mock_plan_gets_apply_derived_statuses() -> None:
+    client = TestClient(create_mock_app())
+
+    plans = client.get("/plans", headers=AUTH)
+    calendar = client.get("/calendar", headers=AUTH)
+
+    assert plans.status_code == 200
+    assert plans.json()["items"][0]["status"] == "DONE"
+    assert calendar.status_code == 200
+    planned_day = next(day for day in calendar.json()["days"] if day["date"] == "2026-08-16")
+    assert planned_day["plan"]["status"] == "SKIPPED"
+
+
 def test_mock_report_scenarios() -> None:
     client = TestClient(create_mock_app())
 

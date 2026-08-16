@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 
@@ -129,6 +130,27 @@ def test_fallback_recovery_prescription_overrides_running_purpose():
     content = build(run)
 
     assert content.prescription == "지금은 회복을 우선하고, 편하게 이어가 보세요."
+
+
+def test_fallback_prioritizes_recovery_after_short_gap_and_high_fatigue():
+    owner = User(running_purpose="PERFORMANCE")
+    current = app_run(fatigue_index=Decimal("0.600"))
+    current.id = uuid4()
+    current.started_at = NOW
+    current.user = owner
+    previous = app_run()
+    previous.id = uuid4()
+    previous.started_at = NOW.replace(day=14)
+    previous.user = owner
+    owner.runs = [previous, current]
+
+    close_gap = build(current)
+
+    previous.started_at = NOW.replace(day=10)
+    wide_gap = build(current)
+
+    assert "회복" in close_gap.prescription
+    assert "회복" not in wide_gap.prescription
 
 
 @pytest.mark.parametrize(
