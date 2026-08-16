@@ -17,6 +17,7 @@ import {
   CADENCE_CLAMP_MIN,
   CONDITION_ADJUST,
   EXPERIENCE_BASE_CADENCE,
+  INITIAL_TARGET_ADJUST_RANGE,
   IDLE_CADENCE_THRESHOLD,
   PURPOSE_ADJUST,
   TARGET_HALF_WIDTH,
@@ -65,6 +66,18 @@ export function computeTargetRange(
   );
 
   return { center, min: center - TARGET_HALF_WIDTH, max: center + TARGET_HALF_WIDTH };
+}
+
+/**
+ * 온보딩 조절 화면에서 사용자가 만진 값을 허용 범위로 자른다 (`ENGINE.md` §2).
+ *
+ * 추천값 ±10 안에서만 움직이고, 그 위에 절대 클램프 130~185가 우선한다.
+ * 130 미만을 허용하면 걷기 구간(50~120)과 겹쳐 **걷는 것이 목표 달성이 된다.**
+ */
+export function clampAdjustedTarget(value: number, recommended: number): number {
+  const lower = Math.max(recommended - INITIAL_TARGET_ADJUST_RANGE, CADENCE_CLAMP_MIN);
+  const upper = Math.min(recommended + INITIAL_TARGET_ADJUST_RANGE, CADENCE_CLAMP_MAX);
+  return clamp(Math.round(value), lower, upper);
 }
 
 /** DB·API가 원본으로 갖는 min/max에서 표시용 중심값을 복원한다 (±4 대칭이라 항상 정수). */

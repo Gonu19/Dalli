@@ -12,6 +12,7 @@
 import { ONBOARDING_SKIP_DEFAULTS, SAMPLE_INTERVAL_SEC } from '../constants';
 import { ReplaySource } from '../sources/replay-source';
 import {
+  clampAdjustedTarget,
   computeInitialTargetCadence,
   computeMeasuredBaseline,
   computeTargetRange,
@@ -61,6 +62,13 @@ check(
   ),
   152,
 );
+
+// 1-2. 조절 화면 상·하한 — ENGINE.md §2
+check('추천값 기준 +10까지', clampAdjustedTarget(200, 152), 162);
+check('추천값 기준 −10까지', clampAdjustedTarget(100, 152), 142);
+check('절대 하한 130이 우선', clampAdjustedTarget(120, 135), 130);
+check('절대 상한 185가 우선', clampAdjustedTarget(200, 182), 185);
+check('걷기 상단(120)은 목표가 될 수 없다', clampAdjustedTarget(120, 132) >= 130, true);
 
 // 2. 목표 범위 — ENGINE.md §3
 check('목표 범위 (보통)', computeTargetRange(157, 3), { center: 157, min: 153, max: 161 });

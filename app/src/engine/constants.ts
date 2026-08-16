@@ -97,8 +97,14 @@ export const BASELINE_WINDOW_END_SEC = 270;
 export const BASELINE_MIN_SAMPLES = 30;
 export const BASELINE_MIN_DURATION_SEC = 360;
 
-/** 온보딩에서 초기 목표값을 손으로 조절할 수 있는 폭 — ±5 spm, 1 spm 단위 (§2). */
-export const INITIAL_TARGET_ADJUST_RANGE = 5;
+/**
+ * 온보딩에서 초기 목표값을 손으로 조절할 수 있는 폭 — 추천값 기준 ±10 (§2).
+ * 절대 상·하한은 `CADENCE_CLAMP_MIN/MAX`가 언제나 우선한다.
+ */
+export const INITIAL_TARGET_ADJUST_RANGE = 10;
+
+/** 조절 버튼 단위 (§2). `±5`가 있어야 조절 폭 ±10을 두 번에 오갈 수 있다. */
+export const INITIAL_TARGET_ADJUST_STEPS = [-5, -1, 1, 5] as const;
 
 /**
  * 온보딩 전체 건너뛰기 기본값 (§2).
