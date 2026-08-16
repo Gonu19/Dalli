@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import json
 import logging
-from typing import Annotated, Callable
+from typing import Callable
 
 from openai import (
     APIConnectionError,
@@ -13,31 +13,28 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.models import Run
 from app.services.fallback import FallbackReportContent
 from app.services.metrics import RunMetrics
+from app.services.report_quality import (
+    HardGateReason,
+    LLMReportContent,
+    evaluate_outgoing_payload,
+    evaluate_report_output,
+)
 from app.services.run_quality import RunQualityAssessment
 
 
 logger = logging.getLogger(__name__)
-NonEmptyText = Annotated[str, Field(min_length=1)]
 
 
-class LLMReportContent(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    verdict: NonEmptyText
-    evidence: list[NonEmptyText] = Field(min_length=1, max_length=3)
-    hypothesis: NonEmptyText | None
-    prescription: NonEmptyText | None
-    next_goal_text: NonEmptyText
-    next_target_min: int
-    next_target_max: int
-    recovery_note: NonEmptyText | None
-    limitation: NonEmptyText | None
+class HardGateViolation(ValueError):
+    def __init__(self, reasons: tuple[HardGateReason, ...]):
+        super().__init__("LLM hard gate failed")
+        self.reasons = reasons
 
 
 def _safe_summary(
@@ -65,6 +62,8 @@ def _safe_summary(
         "next_target_min": fallback.next_target_min,
         "next_target_max": fallback.next_target_max,
         "required_limitation": fallback.limitation,
+        "current_target_min": run.final_target_min,
+        "current_target_max": run.final_target_max,
     }
 
 
@@ -80,26 +79,9 @@ def _call_with_deadline(call: Callable[[], object], timeout_sec: float) -> objec
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-def _validated_content(
-    parsed: object,
-    fallback: FallbackReportContent,
-) -> LLMReportContent:
-    if parsed is None:
-        raise ValueError("empty structured response")
-    content = LLMReportContent.model_validate(parsed)
-    if (
-        content.next_target_min != fallback.next_target_min
-        or content.next_target_max != fallback.next_target_max
-    ):
-        raise ValueError("LLM changed server next target")
-    if content.limitation != fallback.limitation:
-        raise ValueError("LLM changed required limitation")
-    return content
-
-
 def _failure_reason(exc: Exception) -> str:
     if isinstance(exc, (TimeoutError, APITimeoutError)):
-        return "timeout"
+        return HardGateReason.LLM_DEADLINE_EXCEEDED
     if isinstance(exc, AuthenticationError):
         return "authentication"
     if isinstance(exc, RateLimitError):
@@ -109,8 +91,8 @@ def _failure_reason(exc: Exception) -> str:
     if isinstance(exc, APIStatusError):
         return "provider_status"
     if isinstance(exc, (ValidationError, ValueError)):
-        return "invalid_response"
-    return "sdk_error"
+        return HardGateReason.SCHEMA_INVALID
+    return HardGateReason.EVALUATOR_ERROR
 
 
 def generate_llm_report(
@@ -130,7 +112,37 @@ def generate_llm_report(
         logger.warning("llm_report_fallback", extra={"llm_reason": "missing_api_key"})
         return None
 
+    if run.source == "MANUAL":
+        logger.warning(
+            "llm_report_fallback",
+            extra={
+                "run_id": str(run.id),
+                "llm_reason_codes": [HardGateReason.MANUAL_RUN_LLM_BLOCKED],
+            },
+        )
+        return None
+    if not quality.is_analyzable:
+        logger.warning(
+            "llm_report_fallback",
+            extra={
+                "run_id": str(run.id),
+                "llm_reason_codes": [HardGateReason.UNANALYZABLE_RUN_LLM_BLOCKED],
+            },
+        )
+        return None
+
     summary = _safe_summary(run, quality, metrics, fallback)
+    payload_gate = evaluate_outgoing_payload(summary, run.samples, run.events)
+    if not payload_gate.passed:
+        logger.warning(
+            "llm_report_fallback",
+            extra={
+                "run_id": str(run.id),
+                "llm_reason_codes": list(payload_gate.reasons),
+            },
+        )
+        return None
+
     def request() -> object:
         client = client_factory(
             api_key=api_key,
@@ -154,11 +166,23 @@ def generate_llm_report(
 
     try:
         parsed = _call_with_deadline(request, settings.llm_timeout_sec)
-        content = _validated_content(parsed, fallback)
+        gate = evaluate_report_output(parsed, fallback, summary)
+        if not gate.passed or gate.content is None:
+            raise HardGateViolation(gate.reasons)
+        content = gate.content
     except Exception as exc:
+        reasons = (
+            list(exc.reasons)
+            if isinstance(exc, HardGateViolation)
+            else [_failure_reason(exc)]
+        )
         logger.warning(
             "llm_report_fallback",
-            extra={"llm_reason": _failure_reason(exc), "llm_fallback": True},
+            extra={
+                "run_id": str(run.id),
+                "llm_reason_codes": reasons,
+                "llm_fallback": True,
+            },
         )
         return None
 

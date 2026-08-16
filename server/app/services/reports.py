@@ -14,6 +14,7 @@ from app.schemas.reports import ReportMetricsResponse, ReportResponse
 from app.services.fallback import build_fallback_report
 from app.services.llm import generate_llm_report, llm_values
 from app.services.metrics import compute_run_metrics
+from app.services.report_quality import validate_fallback_content
 from app.services.run_quality import assess_run_quality
 
 
@@ -74,6 +75,7 @@ def create_report(
     metrics = compute_run_metrics(run, quality)
     try:
         fallback = build_fallback_report(run, quality, metrics)
+        validate_fallback_content(fallback)
     except ValueError:
         raise ApplicationError(
             code="VALIDATION_ERROR",
