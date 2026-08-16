@@ -136,6 +136,28 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert SECRET not in fake.kwargs["input"]
 
 
+def test_evaluation_observer_receives_only_in_memory_response_metadata() -> None:
+    current_run, quality, metrics, fallback = context()
+    fake = FakeClient(
+        LLMReportContent.model_validate(
+            valid_payload(fallback.next_target_min, fallback.next_target_max, fallback.limitation)
+        )
+    )
+    observed = []
+    content = generate_llm_report(
+        current_run,
+        quality,
+        metrics,
+        fallback,
+        settings(),
+        client_factory=lambda **_: fake,
+        response_observer=observed.append,
+    )
+    assert content is not None
+    assert len(observed) == 1
+    assert observed[0] is not None
+
+
 @pytest.mark.parametrize(
     "parsed",
     [

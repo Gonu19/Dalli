@@ -103,6 +103,7 @@ def generate_llm_report(
     settings: Settings,
     *,
     client_factory: Callable[..., object] = OpenAI,
+    response_observer: Callable[[object], None] | None = None,
 ) -> LLMReportContent | None:
     api_key = settings.openai_api_key.get_secret_value()
     if not settings.llm_enabled:
@@ -162,6 +163,11 @@ def generate_llm_report(
             max_output_tokens=600,
             store=False,
         )
+        # Evaluation-only callers may collect SDK usage/id metadata.  The
+        # observer receives the response object in memory and is never called
+        # by normal API requests; it must decide what safe fields to retain.
+        if response_observer is not None:
+            response_observer(response)
         return response.output_parsed
 
     try:
