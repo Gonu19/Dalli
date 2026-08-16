@@ -68,11 +68,25 @@ def test_mock_report_scenarios() -> None:
         "/runs/run-2/report",
         headers={**AUTH, "X-Mock-Scenario": "fallback"},
     )
+    insufficient_data = client.post(
+        "/runs/run-3/report",
+        headers={**AUTH, "X-Mock-Scenario": "insufficient_data"},
+    )
 
-    assert normal.status_code == 201
+    assert normal.status_code == 200
     assert normal.json()["is_fallback"] is False
     assert fallback.status_code == 200
     assert fallback.json()["is_fallback"] is True
+    assert fallback.json()["limitation"] is None
+    assert insufficient_data.status_code == 200
+    assert insufficient_data.json()["is_fallback"] is True
+    assert insufficient_data.json()["metrics"] == {
+        "rhythm_score": None,
+        "late_drop_rate": None,
+        "fatigue_index": None,
+        "in_range_sec": None,
+    }
+    assert insufficient_data.json()["limitation"]
 
 
 def test_mock_report_creation_is_idempotent() -> None:
@@ -84,7 +98,7 @@ def test_mock_report_creation_is_idempotent() -> None:
         headers={**AUTH, "X-Mock-Scenario": "fallback"},
     )
 
-    assert created.status_code == 201
+    assert created.status_code == 200
     assert repeated.status_code == 200
     assert repeated.json() == created.json()
 

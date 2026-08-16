@@ -37,5 +37,13 @@ X-Mock-Scenario: fallback
 X-Mock-Scenario: insufficient_data
 ```
 
+세 시나리오는 모두 HTTP 200이다. `normal`은 `is_fallback=false`, `fallback`은
+`is_fallback=true`, `insufficient_data`는 `is_fallback=true`와 비어 있지 않은
+`limitation` 및 `null` 지표를 반환한다. 같은 `run_id`로 리포트를 재요청하면
+최초 생성 결과를 그대로 반환하므로 시나리오를 바꿔 재전송해도 결과가 바뀌지 않는다.
+
+러닝 업로드도 `(사용자, client_run_id)` 계약을 흉내 내며, 같은
+`client_run_id`를 재전송하면 최초 201 응답과 동일한 body를 200으로 반환한다.
+
 화요일 실서버 연결 이후에는 같은 HTTPS 진입점의 내부 업스트림을
 `app.mock_main`에서 `app.main`으로 전환하고 이 헤더를 제거한다.
