@@ -1,0 +1,25 @@
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
+import { Animated, StyleSheet, View } from 'react-native';
+
+export function ScrollHeaderScrim({ scrollY, height = 74 }: { scrollY: Animated.Value; height?: number }) {
+  const opacity = scrollY.interpolate({
+    inputRange: [0, 8, 32],
+    outputRange: [0, 0.8, 1],
+    extrapolate: 'clamp',
+  });
+
+  return <Animated.View pointerEvents="none" style={[styles.root, { height, opacity }]}>
+    {isGlassEffectAPIAvailable()
+      ? <GlassView glassEffectStyle="regular" style={StyleSheet.absoluteFill} />
+      : <View style={[StyleSheet.absoluteFill, styles.fallback]} />}
+    <View style={styles.tint} />
+    <View style={styles.edge} />
+  </Animated.View>;
+}
+
+const styles = StyleSheet.create({
+  root: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 8, shadowColor: '#1C1A1A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.75, shadowRadius: 12 },
+  fallback: { backgroundColor: 'rgba(28,26,26,.97)' },
+  tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(28,26,26,.76)' },
+  edge: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: 'rgba(255,255,255,.08)' },
+});

@@ -1,6 +1,7 @@
 import * as Application from 'expo-application';
 import * as SecureStore from 'expo-secure-store';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { ApiError, authenticateDevice, getUserProfile } from '@/src/api/client';
 
@@ -24,13 +25,34 @@ function makeLocalUuid() {
   return `dalli-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+async function getStoredItem(key: string) {
+  if (Platform.OS === 'web') return globalThis.localStorage?.getItem(key) ?? null;
+  return SecureStore.getItemAsync(key);
+}
+
+async function setStoredItem(key: string, value: string) {
+  if (Platform.OS === 'web') {
+    globalThis.localStorage?.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function deleteStoredItem(key: string) {
+  if (Platform.OS === 'web') {
+    globalThis.localStorage?.removeItem(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+}
+
 async function getStableDeviceUuid() {
-  const stored = await SecureStore.getItemAsync(DEVICE_UUID_KEY);
+  const stored = await getStoredItem(DEVICE_UUID_KEY);
   if (stored) return stored;
 
-  const iosId = await Application.getIosIdForVendorAsync().catch(() => null);
+  const iosId = Platform.OS === 'ios' ? await Application.getIosIdForVendorAsync().catch(() => null) : null;
   const deviceUuid = iosId ?? makeLocalUuid();
-  await SecureStore.setItemAsync(DEVICE_UUID_KEY, deviceUuid);
+  await setStoredItem(DEVICE_UUID_KEY, deviceUuid);
   return deviceUuid;
 }
 
@@ -45,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      let activeToken = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      let activeToken = await getStoredItem(ACCESS_TOKEN_KEY);
 
       if (activeToken) {
         try {
@@ -55,14 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         } catch (caught) {
           if (!(caught instanceof ApiError) || caught.status !== 401) throw caught;
-          await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
+          await deleteStoredItem(ACCESS_TOKEN_KEY);
           activeToken = null;
         }
       }
 
       const deviceUuid = await getStableDeviceUuid();
       const auth = await authenticateDevice(deviceUuid);
-      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, auth.accessToken);
+      await setStoredItem(ACCESS_TOKEN_KEY, auth.accessToken);
       const profile = await getUserProfile(auth.accessToken);
       setToken(auth.accessToken);
       setOnboarded(profile.onboarded);
@@ -79,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void Promise.all([
-      SecureStore.deleteItemAsync(LEGACY_ONBOARDED_KEY),
-      SecureStore.deleteItemAsync(LEGACY_PURPOSE_KEY),
+      deleteStoredItem(LEGACY_ONBOARDED_KEY),
+      deleteStoredItem(LEGACY_PURPOSE_KEY),
     ]);
   }, []);
 

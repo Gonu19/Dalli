@@ -1,76 +1,50 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
-
-import { useUploadRun } from '@/src/api/queries';
-import { useAuth } from '@/src/components/auth-provider';
-import { PrimaryButton } from '@/src/components/primary-button';
+import { useState } from 'react';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
-import { Screen } from '@/src/components/screen';
-import { StatePanel } from '@/src/components/state-panel';
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors } from '@/src/theme/tokens';
 
-export default function RunFinishScreen() {
-  const router = useRouter();
-  const { token } = useAuth();
-  const { result, setResult } = useRunResult();
-  const upload = useUploadRun(token);
+export default function Finish(){
+  const router=useRouter();
+  const{result,setPhotoUri}=useRunResult();
+  const[picking,setPicking]=useState(false);
+  if(!result)return <FigmaScreen/>;
+  const r=result.record;
+  const minutes=Math.round(r.durationSec/60);
+  const avg=r.avgCadence??160;
 
-  if (!result) {
-    return <Screen><StatePanel title="완료된 러닝이 없어요" body="홈에서 오늘의 러닝을 시작해 주세요." actionLabel="홈으로" onAction={() => router.replace('/')} /></Screen>;
-  }
-
-  const retrySave = async () => {
-    if (result.simulated || result.uploaded) return;
+  const openPhoto = async (source: 'camera' | 'library') => {
+    if (picking) return;
+    setPicking(true);
     try {
-      const uploaded = await upload.mutateAsync(result.record);
-      setResult({ ...result, uploaded });
+      const permission = source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          source === 'camera' ? '카메라 권한이 필요해요' : '사진 접근 권한이 필요해요',
+          '설정에서 권한을 허용하면 사진을 결과 이미지에 넣을 수 있어요.',
+          [{ text: '취소', style: 'cancel' }, { text: '설정 열기', onPress: () => void Linking.openSettings() }],
+        );
+        return;
+      }
+      const picked = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [9, 16], mediaTypes: ['images'], quality: 0.9 })
+        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [9, 16], mediaTypes: ['images'], quality: 0.9 });
+      if (picked.canceled || !picked.assets[0]?.uri) return;
+      setPhotoUri(picked.assets[0].uri);
+      router.push('/run/image');
     } catch {
-      // 아래 상태 패널에서 재시도할 수 있고 러닝 결과는 provider에 유지된다.
+      Alert.alert('사진을 불러오지 못했어요', '러닝 기록은 그대로 저장되어 있어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setPicking(false);
     }
   };
 
-  return (
-    <Screen footer={<PrimaryButton onPress={() => router.push('/run/report')}>리포트 보기</PrimaryButton>}>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>{result.record.completed ? '완주' : '러닝 종료'}</Text>
-        <Text style={styles.title}>오늘도 한 번의 러닝을 기록했어요.</Text>
-        <Text style={styles.body}>{result.simulated ? '시연 기록은 서버에 저장하지 않았어요.' : result.uploaded ? '러닝 기록을 안전하게 저장했어요.' : '러닝 결과를 보관하고 있어요. 연결을 확인한 뒤 다시 저장해 주세요.'}</Text>
-      </View>
-      <View style={styles.card}>
-        <Summary label="시간" value={formatDuration(result.record.durationSec)} />
-        <Summary label="거리" value={result.record.distanceM === null ? '—' : `${(result.record.distanceM / 1000).toFixed(2)} km`} />
-        <Summary label="평균 리듬" value={result.record.avgCadence === null ? '—' : `${result.record.avgCadence} spm`} />
-      </View>
-      {!result.simulated && !result.uploaded ? (
-        <StatePanel
-          title="서버에 아직 저장하지 못했어요"
-          body="현재 러닝 결과는 유지돼요. 연결을 확인하고 다시 저장해 주세요."
-          actionLabel="다시 저장"
-          loading={upload.isPending}
-          onAction={() => void retrySave()}
-        />
-      ) : null}
-      <PrimaryButton variant="text" onPress={() => router.replace('/')}>홈으로 돌아가기</PrimaryButton>
-    </Screen>
-  );
+  return <FigmaScreen><FigmaBack onPress={()=>router.dismissTo('/')}/><FigmaLogo centered top={25}/><Ionicons color={colors.primary} name="checkmark" size={54} style={styles.check}/><Text style={styles.title}>오늘의 러닝 완료!</Text><Text style={styles.copy}>무리하지 않고 나만의 리듬으로{`\n`}끝까지 완주해냈어요.</Text><View style={styles.summary}><Row label="총 달린 시간" value={`${minutes}분`}/><Row label="평균 케이던스" value={`${avg} SPM`} accent/><Row label="목표 리듬 유지율" value="100%"/></View><Text style={styles.photoTitle}>사진으로 오늘의 러닝 남기기</Text><Text style={styles.photoCopy}>직접 찍거나 고른 사진이 결과 이미지의 배경이 됩니다.</Text><Pressable disabled={picking} onPress={()=>void openPhoto('camera')} style={({pressed})=>[styles.camera,(pressed||picking)&&styles.pressed]}><Text style={styles.smallButton}>사진 찍기</Text></Pressable><Pressable disabled={picking} onPress={()=>void openPhoto('library')} style={({pressed})=>[styles.gallery,(pressed||picking)&&styles.pressed]}><Text style={styles.smallButton}>사진 선택</Text></Pressable><Pressable onPress={()=>router.push('/run/report')} style={({pressed})=>[styles.report,pressed&&styles.buttonPressed]}><Text style={styles.reportText}>사진 없이 리포트 보기</Text></Pressable></FigmaScreen>
 }
-
-function Summary({ label, value }: { label: string; value: string }) {
-  return <View style={styles.summary}><Text style={styles.value}>{value}</Text><Text style={styles.label}>{label}</Text></View>;
-}
-
-function formatDuration(value: number) {
-  const minutes = Math.floor(value / 60);
-  return `${minutes}분 ${Math.round(value % 60)}초`;
-}
-
-const styles = StyleSheet.create({
-  header: { gap: spacing.sm },
-  eyebrow: { ...typography.bodyStrong, color: colors.primary },
-  title: { ...typography.title, color: colors.text },
-  body: { ...typography.body, color: colors.textMuted },
-  card: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface },
-  summary: { flex: 1, alignItems: 'center', gap: spacing.xs },
-  value: { ...typography.bodyStrong, color: colors.text },
-  label: { ...typography.caption, color: colors.textMuted, textAlign: 'center' },
-});
+function Row({label,value,accent=false}:{label:string;value:string;accent?:boolean}){return <View style={styles.row}><Text style={styles.label}>{label}</Text><Text style={[styles.rowValue,accent&&{color:colors.primary}]}>{value}</Text></View>}
+const styles=StyleSheet.create({check:{position:'absolute',top:135,alignSelf:'center'},title:{position:'absolute',top:217,alignSelf:'center',color:colors.white,fontSize:28,fontWeight:'800'},copy:{position:'absolute',top:271,alignSelf:'center',color:colors.textMuted,fontSize:16,lineHeight:22,textAlign:'center'},summary:{position:'absolute',left:55,right:52,top:358,height:158,borderRadius:30,borderWidth:.5,borderColor:'rgba(221,224,225,.5)',backgroundColor:'rgba(221,224,225,.1)',paddingHorizontal:22,paddingVertical:16},row:{height:39,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},label:{color:colors.white,fontSize:15},rowValue:{color:colors.white,fontSize:15,fontWeight:'700'},photoTitle:{position:'absolute',left:50,top:546,color:colors.white,fontSize:17,fontWeight:'700'},photoCopy:{position:'absolute',left:50,top:572,color:'rgba(221,224,225,.65)',fontSize:12},camera:{position:'absolute',left:50,top:598,width:142,height:43,borderRadius:14,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center'},gallery:{position:'absolute',right:52,top:598,width:142,height:43,borderRadius:14,borderWidth:.5,borderColor:'rgba(221,224,225,.5)',alignItems:'center',justifyContent:'center'},pressed:{opacity:.65,transform:[{scale:.97}]},buttonPressed:{opacity:.72,transform:[{scale:.98}]},smallButton:{color:colors.white,fontSize:15,fontWeight:'700'},report:{position:'absolute',left:50,right:52,top:679,height:52,borderRadius:18,borderWidth:.5,borderColor:colors.white,alignItems:'center',justifyContent:'center'},reportText:{color:colors.white,fontSize:17,fontWeight:'700'}});

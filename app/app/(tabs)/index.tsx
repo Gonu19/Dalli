@@ -1,189 +1,100 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useProfile, useStats } from '@/src/api/queries';
+import { useProfile, useRuns } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
-import { ChoiceCard } from '@/src/components/choice-card';
-import { usePreferences } from '@/src/components/preferences-provider';
-import { PrimaryButton } from '@/src/components/primary-button';
+import { FigmaLogo } from '@/src/components/figma-ui';
 import { Screen } from '@/src/components/screen';
 import { StatePanel } from '@/src/components/state-panel';
-import { CONDITION_VALUE } from '@/src/engine/constants';
 import type { ConditionLevel } from '@/src/engine/types';
-import { startTrackedRun } from '@/src/store/runController';
-import type { RunGoal } from '@/src/store/runStore';
-import { useSimulationStore } from '@/src/store/simulation';
-import { colors, radius, shadows, spacing, typography } from '@/src/theme/tokens';
+import { colors } from '@/src/theme/tokens';
 
 const conditions: { level: ConditionLevel; label: string }[] = [
-  { level: 'LIGHT', label: '가벼움' },
+  { level: 'TIRED', label: '나쁨' },
   { level: 'NORMAL', label: '보통' },
-  { level: 'TIRED', label: '피곤함' },
+  { level: 'LIGHT', label: '좋음' },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const profile = useProfile(token);
-  const stats = useStats(token);
-  const startSimulation = useSimulationStore((state) => state.start);
-  const [goalType, setGoalType] = useState<RunGoal['type']>('TIME');
-  const [goalValue, setGoalValue] = useState(20 * 60);
+  const runs = useRuns(token);
   const [condition, setCondition] = useState<ConditionLevel>('NORMAL');
-  const { voiceEnabled, metronomeEnabled, setVoiceEnabled, setMetronomeEnabled } = usePreferences();
 
-  if (profile.isLoading) {
-    return <Screen><StatePanel loading title="오늘의 러닝을 준비하고 있어요" body="나의 기준 리듬을 불러오는 중이에요." /></Screen>;
-  }
+  if (profile.isLoading) return <Screen><StatePanel loading title="오늘의 러닝을 준비하고 있어요" body="케이던스를 불러오는 중이에요." /></Screen>;
+  if (profile.error || !profile.data?.baselineCadence) return <Screen><StatePanel title="러닝 준비 정보를 불러오지 못했어요" body="입력 내용은 보존되어 있어요." actionLabel="다시 시도" onAction={() => void profile.refetch()} /></Screen>;
 
-  if (profile.error || !profile.data?.baselineCadence) {
-    return (
-      <Screen>
-        <StatePanel
-          title="러닝 준비 정보를 불러오지 못했어요"
-          body="입력 내용은 보존되어 있어요. 연결을 확인하고 다시 시도해 주세요."
-          actionLabel="다시 시도"
-          onAction={() => void profile.refetch()}
-        />
-      </Screen>
-    );
-  }
-
-  const referenceCadence = profile.data.baselineCadence;
-  const begin = async () => {
-    await startTrackedRun({
-      referenceCadence,
-      condition: CONDITION_VALUE[condition],
-      goal: { type: goalType, value: goalValue },
-      onSensorUnavailable: () => {
-        Alert.alert(
-          '리듬을 측정하지 못했어요',
-          '러닝은 계속 기록할 수 있어요. 동작 및 피트니스 권한을 확인해 주세요.',
-          [
-            { text: '제한 모드로 계속', style: 'cancel' },
-            { text: '설정 열기', onPress: () => void Linking.openSettings().catch(() => undefined) },
-          ],
-        );
-      },
-    });
-    router.push('/run/active');
-  };
-
-  const simulate = () => {
-    startSimulation({ referenceCadence, condition: CONDITION_VALUE[condition], speed: 10 });
-    router.push('/run/active');
-  };
-
-  return (
-    <Screen>
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>오늘의 달리</Text>
-        <Text style={styles.title}>오늘의 리듬을 시작해 볼까요?</Text>
+  const cadence = profile.data.baselineCadence;
+  const latest = runs.data?.[0];
+  return <Screen padded={false} scroll={false}>
+    <View style={styles.frame}>
+      <FigmaLogo top={31} left={31} />
+      <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
+        <Ionicons color={colors.white} name="settings-outline" size={26} />
+      </Pressable>
+      <Text style={styles.conditionTitle}>오늘의 컨디션</Text>
+      <Text style={styles.conditionCopy}>컨디션에 맞춰 케이던스 목표 범위가 자동 조절됩니다.</Text>
+      <View style={styles.conditions}>
+        {conditions.map((item) => <Pressable key={item.level} onPress={() => setCondition(item.level)} style={({ pressed }) => [styles.condition, condition === item.level && styles.conditionOn, pressed && styles.buttonPressed]}>
+          <View style={[styles.radio, condition === item.level && styles.radioOn]}>{condition === item.level ? <View style={styles.dot} /> : null}</View>
+          <Text style={styles.conditionText}>{item.label}</Text>
+        </Pressable>)}
       </View>
-
-      <View style={styles.rhythmCard}>
-        <Text style={styles.label}>나의 기준 리듬</Text>
-        <Text style={styles.cadence}>{referenceCadence} <Text style={styles.unit}>spm</Text></Text>
-        <Text style={styles.description}>러닝을 시작하면 컨디션을 반영한 오늘의 리듬을 안내해요.</Text>
+      <View style={styles.goal}>
+        <Text style={styles.goalLabel}>오늘의 목표</Text>
+        <Text style={styles.goalValue}><Text style={styles.accent}>60</Text>분 완주</Text>
+        <Text style={styles.goalCadence}>목표 케이던스:  <Text style={styles.bold}>{cadence} SPM</Text></Text>
+        <Text style={styles.quote}>“무리하게 속도를 내지 않아도 괜찮아요. 리듬을 유지해 보세요.”</Text>
       </View>
-
-      <Section title="오늘의 목표">
-        <View style={styles.row}>
-          <View style={styles.flex}><ChoiceCard label="시간" selected={goalType === 'TIME'} onPress={() => { setGoalType('TIME'); setGoalValue(20 * 60); }} /></View>
-          <View style={styles.flex}><ChoiceCard label="거리" selected={goalType === 'DISTANCE'} onPress={() => { setGoalType('DISTANCE'); setGoalValue(3000); }} /></View>
-        </View>
-        <View style={styles.row}>
-          {(goalType === 'TIME' ? [10, 20, 30] : [1, 3, 5]).map((value) => {
-            const stored = goalType === 'TIME' ? value * 60 : value * 1000;
-            return (
-              <View key={value} style={styles.flex}>
-                <ChoiceCard
-                  label={`${value}${goalType === 'TIME' ? '분' : 'km'}`}
-                  selected={goalValue === stored}
-                  onPress={() => setGoalValue(stored)}
-                />
-              </View>
-            );
-          })}
-        </View>
-      </Section>
-
-      <Section title="오늘의 컨디션">
-        <View style={styles.row}>
-          {conditions.map((item) => (
-            <View key={item.level} style={styles.flex}>
-              <ChoiceCard label={item.label} selected={condition === item.level} onPress={() => setCondition(item.level)} />
-            </View>
-          ))}
-        </View>
-      </Section>
-
-      <Section title="안내 방식">
-        <SettingRow label="음성 안내" value={voiceEnabled} onChange={setVoiceEnabled} />
-        <SettingRow label="메트로놈" value={metronomeEnabled} onChange={setMetronomeEnabled} />
-        {!voiceEnabled && !metronomeEnabled ? <Text style={styles.hint}>필요한 순간에는 햅틱으로 한 번 알려드려요.</Text> : null}
-      </Section>
-
-      <PrimaryButton onPress={() => void begin()}>러닝 시작</PrimaryButton>
-      {__DEV__ ? <PrimaryButton variant="secondary" onPress={simulate}>시연 모드 · 10배속</PrimaryButton> : null}
-
-      <View style={styles.summary}>
-        <Text style={styles.summaryTitle}>나의 러닝 루틴</Text>
-        {stats.isLoading ? <Text style={styles.description}>기록을 불러오는 중이에요.</Text> : stats.error ? (
-          <StatePanel
-            title="러닝 요약을 불러오지 못했어요"
-            body="저장된 기록은 유지돼요. 연결을 확인하고 다시 시도해 주세요."
-            actionLabel="다시 시도"
-            onAction={() => void stats.refetch()}
-          />
-        ) : (
-          <View style={styles.row}>
-            <SummaryValue label="누적 활동일" value={`${stats.data?.totalRunDays ?? 0}일`} />
-            <SummaryValue label="이번 주" value={`${stats.data?.thisWeekCount ?? 0}회`} />
-          </View>
-        )}
+      <Pressable onPress={() => router.push({ pathname: '/run/prepare', params: { condition, cadence: String(cadence) } })} style={({ pressed }) => [styles.prepare, pressed && styles.buttonPressed]}>
+        <Text style={styles.prepareText}>러닝 준비하기</Text>
+      </Pressable>
+      <View style={styles.report}>
+        <Text style={styles.reportTitle}>최근 러닝 리포트</Text>
+        <Text style={styles.reportDate}>{latest?.startedAt?.slice(0, 10) ?? '2026-08-05'}</Text>
+        <Text style={styles.reportValue}>{latest ? `${Math.round(latest.durationSec / 60)}분 완주` : '30분 완주'}</Text>
+        <Text style={styles.reportCadence}>{latest?.avgCadence ?? cadence} SPM</Text>
+        <Text style={styles.reportMeta}>유지율 80%  |  07:35</Text>
+        <Pressable onPress={() => latest ? router.push({ pathname: '/run/report', params: { runId: latest.id } }) : router.push('/analysis')} style={({ pressed }) => [styles.detail, pressed && styles.buttonPressed]}>
+          <Text style={styles.detailText}>상세 보기</Text>
+        </Pressable>
       </View>
-
-      {__DEV__ ? <PrimaryButton variant="text" onPress={() => router.push('/spike')}>실기기 스파이크 열기</PrimaryButton> : null}
-    </Screen>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>;
-}
-
-function SettingRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <View style={styles.settingRow}>
-      <Text style={styles.settingLabel}>{label}</Text>
-      <Switch onValueChange={onChange} value={value} trackColor={{ false: colors.border, true: colors.primarySoft }} thumbColor={value ? colors.primary : colors.disabled} />
     </View>
-  );
-}
-
-function SummaryValue({ label, value }: { label: string; value: string }) {
-  return <View style={styles.flex}><Text style={styles.summaryValue}>{value}</Text><Text style={styles.hint}>{label}</Text></View>;
+  </Screen>;
 }
 
 const styles = StyleSheet.create({
-  header: { gap: spacing.sm },
-  eyebrow: { ...typography.bodyStrong, color: colors.primary },
-  title: { ...typography.title, color: colors.text },
-  rhythmCard: { ...shadows.card, gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
-  label: { ...typography.bodyStrong, color: colors.textMuted },
-  cadence: { ...typography.display, color: colors.text },
-  unit: { ...typography.bodyStrong, color: colors.textMuted },
-  description: { ...typography.body, color: colors.textMuted },
-  section: { gap: spacing.sm },
-  sectionTitle: { ...typography.heading, color: colors.text },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  flex: { flex: 1 },
-  settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
-  settingLabel: { ...typography.bodyStrong, color: colors.text },
-  hint: { ...typography.caption, color: colors.textMuted },
-  summary: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
-  summaryTitle: { ...typography.bodyStrong, color: colors.text },
-  summaryValue: { ...typography.heading, color: colors.primary },
+  frame: { flex: 1, position: 'relative' },
+  settings: { position: 'absolute', right: 26, top: 32, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
+  conditionTitle: { position: 'absolute', left: 27, top: 112, color: colors.white, fontSize: 17, fontWeight: '700' },
+  conditionCopy: { position: 'absolute', left: 27, top: 139, color: colors.white, fontSize: 13 },
+  conditions: { position: 'absolute', left: 27, right: 28, top: 170, flexDirection: 'row', gap: 14 },
+  condition: { flex: 1, height: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,.4)', borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  conditionOn: { borderColor: colors.primary },
+  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,.5)', alignItems: 'center', justifyContent: 'center' },
+  radioOn: { borderColor: colors.primary },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary },
+  conditionText: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  goal: { position: 'absolute', left: 27, right: 28, top: 241, height: 164, borderRadius: 28, backgroundColor: colors.white, padding: 22 },
+  goalLabel: { fontSize: 17, fontWeight: '700', color: colors.ink },
+  goalValue: { fontSize: 30, fontWeight: '800', color: colors.ink, marginTop: 14 },
+  accent: { color: colors.primary },
+  goalCadence: { fontSize: 13, color: colors.ink, marginTop: 5 },
+  bold: { fontWeight: '800' },
+  quote: { fontSize: 12, color: 'rgba(0,0,0,.58)', marginTop: 13 },
+  prepare: { position: 'absolute', left: 27, right: 28, top: 430, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
+  prepareText: { color: colors.white, fontSize: 17, fontWeight: '700' },
+  report: { position: 'absolute', left: 27, right: 28, top: 517, height: 153, borderRadius: 22, borderWidth: 1, borderColor: 'rgba(221,224,225,.3)', padding: 21 },
+  reportTitle: { color: colors.white, fontSize: 17, fontWeight: '700' },
+  reportDate: { color: colors.white, fontSize: 13, marginTop: 5 },
+  reportValue: { color: colors.white, fontSize: 28, fontWeight: '800', marginTop: 5 },
+  reportCadence: { position: 'absolute', right: 19, top: 77, color: colors.white, fontSize: 17, fontWeight: '700' },
+  reportMeta: { color: colors.white, fontSize: 12, marginTop: 5 },
+  detail: { position: 'absolute', right: 15, top: 13, width: 84, height: 32, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(221,224,225,.3)', alignItems: 'center', justifyContent: 'center' },
+  detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
 });

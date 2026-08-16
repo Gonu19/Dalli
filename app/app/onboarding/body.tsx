@@ -1,134 +1,94 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { ChoiceCard } from '@/src/components/choice-card';
+import { FigmaButton, FigmaScreen, OnboardingTop } from '@/src/components/figma-ui';
 import { useOnboarding, type Gender } from '@/src/components/onboarding-provider';
-import { PrimaryButton } from '@/src/components/primary-button';
-import { Screen } from '@/src/components/screen';
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { WheelPickerModal, type WheelColumn } from '@/src/components/wheel-picker-modal';
+import { colors } from '@/src/theme/tokens';
 
-function parseOptionalNumber(value: string) {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
+const years = Array.from({ length: 76 }, (_, index) => String(1940 + index));
+const months = Array.from({ length: 12 }, (_, index) => String(index + 1));
+const days = Array.from({ length: 31 }, (_, index) => String(index + 1));
+const heightIntegers = Array.from({ length: 91 }, (_, index) => String(130 + index));
+const weightIntegers = Array.from({ length: 116 }, (_, index) => String(35 + index));
+const decimals = Array.from({ length: 10 }, (_, index) => String(index));
+
+type PickerType = 'birth' | 'height' | 'weight';
 
 export default function BodyInfoScreen() {
   const router = useRouter();
   const { draft, updateDraft } = useOnboarding();
-  const [height, setHeight] = useState(draft.heightCm?.toString() ?? '');
-  const [weight, setWeight] = useState(draft.weightKg?.toString() ?? '');
-  const [birthYear, setBirthYear] = useState(draft.birthYear?.toString() ?? '');
+  const [name, setName] = useState('');
+  const [birth, setBirth] = useState(draft.birthYear && draft.birthMonth && draft.birthDay ? { year: draft.birthYear, month: draft.birthMonth, day: draft.birthDay } : null);
+  const [height, setHeight] = useState<number | null>(draft.heightCm ?? null);
+  const [weight, setWeight] = useState<number | null>(draft.weightKg ?? null);
   const [gender, setGender] = useState<Gender | undefined>(draft.gender);
+  const [picker, setPicker] = useState<PickerType | null>(null);
 
-  const error = useMemo(() => {
-    const heightValue = parseOptionalNumber(height);
-    const weightValue = parseOptionalNumber(weight);
-    const yearValue = parseOptionalNumber(birthYear);
-    if (height && (!heightValue || heightValue < 100 || heightValue > 250)) return '키는 100~250cm로 입력해 주세요.';
-    if (weight && (!weightValue || weightValue < 25 || weightValue > 300)) return '몸무게는 25~300kg으로 입력해 주세요.';
-    if (birthYear && (!yearValue || !Number.isInteger(yearValue) || yearValue < 1900 || yearValue > 2018)) return '출생연도를 확인해 주세요.';
-    return null;
-  }, [birthYear, height, weight]);
-
-  const continueNext = () => {
-    updateDraft({
-      heightCm: parseOptionalNumber(height),
-      weightKg: parseOptionalNumber(weight),
-      birthYear: parseOptionalNumber(birthYear),
-      gender,
-    });
-    router.push('/onboarding/cadence');
+  const complete = Boolean(name.trim() && gender && birth && height && weight);
+  const next = () => {
+    if (!complete || !birth || !gender || !height || !weight) return;
+    updateDraft({ birthYear: birth.year, birthMonth: birth.month, birthDay: birth.day, heightCm: height, weightKg: weight, gender });
+    router.push('/onboarding/reason');
   };
 
-  return (
-    <Screen footer={(
-      <View style={styles.footerButtons}>
-        <PrimaryButton variant="text" onPress={() => router.push('/onboarding/cadence')}>건너뛰기</PrimaryButton>
-        <PrimaryButton disabled={Boolean(error)} onPress={continueNext}>다음</PrimaryButton>
-      </View>
-    )}>
-      <View style={styles.header}>
-        <Text style={styles.step}>2 / 3</Text>
-        <Text style={styles.title}>신체 정보를 알려주세요</Text>
-        <Text style={styles.description}>칼로리 추정에 사용해요. 지금 건너뛰어도 되고, 나중에 설정에서 입력할 수 있어요.</Text>
-      </View>
-
-      <View style={styles.twoColumns}>
-        <Field label="키 (cm)" value={height} onChangeText={setHeight} placeholder="165" />
-        <Field label="몸무게 (kg)" value={weight} onChangeText={setWeight} placeholder="62.5" decimal />
-      </View>
-      <Field label="출생연도" value={birthYear} onChangeText={setBirthYear} placeholder="2004" />
-
-      <View style={styles.section}>
-        <Text style={styles.label}>성별</Text>
-        <View style={styles.twoColumns}>
-          {([
-            ['F', '여성'],
-            ['M', '남성'],
-            ['O', '기타·응답 안 함'],
-          ] as const).map(([value, label]) => (
-            <View key={value} style={styles.choice}>
-              <ChoiceCard label={label} selected={gender === value} onPress={() => setGender(value)} />
-            </View>
-          ))}
-        </View>
-      </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </Screen>
-  );
+  const columns = getColumns(picker, birth, height, weight);
+  return <FigmaScreen>
+    <OnboardingTop step={3} onBack={() => router.back()}/>
+    <Text style={styles.title}>신체 정보를 입력해주세요</Text><Text style={styles.subtitle}>케이던스를 제안하는 기준으로 사용돼요</Text>
+    <Text style={styles.labelGender}>성별</Text>
+    <View style={styles.gender}>{([['M','남성'],['F','여성'],['O','선택하지 않음']] as const).map(([value, label]) => <Pressable key={value} onPress={() => setGender(value)} style={({ pressed }) => [styles.genderItem, pressed && styles.pressed]}><View style={[styles.radio, gender === value && styles.radioOn]}>{gender === value ? <View style={styles.dot}/> : null}</View><Text style={[styles.genderText, gender === value && styles.selected]}>{label}</Text></Pressable>)}</View>
+    <View style={[styles.field, { left: 38, top: 294, width: 124 }]}><Text style={styles.fieldLabel}>성함</Text><View style={styles.inputWrap}><TextInput onChangeText={setName} placeholder="입력해 주세요" placeholderTextColor="rgba(255,255,255,.35)" style={styles.input} value={name}/></View></View>
+    <PickerField label="생년월일" value={birth ? `${birth.year}. ${pad(birth.month)}. ${pad(birth.day)}` : undefined} left={237} top={294} width={124} onPress={() => setPicker('birth')}/>
+    <PickerField label="신장" value={height?.toString()} left={38} top={392} width={124} unit="cm" onPress={() => setPicker('height')}/>
+    <PickerField label="체중" value={weight?.toString()} left={237} top={392} width={124} unit="kg" onPress={() => setPicker('weight')}/>
+    <FigmaButton disabled={!complete} onPress={next} style={styles.button}>다음</FigmaButton>
+    {picker ? <WheelPickerModal
+      columns={columns}
+      onCancel={() => setPicker(null)}
+      onConfirm={(indexes) => {
+        if (picker === 'birth') {
+          const year = Number(years[indexes[0]]); const month = Number(months[indexes[1]]); const requestedDay = Number(days[indexes[2]]);
+          setBirth({ year, month, day: Math.min(requestedDay, new Date(year, month, 0).getDate()) });
+        }
+        if (picker === 'height') setHeight(Number(`${heightIntegers[indexes[0]]}.${decimals[indexes[1]]}`));
+        if (picker === 'weight') setWeight(Number(`${weightIntegers[indexes[0]]}.${decimals[indexes[1]]}`));
+        setPicker(null);
+      }}
+      title={picker === 'birth' ? '생년월일' : picker === 'height' ? '신장' : '체중'}
+      visible
+    /> : null}
+  </FigmaScreen>;
 }
 
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  decimal = false,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  decimal?: boolean;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.disabled}
-        style={styles.input}
-        value={value}
-      />
-    </View>
-  );
+function PickerField({ label, value, left, top, width, unit, onPress }: { label: string; value?: string; left: number; top: number; width: number; unit?: string; onPress: () => void }) {
+  return <View style={[styles.field, { left, top, width }]}><Text style={styles.fieldLabel}>{label}</Text><Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.inputWrap, pressed && styles.pressed]}><Text numberOfLines={1} style={[styles.pickerValue, !value && styles.placeholder]}>{value ?? '선택해 주세요'}</Text>{value && unit ? <Text style={styles.unit}>{unit}</Text> : null}<Ionicons color="rgba(255,255,255,.65)" name="chevron-down" size={14} style={styles.chevron}/></Pressable></View>;
 }
+
+function getColumns(picker: PickerType | null, birth: { year: number; month: number; day: number } | null, height: number | null, weight: number | null): WheelColumn[] {
+  if (picker === 'birth') return [
+    { values: years, initialIndex: Math.max(0, years.indexOf(String(birth?.year ?? 2000))), suffix: '년' },
+    { values: months, initialIndex: Math.max(0, months.indexOf(String(birth?.month ?? 1))), suffix: '월' },
+    { values: days, initialIndex: Math.max(0, days.indexOf(String(birth?.day ?? 1))), suffix: '일' },
+  ];
+  if (picker === 'height') {
+    const current = height ?? 170;
+    return [{ values: heightIntegers, initialIndex: Math.max(0, heightIntegers.indexOf(String(Math.floor(current)))), suffix: '' }, { values: decimals, initialIndex: Math.max(0, decimals.indexOf(String(Math.round((current % 1) * 10)))), prefix: '.', suffix: ' cm' }];
+  }
+  if (picker === 'weight') {
+    const current = weight ?? 60;
+    return [{ values: weightIntegers, initialIndex: Math.max(0, weightIntegers.indexOf(String(Math.floor(current)))), suffix: '' }, { values: decimals, initialIndex: Math.max(0, decimals.indexOf(String(Math.round((current % 1) * 10)))), prefix: '.', suffix: ' kg' }];
+  }
+  return [];
+}
+
+function pad(value: number) { return String(value).padStart(2, '0'); }
 
 const styles = StyleSheet.create({
-  header: { gap: spacing.sm, marginBottom: spacing.sm },
-  step: { ...typography.caption, color: colors.primary },
-  title: { ...typography.title, color: colors.text },
-  description: { ...typography.body, color: colors.textMuted },
-  section: { gap: spacing.sm },
-  twoColumns: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  field: { flex: 1, minWidth: 140, gap: spacing.sm },
-  label: { ...typography.bodyStrong, color: colors.text },
-  input: {
-    minHeight: 54,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    ...typography.body,
-    color: colors.text,
-  },
-  choice: { flex: 1, minWidth: 140 },
-  error: { ...typography.caption, color: colors.danger },
-  footerButtons: { gap: spacing.sm },
+  title: { position: 'absolute', left: 27, right: 27, top: 108, color: colors.white, fontSize: 20, fontWeight: '800', textAlign: 'center' }, subtitle: { position: 'absolute', left: 27, right: 27, top: 143, color: colors.white, fontSize: 14, textAlign: 'center' }, pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  labelGender: { position: 'absolute', left: 38, top: 203, color: colors.white, fontSize: 17, fontWeight: '700' }, gender: { position: 'absolute', left: 38, right: 35, top: 233, flexDirection: 'row', justifyContent: 'space-between' }, genderItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' }, radioOn: { borderColor: colors.primary }, dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }, genderText: { color: colors.white, fontSize: 15, fontWeight: '700' }, selected: { color: colors.primary },
+  field: { position: 'absolute' }, fieldLabel: { color: colors.white, fontSize: 17, fontWeight: '700', marginBottom: 14 }, inputWrap: { height: 43, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', borderRadius: 11, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: colors.white, fontSize: 15, fontWeight: '700', paddingHorizontal: 12 }, pickerValue: { flex: 1, color: colors.white, fontSize: 13, fontWeight: '700', paddingLeft: 10 }, placeholder: { color: 'rgba(255,255,255,.45)', fontSize: 12 }, unit: { color: colors.white, fontSize: 13, fontWeight: '700', marginRight: 25 }, chevron: { position: 'absolute', right: 8 }, button: { top: 606 },
 });

@@ -1,133 +1,14 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { useCompleteOnboarding } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
+import { FigmaBack, FigmaButton, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { useOnboarding } from '@/src/components/onboarding-provider';
-import { PrimaryButton } from '@/src/components/primary-button';
-import { Screen } from '@/src/components/screen';
 import { computeInitialTargetCadence } from '@/src/engine/target';
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors } from '@/src/theme/tokens';
 
-export default function CadenceScreen() {
-  const router = useRouter();
-  const { token, confirmOnboarded } = useAuth();
-  const { draft, updateDraft } = useOnboarding();
-  const initialCadence = draft.experienceLevel === undefined || draft.purpose === undefined
-    ? draft.baselineCadence
-    : computeInitialTargetCadence(draft.experienceLevel, draft.purpose);
-  const [cadence, setCadence] = useState(initialCadence);
-  const completeOnboarding = useCompleteOnboarding(token);
-  const minCadence = initialCadence - 5;
-  const maxCadence = initialCadence + 5;
-
-  const finish = async () => {
-    if (draft.purpose === undefined || draft.experienceLevel === undefined || draft.maxContinuousMin === undefined || draft.weeklyGoalCount === undefined) {
-      router.replace('/onboarding');
-      return;
-    }
-
-    try {
-      const profile = await completeOnboarding.mutateAsync({
-        runningPurpose: draft.purpose,
-        experienceLevel: draft.experienceLevel,
-        maxContinuousMin: draft.maxContinuousMin,
-        weeklyGoalCount: draft.weeklyGoalCount,
-        baselineCadence: cadence,
-        heightCm: draft.heightCm,
-        weightKg: draft.weightKg,
-        birthYear: draft.birthYear,
-        gender: draft.gender,
-      });
-      confirmOnboarded(profile.onboarded);
-      updateDraft({ baselineCadence: cadence });
-      router.replace('/');
-    } catch {
-      // Mutation state renders the recoverable error while preserving the draft.
-    }
-  };
-
-  return (
-    <Screen footer={(
-      <PrimaryButton loading={completeOnboarding.isPending} onPress={() => void finish()}>
-        달리 시작하기
-      </PrimaryButton>
-    )}>
-      <View style={styles.header}>
-        <Text style={styles.step}>3 / 3</Text>
-        <Text style={styles.title}>첫 러닝의 리듬을 준비했어요</Text>
-        <Text style={styles.description}>첫 러닝에서 실제 리듬을 측정해 나의 기준 리듬을 확정합니다.</Text>
-      </View>
-
-      <View style={styles.cadenceCard}>
-        <Text style={styles.cardLabel}>나의 시작 리듬</Text>
-        <View style={styles.adjustRow}>
-          <AdjustButton label="−" disabled={cadence <= minCadence} onPress={() => setCadence((value) => value - 1)} />
-          <View style={styles.valueGroup}>
-            <Text style={styles.value}>{cadence}</Text>
-            <Text style={styles.unit}>spm</Text>
-          </View>
-          <AdjustButton label="+" disabled={cadence >= maxCadence} onPress={() => setCadence((value) => value + 1)} />
-        </View>
-        <Text style={styles.hint}>지금은 ±5까지 조절할 수 있어요.</Text>
-      </View>
-
-      <View style={styles.note}>
-        <Text style={styles.noteTitle}>숫자를 정확히 맞출 필요는 없어요</Text>
-        <Text style={styles.noteBody}>달리는 리듬이 달라지면 필요한 순간에만 짧게 안내할게요.</Text>
-      </View>
-
-      {completeOnboarding.error ? (
-        <Text style={styles.error}>정보를 저장하지 못했어요. 입력 내용은 그대로 유지되어 있어요.</Text>
-      ) : null}
-    </Screen>
-  );
-}
-
-function AdjustButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.adjustButton, disabled && styles.disabled, pressed && styles.pressed]}>
-      <Text style={styles.adjustLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  header: { gap: spacing.sm },
-  step: { ...typography.caption, color: colors.primary },
-  title: { ...typography.title, color: colors.text },
-  description: { ...typography.body, color: colors.textMuted },
-  cadenceCard: {
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.xl,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-  },
-  cardLabel: { ...typography.bodyStrong, color: colors.textMuted },
-  adjustRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl },
-  adjustButton: {
-    width: 56,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
-  },
-  adjustLabel: { ...typography.title, color: colors.primary },
-  disabled: { opacity: 0.35 },
-  pressed: { opacity: 0.7 },
-  valueGroup: { alignItems: 'center' },
-  value: { fontSize: 64, lineHeight: 72, fontWeight: '700', color: colors.text },
-  unit: { ...typography.bodyStrong, color: colors.textMuted },
-  hint: { ...typography.caption, color: colors.textMuted },
-  note: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  noteTitle: { ...typography.bodyStrong, color: colors.primary },
-  noteBody: { ...typography.body, color: colors.text },
-  error: { ...typography.caption, color: colors.danger },
-});
+export default function CadenceScreen(){const router=useRouter();const{token,confirmOnboarded}=useAuth();const{draft,updateDraft}=useOnboarding();const mutation=useCompleteOnboarding(token);const cadence=draft.experienceLevel===undefined||draft.purpose===undefined?160:computeInitialTargetCadence(draft.experienceLevel,draft.purpose);
+const finish=async()=>{try{const profile=await mutation.mutateAsync({runningPurpose:draft.purpose??'HABIT',experienceLevel:draft.experienceLevel??0,maxContinuousMin:draft.maxContinuousMin??5,weeklyGoalCount:draft.weeklyGoalCount??3,baselineCadence:cadence,heightCm:draft.heightCm,weightKg:draft.weightKg,birthYear:draft.birthYear,gender:draft.gender});updateDraft({baselineCadence:cadence});confirmOnboarded(profile.onboarded);router.replace('/');}catch{}};
+return <FigmaScreen><FigmaBack onPress={()=>router.back()}/><FigmaLogo centered top={25}/><Text style={styles.title}>케이던스 측정이 끝났어요!</Text><Text style={styles.subtitle}>지금까지 알려주신 정보를 바탕으로{`\n`}케이던스를 추천해드릴게요</Text><View style={styles.card}><Text style={styles.cardTitle}>추천 케이던스</Text><View style={styles.valueRow}><Text style={styles.value}>{cadence}</Text><Text style={styles.unit}>SPM</Text></View><View style={styles.orangeLine}/><Text style={styles.cardCopy}>초보 러너에게 적합한 편안한 케이던스로{`\n`}달리와 함께 러닝을 시작해보세요</Text></View><View style={styles.reason}><Text style={styles.reasonTitle}>추천 이유</Text><Text style={styles.reasonStrong}>♧  왜 {cadence} SPM인가요?</Text><Text style={styles.reasonCopy}>러닝 경험과 목표 등 질문에 대한 바탕으로{`\n`}첫 러닝에 부담이 적은 케이던스를 추천했어요</Text></View><FigmaButton onPress={()=>void finish()} style={styles.primary}>추천 케이던스로 시작하기</FigmaButton><FigmaButton secondary onPress={()=>router.push('/onboarding/adjust')} style={styles.secondary}>케이던스 직접 조정하기</FigmaButton>{mutation.error?<Text style={styles.error}>정보를 저장하지 못했어요. 다시 시도해 주세요.</Text>:null}</FigmaScreen>}
+const styles=StyleSheet.create({title:{position:'absolute',left:27,right:27,top:108,color:colors.white,fontSize:20,fontWeight:'800',textAlign:'center'},subtitle:{position:'absolute',left:27,right:27,top:143,color:colors.white,fontSize:14,lineHeight:20,textAlign:'center'},card:{position:'absolute',left:27,right:28,top:213,height:167,borderRadius:20,backgroundColor:colors.white,padding:18},cardTitle:{fontSize:17,fontWeight:'700',color:colors.ink},valueRow:{position:'absolute',top:55,left:0,right:0,alignItems:'center',justifyContent:'center',flexDirection:'row',gap:7},value:{fontSize:36,fontWeight:'800',color:colors.primary},unit:{fontSize:13,fontWeight:'700',color:colors.inkMuted,marginTop:14},orangeLine:{position:'absolute',left:18,top:119,width:2,height:28,backgroundColor:colors.primary},cardCopy:{position:'absolute',left:27,top:116,color:colors.ink,fontSize:13,fontWeight:'700',lineHeight:18},reason:{position:'absolute',left:27,right:28,top:419,height:148,borderRadius:30,borderWidth:.5,borderColor:'rgba(221,224,225,0.5)',backgroundColor:'rgba(221,224,225,0.1)',padding:22},reasonTitle:{color:colors.white,fontSize:17,fontWeight:'700'},reasonStrong:{color:colors.white,fontSize:15,fontWeight:'700',marginTop:14},reasonCopy:{color:colors.white,fontSize:13,lineHeight:18,marginTop:10},primary:{top:602},secondary:{top:666},error:{position:'absolute',left:30,top:724,color:colors.danger,fontSize:12}});

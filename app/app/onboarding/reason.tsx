@@ -1,0 +1,8 @@
+import { useRouter } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { FigmaButton, FigmaRadio, FigmaScreen, OnboardingTop } from '@/src/components/figma-ui';
+import { useOnboarding, type RunningPurpose } from '@/src/components/onboarding-provider';
+import { colors } from '@/src/theme/tokens';
+const options:[RunningPurpose,string][]=[['FITNESS','체력을 키우고 싶어요'],['HABIT','러닝 습관을 만들고 싶어요'],['WEIGHT','건강한 몸을 만들고 싶어요'],['COMPLETE','더 오래 달리고 싶어요'],['PERFORMANCE','기록을 단축하고 싶어요']];
+export default function ReasonScreen(){const router=useRouter();const{draft,updateDraft}=useOnboarding();return <FigmaScreen><OnboardingTop step={4} onBack={()=>router.back()}/><Text style={styles.title}>러닝 하시는 이유를 골라주세요</Text><Text style={styles.subtitle}>가장 가까운 이유를 하나 선택해주세요</Text><View style={styles.options}>{options.map(([v,l])=><FigmaRadio key={v} label={l} selected={draft.reasonChoice===v} onPress={()=>updateDraft({reasonChoice:v})}/>)}</View><Text style={styles.note}>케이던스 추천은 러닝 경험과 목적을 기준으로 해요.</Text><FigmaButton disabled={draft.reasonChoice===undefined} onPress={()=>router.push('/onboarding/schedule')} style={styles.button}>다음</FigmaButton></FigmaScreen>}
+const styles=StyleSheet.create({title:{position:'absolute',left:27,right:27,top:108,color:colors.white,fontSize:20,fontWeight:'800',textAlign:'center'},subtitle:{position:'absolute',left:27,right:27,top:143,color:colors.white,fontSize:14,textAlign:'center'},options:{position:'absolute',left:30,top:188,right:25},note:{position:'absolute',left:27,right:27,top:507,color:'rgba(255,255,255,.6)',fontSize:12,textAlign:'center'},button:{top:606}});

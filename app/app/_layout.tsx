@@ -1,12 +1,15 @@
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { AppProviders } from '@/src/components/app-providers';
 import { useAuth } from '@/src/components/auth-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
+import { createRun } from '@/src/api/client';
+import { recoverInterruptedRun } from '@/src/store/session-recovery';
+import { flushQueue, hasPendingRuns } from '@/src/store/upload-queue';
 import { colors, spacing, typography } from '@/src/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
@@ -15,6 +18,19 @@ function AppNavigator() {
   const { loading, error, onboarded, retry, token } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const { preview } = useGlobalSearchParams<{ preview?: string }>();
+  const previewOnboarding = __DEV__ && preview === 'onboarding';
+  const recovered = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' && !recovered.current) {
+      recoverInterruptedRun();
+      recovered.current = true;
+    }
+    if (Platform.OS !== 'web' && token && hasPendingRuns()) {
+      void flushQueue((record) => createRun(token, record));
+    }
+  }, [token]);
 
   useEffect(() => {
     if (loading) return;
@@ -25,9 +41,13 @@ function AppNavigator() {
     if (loading || error || !token) return;
 
     const inOnboarding = segments[0] === 'onboarding';
+    if (previewOnboarding && !inOnboarding) {
+      router.replace('/onboarding');
+      return;
+    }
     if (!onboarded && !inOnboarding) router.replace('/onboarding');
-    if (onboarded && inOnboarding) router.replace('/');
-  }, [error, loading, onboarded, router, segments, token]);
+    if (onboarded && inOnboarding && !previewOnboarding) router.replace('/');
+  }, [error, loading, onboarded, previewOnboarding, router, segments, token]);
 
   if (loading) {
     return (
@@ -50,7 +70,7 @@ function AppNavigator() {
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />

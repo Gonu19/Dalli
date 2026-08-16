@@ -8,25 +8,26 @@ type Props = {
   children: ReactNode;
   footer?: ReactNode;
   scroll?: boolean;
+  padded?: boolean;
 };
 
-export function Screen({ children, footer, scroll = true }: Props) {
+export function Screen({ children, footer, scroll = true, padded = true }: Props) {
   const content = scroll ? (
     <ScrollView
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, !padded && styles.unpadded]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}>
       {children}
     </ScrollView>
   ) : (
-    <View style={styles.content}>{children}</View>
+    <View style={[styles.content, !padded && styles.unpadded]}>{children}</View>
   );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}>
+        style={[styles.flex, Platform.OS === 'web' && styles.webFrame]}>
         {content}
         {footer ? <View style={styles.footer}>{footer}</View> : null}
       </KeyboardAvoidingView>
@@ -37,6 +38,8 @@ export function Screen({ children, footer, scroll = true }: Props) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
-  footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md },
+  webFrame: { width: '100%', maxWidth: 402, alignSelf: 'center' },
+  content: { flexGrow: 1, paddingHorizontal: 27, paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.lg },
+  unpadded: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, gap: 0 },
+  footer: { paddingHorizontal: 27, paddingTop: spacing.sm, paddingBottom: spacing.md, backgroundColor: colors.background },
 });

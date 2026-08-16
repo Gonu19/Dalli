@@ -1,15 +1,17 @@
-import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useUploadRun } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
 import { usePreferences } from '@/src/components/preferences-provider';
 import { useRunResult } from '@/src/components/run-result-provider';
+import { FigmaLogo } from '@/src/components/figma-ui';
 import { Screen } from '@/src/components/screen';
 import type { JudgeVerdict } from '@/src/engine/types';
+import { attachCues } from '@/src/store/cue-bridge';
 import {
   detachSensor,
   pauseTrackedRun,
@@ -18,12 +20,13 @@ import {
 } from '@/src/store/runController';
 import { useRunStore } from '@/src/store/runStore';
 import { useSimulationStore } from '@/src/store/simulation';
+import { dequeueRun } from '@/src/store/upload-queue';
 import { colors, radius, spacing, typography } from '@/src/theme/tokens';
 
 export default function ActiveRunScreen() {
   const router = useRouter();
   const { token } = useAuth();
-  const { voiceEnabled, metronomeEnabled } = usePreferences();
+  const { voiceEnabled, metronomeEnabled, setVoiceEnabled, setMetronomeEnabled } = usePreferences();
   const { setResult } = useRunResult();
   const upload = useUploadRun(token);
   const run = useRunStore();
@@ -31,9 +34,12 @@ export default function ActiveRunScreen() {
   const stopSimulation = useSimulationStore((state) => state.stop);
   const [showEnd, setShowEnd] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [vibration, setVibration] = useState(false);
   const [targetNotice, setTargetNotice] = useState<string | null>(null);
   const previousTarget = useRef(run.target.center);
-  const previousInterventions = useRef(run.interventionCount);
+
+  useEffect(() => attachCues(), []);
 
   useEffect(() => {
     if (previousTarget.current > 0 && run.target.center < previousTarget.current) {
@@ -45,24 +51,19 @@ export default function ActiveRunScreen() {
     previousTarget.current = run.target.center;
   }, [run.target.center]);
 
-  useEffect(() => {
-    if (
-      run.interventionCount > previousInterventions.current
-      && !voiceEnabled
-      && !metronomeEnabled
-    ) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    previousInterventions.current = run.interventionCount;
-  }, [metronomeEnabled, run.interventionCount, voiceEnabled]);
-
   const save = async () => {
+    const snapshot = run.snapshot();
+    const completed = snapshot !== null && (
+      snapshot.goal.type === 'TIME'
+        ? run.activeSec >= snapshot.goal.value
+        : (run.distanceM ?? 0) >= snapshot.goal.value
+    );
     let record;
     if (simulationActive) {
       stopSimulation();
-      record = run.finish(true);
+      record = run.finish(completed);
     } else {
-      record = await stopTrackedRun(false);
+      record = await stopTrackedRun(completed);
     }
     if (!record) return;
 
@@ -75,6 +76,7 @@ export default function ActiveRunScreen() {
     let uploaded = null;
     try {
       uploaded = await upload.mutateAsync(record);
+      dequeueRun(record.clientRunId);
     } catch {
       // The local result is preserved and shown on the finish screen.
     }
@@ -90,7 +92,7 @@ export default function ActiveRunScreen() {
     if (simulationActive) stopSimulation();
     else detachSensor();
     run.reset();
-    router.replace('/');
+    router.dismissTo('/');
   };
 
   const togglePause = () => {
@@ -98,62 +100,85 @@ export default function ActiveRunScreen() {
     else pauseTrackedRun();
   };
 
+  const closeEndSheet = () => {
+    setShowEnd(false);
+    setConfirmDiscard(false);
+  };
+
   const verdictColor = cadenceColor(run.verdict);
 
   return (
-    <Screen scroll={false}>
-      <View style={styles.topRow}>
-        <View>
-          <Text style={styles.label}>경과 시간</Text>
-          <Text style={styles.time}>{formatDuration(run.totalSec)}</Text>
-        </View>
-        {simulationActive ? <Text style={styles.badge}>시연 모드</Text> : null}
-      </View>
+    <Screen padded={false} scroll={false}>
+      <View style={styles.activeRoot}>
+      <View style={styles.contentTop}>
+        <FigmaLogo top={34} left={14} />
+        <Pressable accessibilityLabel="가이드" onPress={() => setShowGuide((value) => !value)} style={({ pressed }) => [styles.help, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={26} /></Pressable>
+        <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="settings-outline" size={26} /></Pressable>
+        {simulationActive ? <Text style={styles.badge}>시연</Text> : null}
 
       {targetNotice ? <Text style={styles.notice}>{targetNotice}</Text> : null}
       {run.recovery ? <Text style={styles.notice}>지금은 회복이 우선이에요</Text> : null}
 
-      <View style={styles.rhythmArea}>
-        <Text style={styles.label}>현재 리듬</Text>
-        <Text style={[styles.cadence, { color: verdictColor }]}>{run.verdict === 'UNAVAILABLE' || run.cadence === null ? '—' : Math.round(run.cadence)}</Text>
-        <Text style={styles.unit}>{run.verdict === 'UNAVAILABLE' ? '측정이 어려워요' : 'spm'}</Text>
-        <View style={styles.targetPill}>
-          <Text style={styles.targetLabel}>오늘의 리듬</Text>
-          <Text style={styles.targetValue}>{run.target.center}</Text>
-        </View>
-      </View>
+      <View style={styles.statusPill}><View style={styles.statusDot} /><Text style={styles.statusText}>{run.verdict === 'UNAVAILABLE' ? '케이던스를 측정하고 있어요' : verdictColor === colors.text ? '안정적인 리듬이에요' : '리듬을 천천히 맞춰보세요'}</Text></View>
+      <Text style={styles.time}>{formatDuration(run.totalSec)}</Text>
 
       <View style={styles.metrics}>
+        <Metric highlighted label="현재 케이던스" value={run.verdict === 'UNAVAILABLE' || run.cadence === null ? '—' : `${Math.round(run.cadence)} SPM`} color={verdictColor} />
         <Metric label="거리" value={run.distanceM === null ? '—' : `${(run.distanceM / 1000).toFixed(2)} km`} />
-        <Metric label="페이스" value={run.paceSecPerKm === null ? '—' : formatPace(run.paceSecPerKm)} />
+        <Metric label="평균 페이스" value={run.paceSecPerKm === null ? '—' : `${formatPace(run.paceSecPerKm)}/km`} />
+      </View>
       </View>
 
+      {!showGuide ? <Image resizeMode="cover" source={require('@/assets/images/run-map.png')} style={styles.map} /> : null}
+      {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={vibration} onChange={setVibration}/></View> : null}
+      <View style={styles.mapShade} />
       <View style={styles.controls}>
-        <PrimaryButton variant="secondary" onPress={togglePause}>
-          {run.runState === 'PAUSED' ? '다시 달리기' : '일시정지'}
-        </PrimaryButton>
-        <PrimaryButton variant="text" onPress={() => setShowEnd(true)}>러닝 종료</PrimaryButton>
+        <Pressable onPress={togglePause} style={({ pressed }) => [styles.runButton, styles.pauseButton, pressed && styles.buttonPressed]}><Text style={styles.runButtonText}>{run.runState === 'PAUSED' ? '다시 달리기' : '일시정지'}</Text></Pressable>
+        <Pressable onPress={() => setShowEnd(true)} style={({ pressed }) => [styles.runButton, styles.finishButton, pressed && styles.buttonPressed]}><Text style={styles.runButtonText}>러닝 완료</Text></Pressable>
       </View>
 
       {run.runState === 'PAUSED' ? <View pointerEvents="none" style={styles.pauseOverlay}><Text style={styles.pauseText}>잠시 멈췄어요</Text></View> : null}
 
-      <Modal animationType="slide" onRequestClose={() => setShowEnd(false)} transparent visible={showEnd}>
-        <Pressable style={styles.backdrop} onPress={() => setShowEnd(false)} />
+      <Modal animationType="slide" onRequestClose={closeEndSheet} transparent visible={showEnd}>
+        <Pressable style={styles.backdrop} onPress={closeEndSheet} />
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle}>{confirmDiscard ? '이 기록을 정말 버릴까요?' : '러닝을 마칠까요?'}</Text>
           <Text style={styles.sheetBody}>{confirmDiscard ? '버린 기록은 복구할 수 없어요.' : '지금까지의 러닝은 종료 후에도 안전하게 저장할 수 있어요.'}</Text>
-          {!confirmDiscard ? <PrimaryButton variant="secondary" onPress={() => { setShowEnd(false); resumeTrackedRun(); }}>계속 달리기</PrimaryButton> : null}
-          {!confirmDiscard ? <PrimaryButton loading={upload.isPending} onPress={() => void save()}>종료하고 저장</PrimaryButton> : null}
-          <PrimaryButton variant="text" onPress={discard}>{confirmDiscard ? '기록 버리기' : '기록 버리기'}</PrimaryButton>
-          {confirmDiscard ? <PrimaryButton variant="secondary" onPress={() => setConfirmDiscard(false)}>돌아가기</PrimaryButton> : null}
+          {!confirmDiscard ? <>
+            <SheetButton label="취소" onPress={() => { closeEndSheet(); resumeTrackedRun(); }} />
+            <PrimaryButton loading={upload.isPending} onPress={() => void save()}>종료하고 저장</PrimaryButton>
+            <SheetButton label="기록 버리기" onPress={discard} variant="dangerText" />
+          </> : <>
+            <SheetButton label="기록 버리기" onPress={discard} variant="danger" />
+            <SheetButton label="돌아가기" onPress={() => setConfirmDiscard(false)} />
+          </>}
         </View>
       </Modal>
+      </View>
     </Screen>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return <View style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.label}>{label}</Text></View>;
+function Metric({ label, value, highlighted = false, color = colors.text }: { label: string; value: string; highlighted?: boolean; color?: string }) {
+  return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={[styles.metricValue, highlighted && styles.metricHighlighted, { color }]}>{value}</Text></View>;
+}
+
+function GuideToggle({label,copy,value,onChange}:{label:string;copy:string;value:boolean;onChange:(value:boolean)=>void}) { return <View style={styles.guideToggle}><View><Text style={styles.guideLabel}>{label}</Text><Text style={styles.guideCopy}>{copy}</Text></View><Switch value={value} onValueChange={onChange} trackColor={{false:'#DDE0E1',true:colors.primary}} thumbColor={colors.white}/></View>; }
+
+function SheetButton({ label, onPress, variant = 'secondary' }: { label: string; onPress: () => void; variant?: 'secondary' | 'danger' | 'dangerText' }) {
+  return <Pressable
+    accessibilityRole="button"
+    onPress={onPress}
+    style={({ pressed }) => [
+      variant === 'dangerText' ? styles.sheetTextButton : styles.sheetButton,
+      variant === 'danger' && styles.sheetDangerButton,
+      pressed && styles.sheetButtonPressed,
+    ]}
+  ><Text style={[
+    styles.sheetButtonLabel,
+    variant === 'danger' && styles.sheetDangerButtonLabel,
+    variant === 'dangerText' && styles.sheetDangerText,
+  ]}>{label}</Text></Pressable>;
 }
 
 function cadenceColor(verdict: JudgeVerdict) {
@@ -172,25 +197,45 @@ function formatPace(value: number) {
 }
 
 const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  label: { ...typography.caption, color: colors.textMuted },
-  time: { ...typography.heading, color: colors.text },
-  badge: { ...typography.caption, color: colors.primary, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
+  activeRoot: { flex: 1, overflow: 'hidden', backgroundColor: colors.background },
+  contentTop: { zIndex: 2, paddingHorizontal: 20, paddingTop: 100 },
+  help: { position: 'absolute', right: 63, top: 34, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  settings: { position: 'absolute', right: 14, top: 34, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
+  time: { fontSize: 64, lineHeight: 76, fontWeight: '800', color: colors.text, marginTop: 20 },
+  badge: { position: 'absolute', left: 95, top: 38, ...typography.caption, color: colors.primary },
   notice: { ...typography.bodyStrong, color: colors.primary, textAlign: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  rhythmArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  cadence: { fontSize: 104, lineHeight: 116, fontWeight: '700' },
-  unit: { ...typography.bodyStrong, color: colors.textMuted },
-  targetPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface },
-  targetLabel: { ...typography.caption, color: colors.textMuted },
-  targetValue: { ...typography.heading, color: colors.primary },
-  metrics: { flexDirection: 'row', gap: spacing.sm },
-  metric: { flex: 1, alignItems: 'center', gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
-  metricValue: { ...typography.heading, color: colors.text },
-  controls: { gap: spacing.sm },
+  statusPill: { alignSelf: 'center', width: 206, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: .5, borderColor: 'rgba(221,224,225,.2)', borderRadius: 30, backgroundColor: colors.surfaceMuted },
+  statusDot: { width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.success },
+  statusText: { ...typography.bodyStrong, color: colors.text },
+  metrics: { flexDirection: 'row', gap: 13 },
+  metric: { flex: 1, height: 58, alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderWidth: .5, borderColor: 'rgba(221,224,225,.3)', borderRadius: 20, backgroundColor: colors.surfaceMuted },
+  metricLabel: { ...typography.caption, color: colors.text },
+  metricValue: { ...typography.subhead, fontWeight: '700', color: colors.text },
+  metricHighlighted: { color: colors.primary },
+  map: { position: 'absolute', left: 0, right: 0, top: 321, width: '100%', bottom: 0 },
+  mapShade: { position: 'absolute', left: 0, right: 0, top: 321, height: 50, backgroundColor: 'rgba(28,26,26,0.2)' },
+  guide: { position: 'absolute', left: 29, right: 27, top: 341, height: 203, padding: 21, borderRadius: 20, backgroundColor: colors.white, zIndex: 2 },
+  guideTitle: { color: colors.ink, fontSize: 17, fontWeight: '700', marginBottom: 7 },
+  guideToggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
+  guideLabel: { color: colors.ink, fontSize: 15, fontWeight: '700' }, guideCopy: { color: 'rgba(28,26,26,.58)', fontSize: 12 },
+  controls: { position: 'absolute', left: 13, right: 13, bottom: 20, zIndex: 3, flexDirection: 'row', gap: 10 },
+  runButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  pauseButton: { backgroundColor: colors.background },
+  finishButton: { backgroundColor: colors.primary },
+  runButtonText: { ...typography.button, color: colors.white },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(23,33,28,0.72)' },
   pauseText: { ...typography.title, color: colors.white },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
-  sheet: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.xl, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, backgroundColor: colors.background },
-  sheetTitle: { ...typography.title, color: colors.text },
-  sheetBody: { ...typography.body, color: colors.textMuted },
+  sheet: { position: 'absolute', left: 24, right: 24, top: '35%', gap: spacing.md, padding: 30, borderRadius: 40, backgroundColor: colors.white },
+  sheetTitle: { ...typography.heading, color: colors.ink },
+  sheetBody: { ...typography.subhead, color: 'rgba(28,26,26,.62)' },
+  sheetButton: { minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D9D9D9', borderRadius: radius.md, backgroundColor: colors.white },
+  sheetButtonLabel: { ...typography.button, color: colors.ink },
+  sheetDangerButton: { borderColor: colors.danger, backgroundColor: colors.danger },
+  sheetDangerButtonLabel: { color: colors.white },
+  sheetTextButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  sheetDangerText: { ...typography.button, color: '#D94444' },
+  sheetButtonPressed: { opacity: 0.72 },
 });

@@ -8,13 +8,17 @@ export type Gender = 'M' | 'F' | 'O';
 
 export type OnboardingDraft = {
   purpose?: RunningPurpose;
+  experienceChoice?: number;
   experienceLevel?: ExperienceLevel;
   maxContinuousMin?: number;
   weeklyGoalCount?: number;
   heightCm?: number;
   weightKg?: number;
   birthYear?: number;
+  birthMonth?: number;
+  birthDay?: number;
   gender?: Gender;
+  reasonChoice?: RunningPurpose;
   baselineCadence: number;
 };
 

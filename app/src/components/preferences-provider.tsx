@@ -1,5 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
+
+import { configureCues } from '../native/cue-player';
 
 const VOICE_KEY = 'dalli.voiceEnabled';
 const METRONOME_KEY = 'dalli.metronomeEnabled';
@@ -13,14 +16,27 @@ type ContextValue = {
 
 const PreferencesContext = createContext<ContextValue | null>(null);
 
+async function getPreference(key: string) {
+  if (Platform.OS === 'web') return globalThis.localStorage?.getItem(key) ?? null;
+  return SecureStore.getItemAsync(key);
+}
+
+async function setPreference(key: string, value: string) {
+  if (Platform.OS === 'web') {
+    globalThis.localStorage?.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+}
+
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [voiceEnabled, setVoiceState] = useState(true);
   const [metronomeEnabled, setMetronomeState] = useState(false);
 
   useEffect(() => {
     void Promise.all([
-      SecureStore.getItemAsync(VOICE_KEY),
-      SecureStore.getItemAsync(METRONOME_KEY),
+      getPreference(VOICE_KEY),
+      getPreference(METRONOME_KEY),
     ]).then(([voice, metronome]) => {
       if (voice !== null) setVoiceState(voice === 'true');
       if (metronome !== null) setMetronomeState(metronome === 'true');
@@ -29,13 +45,17 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   const setVoiceEnabled = useCallback((enabled: boolean) => {
     setVoiceState(enabled);
-    void SecureStore.setItemAsync(VOICE_KEY, String(enabled));
+    void setPreference(VOICE_KEY, String(enabled));
   }, []);
 
   const setMetronomeEnabled = useCallback((enabled: boolean) => {
     setMetronomeState(enabled);
-    void SecureStore.setItemAsync(METRONOME_KEY, String(enabled));
+    void setPreference(METRONOME_KEY, String(enabled));
   }, []);
+
+  useEffect(() => {
+    configureCues({ voice: voiceEnabled, metronome: metronomeEnabled });
+  }, [metronomeEnabled, voiceEnabled]);
 
   const value = useMemo(() => ({
     voiceEnabled,
