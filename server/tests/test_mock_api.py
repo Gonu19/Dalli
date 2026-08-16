@@ -50,6 +50,36 @@ def test_mock_run_upload_is_idempotent() -> None:
     assert repeated.json() == created.json()
 
 
+def test_mock_short_app_run_returns_too_short_fixture() -> None:
+    client = TestClient(create_mock_app())
+
+    too_short = client.post(
+        "/runs",
+        headers=AUTH,
+        json={
+            "client_run_id": "device-run-too-short",
+            "source": "APP",
+            "duration_sec": 179,
+        },
+    )
+    boundary = client.post(
+        "/runs",
+        headers=AUTH,
+        json={
+            "client_run_id": "device-run-boundary",
+            "source": "APP",
+            "duration_sec": 180,
+        },
+    )
+
+    assert too_short.status_code == 201
+    assert too_short.json()["is_analyzable"] is False
+    assert too_short.json()["analysis_limitation"] == "TOO_SHORT"
+    assert too_short.json()["rhythm_score"] is None
+    assert boundary.status_code == 201
+    assert boundary.json()["is_analyzable"] is True
+
+
 def test_mock_protected_route_requires_bearer_token() -> None:
     client = TestClient(create_mock_app())
     response = client.get("/stats")

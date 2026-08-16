@@ -124,7 +124,17 @@ def create_mock_app() -> FastAPI:
             response.status_code = status.HTTP_200_OK
             return deepcopy(runs_by_client_id[client_run_id])
 
-        scenario = "manual" if payload.get("source") == "MANUAL" else "created"
+        duration_sec = payload.get("duration_sec")
+        if payload.get("source") == "MANUAL":
+            scenario = "manual"
+        elif (
+            isinstance(duration_sec, (int, float))
+            and not isinstance(duration_sec, bool)
+            and duration_sec < 180
+        ):
+            scenario = "too_short"
+        else:
+            scenario = "created"
         result = _body(fixtures, "runs", scenario)
         result["client_run_id"] = client_run_id
         runs_by_client_id[client_run_id] = result
