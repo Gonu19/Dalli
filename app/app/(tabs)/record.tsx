@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, Pressable, type StyleProp, StyleSheet, Text, TextInput, type ViewStyle, View } from 'react-native';
+import { Animated, Image, Modal, Pressable, ScrollView, type StyleProp, StyleSheet, Text, TextInput, type ViewStyle, View } from 'react-native';
 
 import type { CalendarDay } from '@/src/api/client';
-import { useCalendar, useCreateManualRun, useCreatePlan, useStats, useUpdatePlan } from '@/src/api/queries';
+import { useCalendar, useCreateManualRun, useCreatePlan, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaScreen } from '@/src/components/figma-ui';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
@@ -31,8 +31,13 @@ export default function RecordScreen() {
   const [memo, setMemo] = useState('');
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const modalProgress = useRef(new Animated.Value(0)).current;
+  const profileButtonScale = useRef(new Animated.Value(1)).current;
+  const doneButtonScale = useRef(new Animated.Value(1)).current;
+  const isModalOpen = form !== null;
   const daysByDate = useMemo(() => new Map(calendar.data?.map((day) => [day.date, day]) ?? []), [calendar.data]);
   const selected = daysByDate.get(selectedDate);
+  const selectedRun = selected?.runs[0] ?? null;
+  const runDetail = useRunDetail(token, selectedRun?.id ?? null);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -43,16 +48,23 @@ export default function RecordScreen() {
   }, []));
 
   useEffect(() => {
-    if (!form) return;
+    if (!isModalOpen) {
+      modalProgress.setValue(0);
+      return;
+    }
+
     modalProgress.setValue(0);
-    Animated.spring(modalProgress, {
+    const animation = Animated.spring(modalProgress, {
       damping: 18,
       mass: 0.7,
       stiffness: 220,
       toValue: 1,
       useNativeDriver: true,
-    }).start();
-  }, [form, modalProgress]);
+    });
+    animation.start();
+
+    return () => animation.stop();
+  }, [isModalOpen, modalProgress]);
 
   const save = async () => {
     if (form === 'plan') await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
@@ -61,17 +73,47 @@ export default function RecordScreen() {
   };
 
   return <FigmaScreen>
-    <Text style={styles.heading}>누적 <Text style={styles.orange}>달리 데이</Text> {stats.data?.totalRunDays ?? 3}일</Text>
-    <View style={styles.profileCard}>
+    <ScrollView
+      contentContainerStyle={styles.scrollContent}
+      directionalLockEnabled
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+    >
+    <View style={styles.screenContent}>
+      <Text style={styles.heading}>누적 <Text style={styles.orange}>달리 데이</Text> {stats.data?.totalRunDays ?? 3}일</Text>
+      <View style={styles.profileCard}>
       <View style={styles.avatar}>{profilePhotoUri
         ? <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage}/>
         : <Ionicons color="#1C1A1A" name="person" size={27}/>}</View>
       <View><Text style={styles.runner}>홍길동 러너님</Text><Text style={styles.profileCopy}>달리와 꾸준한 러닝을 이어가고 있어요</Text></View>
       <View style={styles.profileActions}>
-        <SpringPressable onPress={() => setForm('manual')} style={styles.profileButton}><Text style={styles.profileButtonText}>+ 기록</Text></SpringPressable>
-        <SpringPressable onPress={() => setForm('plan')} style={styles.profileButton}><Text style={styles.profileButtonText}>+ 계획</Text></SpringPressable>
+        <AnimatedPressable
+          accessibilityRole="button"
+          onPress={() => setForm('plan')}
+          onPressIn={() => {
+            Animated.spring(profileButtonScale, {
+              damping: 12,
+              mass: 0.5,
+              stiffness: 320,
+              toValue: 0.94,
+              useNativeDriver: true,
+            }).start();
+          }}
+          onPressOut={() => {
+            Animated.spring(profileButtonScale, {
+              damping: 12,
+              mass: 0.5,
+              stiffness: 320,
+              toValue: 1,
+              useNativeDriver: true,
+            }).start();
+          }}
+          style={[styles.profileButton, { transform: [{ scale: profileButtonScale }] }]}
+        >
+          <Text style={styles.profileButtonText}>+ 계획/기록</Text>
+        </AnimatedPressable>
       </View>
-    </View>
+      </View>
 
       <View style={styles.calendarCard}>
       <View style={styles.monthRow}>
@@ -96,15 +138,56 @@ export default function RecordScreen() {
         </Pressable>;
       })}</View>
       <View style={styles.legend}><Legend color={colors.primary} label="완료"/><Legend color="#1C1A1A" label="직접 기록" outline/><Legend color="#9B9B9B" label="계획"/><Legend color="#D94B4B" label="공휴일"/></View>
-    </View>
+      </View>
 
-    <View style={styles.detailCard}>
-      <View><Text style={styles.detailDate}>{Number(selectedDate.slice(-2))}일 러닝</Text><Text style={styles.detailCopy}>{describeDay(selected)}</Text></View>
-      <SpringPressable onPress={() => setForm(selected?.plan ? 'manual' : 'plan')} style={styles.addButton}><Ionicons color={colors.white} name="add" size={22}/></SpringPressable>
-      {selected?.plan?.status === 'PLANNED' && <SpringPressable onPress={() => void updatePlan.mutateAsync({ planId: selected.plan!.id, status: 'DONE' })} style={styles.doneButton}><Text style={styles.doneText}>완료 처리</Text></SpringPressable>}
-    </View>
+      <View style={styles.detailCard}>
+      <View style={styles.detailHeader}>
+        <View style={[styles.detailMarker, selectedRun?.source === 'MANUAL' && styles.manualMarker]}/>
+        <Text numberOfLines={1} style={styles.detailDate}>{selectedDate} 일정 및 기록</Text>
+        {selectedRun ? <Text style={styles.detailMeta}>{selectedRun.source === 'MANUAL' ? '수기 기록 · 달리 데이 제외' : '앱 기록 · 달리 데이 포함'}</Text> : null}
+      </View>
 
-    <Modal animationType="fade" transparent visible={form !== null} onRequestClose={() => setForm(null)}>
+      {selectedRun ? <View style={styles.runSummary}>
+        <Text numberOfLines={1} style={styles.runTitle}>{runDetail.data?.memo?.trim() || (selectedRun.source === 'MANUAL' ? '직접 기록한 러닝' : '달리와 함께한 러닝')}</Text>
+        <Text style={styles.runMetrics}>{formatMinutes(selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
+        <Text numberOfLines={1} style={styles.detailCopy}>{describeRunCondition(runDetail.data?.condition, selectedRun.source)}</Text>
+      </View> : selected?.plan ? <View style={styles.runSummary}>
+        <Text style={styles.runTitle}>러닝 계획</Text>
+        <Text style={styles.runMetrics}>{formatPlanGoal(selected.plan)}</Text>
+        <Text style={styles.detailCopy}>{selected.plan.status === 'PLANNED' ? '예정된 러닝이에요' : '완료된 계획이에요'}</Text>
+        <AnimatedPressable
+          accessibilityRole="button"
+          disabled={updatePlan.isPending}
+          onPress={() => void updatePlan.mutateAsync({ planId: selected.plan!.id, status: selected.plan!.status === 'DONE' ? 'PLANNED' : 'DONE' })}
+          onPressIn={() => {
+            Animated.spring(doneButtonScale, {
+              damping: 12,
+              mass: 0.5,
+              stiffness: 320,
+              toValue: 0.94,
+              useNativeDriver: true,
+            }).start();
+          }}
+          onPressOut={() => {
+            Animated.spring(doneButtonScale, {
+              damping: 12,
+              mass: 0.5,
+              stiffness: 320,
+              toValue: 1,
+              useNativeDriver: true,
+            }).start();
+          }}
+          style={[styles.doneButton, selected.plan!.status === 'DONE' && styles.undoButton, updatePlan.isPending && styles.buttonDisabled, { transform: [{ scale: doneButtonScale }] }]}
+        ><Text style={[styles.doneText, selected.plan.status === 'DONE' && styles.undoText]}>{updatePlan.isPending ? '처리 중' : selected.plan.status === 'DONE' ? '완료 취소' : '완료 처리'}</Text></AnimatedPressable>
+      </View> : <View style={styles.emptyDetail}>
+        <Text style={styles.detailCopy}>아직 등록된 일정이나 기록이 없어요</Text>
+        <SpringPressable onPress={() => setForm('plan')} style={styles.addButton}><Ionicons color={colors.white} name="add" size={22}/></SpringPressable>
+      </View>}
+      </View>
+    </View>
+    </ScrollView>
+
+    <Modal animationType="fade" transparent visible={isModalOpen} onRequestClose={() => setForm(null)}>
       <View style={styles.overlay}><Pressable style={StyleSheet.absoluteFill} onPress={() => setForm(null)}/><Animated.View style={[styles.modalCard,{opacity:modalProgress,transform:[{translateY:modalProgress.interpolate({inputRange:[0,1],outputRange:[34,0]})},{scale:modalProgress.interpolate({inputRange:[0,1],outputRange:[.97,1]})}]}]}>
         <View style={styles.modalTabs}>
           <Pressable onPress={() => setForm('plan')} style={({ pressed }) => [styles.modalTab, form === 'plan' && styles.activeTab, pressed && styles.buttonPressed]}><Text style={[styles.tabText, form === 'plan' && styles.activeTabText]}>계획 추가</Text></Pressable>
@@ -133,7 +216,16 @@ function SpringPressable({ children, onPress, style }: { children: ReactNode; on
     style={[style, { transform: [{ scale }] }]}
   >{children}</AnimatedPressable>;
 }
-function describeDay(day?: CalendarDay) { if (day?.runs.length) return `${day.runs[0].durationSec ? Math.round(day.runs[0].durationSec / 60) : 0}분 달리기 완료`; if (day?.plan) return `${Math.round(day.plan.goalValue / 60)}분 달리기 계획`; return '아직 등록된 러닝이 없어요'; }
+function formatMinutes(durationSec: number) { return `${Math.round(durationSec / 60)} min`; }
+function formatDistance(distanceM: number | null | undefined) { return distanceM == null ? '— km' : `${Number((distanceM / 1000).toFixed(2))} km`; }
+function formatCadence(cadence: number | null | undefined) { return cadence == null ? '— spm' : `${Math.round(cadence)} spm`; }
+function formatPlanGoal(plan: NonNullable<CalendarDay['plan']>) { return plan.goalType === 'TIME' ? `${Math.round(plan.goalValue / 60)} min` : `${Number((plan.goalValue / 1000).toFixed(2))} km`; }
+function describeRunCondition(condition: 1 | 3 | 5 | null | undefined, source: 'APP' | 'MANUAL') {
+  if (condition === 1) return '피곤한 컨디션으로 시작한 러닝이에요';
+  if (condition === 3) return '보통 컨디션으로 시작한 러닝이에요';
+  if (condition === 5) return '가벼운 컨디션으로 시작한 러닝이에요';
+  return source === 'MANUAL' ? '앱 밖에서 달린 기록이에요' : '오늘의 러닝을 기록했어요';
+}
 function getHolidayName(year: number, month: number, day: number) {
   const fixed: Record<string, string> = { '1-1': '신정', '3-1': '삼일절', '5-5': '어린이날', '6-6': '현충일', '8-15': '광복절', '10-3': '개천절', '10-9': '한글날', '12-25': '성탄절' };
   const lunar: Record<number, Record<string, string>> = {
@@ -148,10 +240,11 @@ function toDateKey(date: Date) { return `${date.getFullYear()}-${String(date.get
 function makeClientRunId() { return globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 const styles = StyleSheet.create({
+  scrollContent: { minHeight: 770 }, screenContent: { position: 'relative', height: 770 },
   heading: { position: 'absolute', top: 28, left: 27, color: colors.white, fontSize: 22, fontWeight: '800' }, orange: { color: colors.primary },
   profileCard: { position: 'absolute', top: 70, left: 24, right: 24, height: 111, borderRadius: 24, backgroundColor: colors.primary, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 48, height: 48, borderRadius: 24 }, runner: { color: colors.white, fontSize: 17, fontWeight: '800', marginTop: 2 }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 5 }, profileActions: { position: 'absolute', right: 16, bottom: 11, flexDirection: 'row', gap: 7 }, profileButton: { width: 68, height: 32, borderRadius: 10, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' }, profileButtonText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 48, height: 48, borderRadius: 24 }, runner: { color: colors.white, fontSize: 17, fontWeight: '800', marginTop: 2 }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 5 }, profileActions: { position: 'absolute', right: 16, bottom: 11 }, profileButton: { minWidth: 104, height: 32, borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' }, profileButtonText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   calendarCard: { position: 'absolute', top: 194, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] }, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { backgroundColor: '#1C1A1A' }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#1C1A1A' }, holidayDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#D94B4B' }, planDot: { backgroundColor: '#9B9B9B' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
-  detailCard: { position: 'absolute', top: 581, left: 24, right: 24, height: 91, borderRadius: 22, backgroundColor: colors.white, padding: 18 }, detailDate: { color: '#1C1A1A', fontSize: 15, fontWeight: '800' }, detailCopy: { color: '#686868', fontSize: 13, marginTop: 7 }, addButton: { position: 'absolute', right: 17, top: 25, width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, doneButton: { position: 'absolute', right: 68, top: 32 }, doneText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
+  detailCard: { position: 'absolute', top: 581, left: 24, right: 24, height: 140, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 14, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, runSummary: { marginTop: 15 }, runTitle: { color: '#1C1A1A', fontSize: 13, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 11.5, marginTop: 5 }, emptyDetail: { flex: 1, justifyContent: 'center' }, addButton: { position: 'absolute', right: 0, top: 12, width: 42, height: 42, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, doneButton: { position: 'absolute', right: 0, top: 15, minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.62)', alignItems: 'center', justifyContent: 'center' }, modalCard: { width: 346, minHeight: 465, borderRadius: 28, backgroundColor: colors.white, padding: 24 }, modalTabs: { flexDirection: 'row', height: 44, backgroundColor: '#F2F2F2', borderRadius: 13, padding: 3 }, modalTab: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, activeTab: { backgroundColor: colors.primary }, tabText: { color: '#777777', fontSize: 14, fontWeight: '800' }, activeTabText: { color: colors.white }, modalTitle: { color: '#1C1A1A', fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 20 }, inputLabel: { color: '#1C1A1A', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 8 }, inputRow: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: '#1C1A1A', paddingHorizontal: 13, fontSize: 15, fontWeight: '700' }, unit: { color: '#686868', marginRight: 14, fontSize: 13 }, memo: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, paddingHorizontal: 13, color: '#1C1A1A', fontSize: 15 }, error: { color: '#D64545', fontSize: 12, marginTop: 5 }, save: { height: 50, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }, saveText: { color: colors.white, fontSize: 17, fontWeight: '800' }, buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
 });

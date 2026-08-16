@@ -15,6 +15,7 @@ import {
   getUserProfile,
   patchUserProfile,
   updatePlan,
+  type CalendarDay,
   type RunUpload,
   type UserProfilePatch,
 } from './client';
@@ -147,8 +148,20 @@ export function useUpdatePlan(token: string | null) {
       const { planId, ...patch } = input;
       return updatePlan(requireToken(token), planId, patch);
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    onSuccess: (updatedPlan) => {
+      queryClient.setQueriesData<CalendarDay[]>({ queryKey: ['calendar'] }, (days) => days?.map((day) => (
+        day.plan?.id === updatedPlan.id
+          ? {
+              ...day,
+              plan: {
+                id: updatedPlan.id,
+                status: updatedPlan.status,
+                goalType: updatedPlan.goalType,
+                goalValue: updatedPlan.goalValue,
+              },
+            }
+          : day
+      )));
     },
   });
 }
