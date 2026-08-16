@@ -99,3 +99,17 @@ export const BASELINE_MIN_DURATION_SEC = 360;
 
 /** 온보딩에서 초기 목표값을 손으로 조절할 수 있는 폭 — ±5 spm, 1 spm 단위 (§2). */
 export const INITIAL_TARGET_ADJUST_RANGE = 5;
+
+/**
+ * 온보딩 전체 건너뛰기 기본값 (§2).
+ *
+ * 값을 비워 보내면 서버의 `onboarded`가 계속 `false`라 앱이 온보딩으로 되돌아온다
+ * (`CONTRACT.md`). 그래서 **비우지 않고 가장 보수적인 값을 대신 보낸다.**
+ * 초기 목표값은 이 조합에서 `computeInitialTargetCadence`가 그대로 계산한다(152).
+ */
+export const ONBOARDING_SKIP_DEFAULTS = {
+  runningPurpose: 'COMPLETE',
+  experienceLevel: 0,
+  maxContinuousMin: 10,
+  weeklyGoalCount: 3,
+} as const;

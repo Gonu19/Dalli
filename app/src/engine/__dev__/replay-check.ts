@@ -9,7 +9,7 @@
  * 판정(`judge`)은 `F1-05`에서 붙는다. 여기서는 소스·목표 계산·baseline 산출까지만 검증한다.
  */
 
-import { SAMPLE_INTERVAL_SEC } from '../constants';
+import { ONBOARDING_SKIP_DEFAULTS, SAMPLE_INTERVAL_SEC } from '../constants';
 import { ReplaySource } from '../sources/replay-source';
 import {
   computeInitialTargetCadence,
@@ -51,6 +51,15 @@ check(
     }),
   ),
   true,
+);
+
+check(
+  '온보딩 건너뛰기 기본값의 초기 목표값',
+  computeInitialTargetCadence(
+    ONBOARDING_SKIP_DEFAULTS.experienceLevel,
+    ONBOARDING_SKIP_DEFAULTS.runningPurpose,
+  ),
+  152,
 );
 
 // 2. 목표 범위 — ENGINE.md §3
