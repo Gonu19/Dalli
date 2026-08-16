@@ -18,6 +18,7 @@ import {
   type RunUpload,
   type UserProfilePatch,
 } from './client';
+import { dequeueRun } from '../store/upload-queue';
 
 export function useCompleteOnboarding(token: string | null) {
   return useMutation({
@@ -96,7 +97,8 @@ export function useUploadRun(token: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (run: RunUpload) => createRun(requireToken(token), run),
-    onSuccess: async () => {
+    onSuccess: async (_createdRun, run) => {
+      dequeueRun(run.clientRunId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['runs'] }),
         queryClient.invalidateQueries({ queryKey: ['stats'] }),

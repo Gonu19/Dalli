@@ -55,12 +55,43 @@ const fileStorage: QueueStorage = {
 
 const queue = createQueue(fileStorage);
 
-export const enqueueRun = queue.enqueue;
-export const dequeueRun = queue.dequeue;
+const listeners = new Set<() => void>();
+
+function emitQueueChanged() {
+  for (const listener of listeners) listener();
+}
+
+export function subscribeQueue(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function enqueueRun(record: Parameters<typeof queue.enqueue>[0]) {
+  const entry = queue.enqueue(record);
+  emitQueueChanged();
+  return entry;
+}
+
+export function dequeueRun(clientRunId: string) {
+  queue.dequeue(clientRunId);
+  emitQueueChanged();
+}
+
 export const listQueuedRuns = queue.list;
-export const markAttemptFailed = queue.markFailed;
+export function markAttemptFailed(clientRunId: string, error: unknown) {
+  const entry = queue.markFailed(clientRunId, error);
+  emitQueueChanged();
+  return entry;
+}
+
 export const hasPendingRuns = queue.hasPending;
 /** 네트워크가 돌아왔을 때·앱을 다시 켰을 때 호출한다. */
-export const flushQueue = queue.flush.bind(queue);
+export async function flushQueue(upload: Parameters<typeof queue.flush>[0]) {
+  const result = await queue.flush(upload);
+  emitQueueChanged();
+  return result;
+}
 
 export type { QueuedRun } from './queue-core';
