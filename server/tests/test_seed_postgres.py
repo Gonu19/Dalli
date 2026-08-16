@@ -1,6 +1,6 @@
 from datetime import date
 import os
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import httpx
@@ -17,11 +17,17 @@ from app.main import create_app
 from app.models import Plan, Report, Run, User
 from app.seed import (
     PLAN_DONE_ID,
+    PLAN_PLANNED_ID,
+    PLAN_SKIPPED_ID,
     PRIMARY_DEVICE_UUID,
     PRIMARY_USER_ID,
     REPORT_ID,
+    RUN_APP_NO_PLAN_ID,
     RUN_LINKED_ID,
     RUN_MANUAL_ID,
+    RUN_MONTH_BOUNDARY_ID,
+    RUN_OTHER_USER_ID,
+    SECONDARY_USER_ID,
     SeedError,
     run_seed,
 )
@@ -93,37 +99,120 @@ def test_seed_is_idempotent_preserves_general_data_and_relationships(seed_postgr
 
 @pytest.mark.postgres
 def test_seed_refuses_identifier_collision(seed_postgres_engine) -> None:
+    collision_user_id = uuid4()
+    general_user_id = uuid4()
     with Session(seed_postgres_engine) as session:
+        original_primary = session.get(User, PRIMARY_USER_ID)
+        original_primary_state = {
+            "exists": original_primary is not None,
+            "device_uuid": original_primary.device_uuid if original_primary is not None else None,
+        }
+        session.add(
+            User(
+                id=general_user_id,
+                device_uuid=f"general-{uuid4()}",
+                running_purpose="HABIT",
+            )
+        )
+        session.commit()
         run_seed(app_env="test", session=session)
-        expected_counts = _counts(session)
-        existing = session.get(User, PRIMARY_USER_ID)
+        baseline_counts = _counts(session)
+        baseline_primary = session.get(User, PRIMARY_USER_ID)
+        assert baseline_primary is not None
+        baseline_primary_device_uuid = baseline_primary.device_uuid
+        assert baseline_primary_device_uuid == PRIMARY_DEVICE_UUID
+        baseline_general = session.get(User, general_user_id)
+        assert baseline_general is not None
+        fixed_ids = (
+            (User, PRIMARY_USER_ID),
+            (User, SECONDARY_USER_ID),
+            (Plan, PLAN_DONE_ID),
+            (Plan, PLAN_PLANNED_ID),
+            (Plan, PLAN_SKIPPED_ID),
+            (Run, RUN_LINKED_ID),
+            (Run, RUN_APP_NO_PLAN_ID),
+            (Run, RUN_MANUAL_ID),
+            (Run, RUN_MONTH_BOUNDARY_ID),
+            (Run, RUN_OTHER_USER_ID),
+            (Report, REPORT_ID),
+        )
+
+        def fixed_counts() -> tuple[int, ...]:
+            return tuple(
+                session.scalar(
+                    select(func.count()).select_from(model).where(model.id == entity_id)
+                )
+                for model, entity_id in fixed_ids
+            )
+
+        baseline_fixed_counts = fixed_counts()
+        collision_prepared = False
         try:
+            existing = session.get(User, PRIMARY_USER_ID)
+            assert existing is not None
             existing.device_uuid = f"changed-{uuid4()}"
-            session.add(User(device_uuid=PRIMARY_DEVICE_UUID))
+            session.add(User(id=collision_user_id, device_uuid=PRIMARY_DEVICE_UUID))
             session.commit()
+            collision_prepared = True
             with pytest.raises(SeedError, match="device_uuid 충돌"):
                 run_seed(app_env="test", session=session)
         finally:
             session.rollback()
-            collision_user = session.scalar(
-                select(User).where(
-                    User.device_uuid == PRIMARY_DEVICE_UUID,
-                    User.id != PRIMARY_USER_ID,
+            collision_users = session.scalars(
+                select(User).where(User.id == collision_user_id)
+            ).all()
+            if collision_prepared and len(collision_users) != 1:
+                pytest.fail(
+                    "collision 사용자 cleanup 대상이 정확히 1개가 아닙니다: "
+                    f"{len(collision_users)}"
                 )
-            )
-            if collision_user is not None:
-                session.delete(collision_user)
+            if len(collision_users) > 1:
+                pytest.fail(
+                    "collision 사용자 cleanup 대상이 여러 개입니다: "
+                    f"{len(collision_users)}"
+                )
+            if collision_users:
+                session.delete(collision_users[0])
                 session.flush()
-            existing = session.get(User, PRIMARY_USER_ID)
-            existing.device_uuid = PRIMARY_DEVICE_UUID
-            session.commit()
+            if session.scalar(
+                select(func.count()).select_from(User).where(User.id == collision_user_id)
+            ) != 0:
+                pytest.fail("collision 사용자 DELETE가 DB에 반영되지 않았습니다.")
 
-        assert session.get(User, PRIMARY_USER_ID).device_uuid == PRIMARY_DEVICE_UUID
+            restored = session.get(User, PRIMARY_USER_ID)
+            if restored is None:
+                pytest.fail("고정 Seed 사용자가 cleanup 후 존재하지 않습니다.")
+            restored.device_uuid = baseline_primary_device_uuid
+            session.commit()
+            session.expire_all()
+
+        primary_rows = session.scalars(
+            select(User).where(User.id == PRIMARY_USER_ID)
+        ).all()
+        assert len(primary_rows) == 1
+        primary_device_rows = session.scalars(
+            select(User).where(User.device_uuid == baseline_primary_device_uuid)
+        ).all()
+        assert len(primary_device_rows) == 1
+        assert primary_device_rows[0].id == PRIMARY_USER_ID
         assert session.scalar(
-            select(func.count()).select_from(User).where(User.device_uuid == PRIMARY_DEVICE_UUID)
-        ) == 1
+            select(func.count()).select_from(User).where(User.id == collision_user_id)
+        ) == 0
+        assert _counts(session) == baseline_counts
+        assert fixed_counts() == baseline_fixed_counts
+        general_after_cleanup = session.get(User, general_user_id)
+        assert general_after_cleanup is not None
+        assert general_after_cleanup.running_purpose == baseline_general.running_purpose
+        assert original_primary_state["exists"] == (
+            original_primary_state["device_uuid"] is not None
+        )
+
         run_seed(app_env="test", session=session)
-        assert _counts(session) == expected_counts
+        assert _counts(session) == baseline_counts
+        assert fixed_counts() == baseline_fixed_counts
+        session.expire_all()
+        assert session.get(User, PRIMARY_USER_ID).device_uuid == baseline_primary_device_uuid
+        assert session.get(User, general_user_id).running_purpose == "HABIT"
 
 
 @pytest.mark.postgres
