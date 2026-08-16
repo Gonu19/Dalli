@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 from types import SimpleNamespace
 import time
 from uuid import uuid4
@@ -21,6 +22,8 @@ from app.services.fallback import build_fallback_report
 from app.services.llm import (
     LLMReportContent,
     _call_with_deadline,
+    _days_since_last_app_run,
+    _safe_summary,
     generate_llm_report,
 )
 from app.services.metrics import compute_run_metrics
@@ -134,6 +137,41 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert "samples" not in fake.kwargs["input"]
     assert "events" not in fake.kwargs["input"]
     assert SECRET not in fake.kwargs["input"]
+    summary = json.loads(fake.kwargs["input"])
+    assert summary["running_purpose"] == "COMPLETE"
+    assert summary["weekly_goal_count"] is None
+    assert summary["days_since_last_run"] is None
+
+
+def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:
+    owner = User(
+        id=uuid4(),
+        device_uuid="summary-user",
+        running_purpose="HABIT",
+        weekly_goal_count=4,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    current = run()
+    current.user = owner
+    previous_app = run()
+    previous_app.started_at = NOW.replace(day=12)
+    previous_app.user = owner
+    manual = run()
+    manual.started_at = NOW.replace(day=14)
+    manual.source = "MANUAL"
+    manual.user = owner
+    owner.runs = [previous_app, manual, current]
+
+    quality = assess_run_quality(current)
+    metrics = compute_run_metrics(current, quality)
+    fallback = build_fallback_report(current, quality, metrics)
+
+    assert _days_since_last_app_run(current) == 3
+    summary = _safe_summary(current, quality, metrics, fallback)
+    assert summary["running_purpose"] == "HABIT"
+    assert summary["weekly_goal_count"] == 4
+    assert summary["days_since_last_run"] == 3
 
 
 def test_evaluation_observer_receives_only_in_memory_response_metadata() -> None:

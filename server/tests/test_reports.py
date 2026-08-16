@@ -170,7 +170,8 @@ def test_first_analyzable_post_creates_fallback_report_with_200():
         "fatigue_index": None,
         "in_range_sec": 180.0,
     }
-    assert body["hypothesis"] is body["prescription"] is body["recovery_note"] is None
+    assert body["hypothesis"] is body["recovery_note"] is None
+    assert body["prescription"]
     assert body["is_fallback"] is True and body["model"] is None
 
 

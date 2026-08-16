@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from math import isfinite
+from typing import Final
 
 from app.models import Run
 from app.services.metrics import RunMetrics, compute_upper_range_sec
 from app.services.run_quality import RunQualityAssessment
+
+
+RUNNING_PURPOSES: Final = frozenset(
+    {"COMPLETE", "HABIT", "WEIGHT", "FITNESS", "PERFORMANCE"}
+)
 
 
 @dataclass(frozen=True)
@@ -14,7 +20,7 @@ class FallbackReportContent:
     verdict: str
     evidence: tuple[str, ...]
     hypothesis: None
-    prescription: None
+    prescription: str
     next_goal_text: str
     next_target_min: int
     next_target_max: int
@@ -35,6 +41,32 @@ def fatigue_label(value: object) -> str | None:
     if number < 0.6:
         return "보통"
     return "부담됨"
+
+
+def running_purpose(run: Run) -> str:
+    user = getattr(run, "user", None)
+    purpose = getattr(user, "running_purpose", None) or "COMPLETE"
+    return purpose if purpose in RUNNING_PURPOSES else "COMPLETE"
+
+
+def _ended_in_recovery(run: Run) -> bool:
+    return any(
+        isinstance(event, dict) and event.get("type") == "RECOVERY_MODE_ON"
+        for event in (run.events or [])
+    )
+
+
+def _prescription(run: Run) -> str:
+    if _ended_in_recovery(run):
+        return "지금은 회복을 우선하고, 편하게 이어가 보세요."
+
+    return {
+        "COMPLETE": "다음 러닝은 초반에 조금 천천히 시작해 끝까지 끊지 않고 완주해 보세요.",
+        "HABIT": "다음 러닝 시점을 미리 정해, 무리하지 않는 리듬으로 다시 이어가 보세요.",
+        "WEIGHT": "다음 러닝은 강도를 높이기보다 편안한 지속 시간을 조금씩 늘려 보세요.",
+        "FITNESS": "다음 러닝은 후반까지 유지할 수 있는 리듬으로 안정 구간을 이어가 보세요.",
+        "PERFORMANCE": "다음 러닝은 평균 페이스를 높이기보다 안정 구간의 비율을 유지하는 데 집중해 보세요.",
+    }[running_purpose(run)]
 
 
 def _limitations(run: Run, quality: RunQualityAssessment) -> list[str]:
@@ -137,7 +169,7 @@ def build_fallback_report(
         verdict=verdict,
         evidence=tuple(evidence[:3]),
         hypothesis=None,
-        prescription=None,
+        prescription=_prescription(run),
         next_goal_text=_goal_text(run, center),
         next_target_min=next_min,
         next_target_max=next_max,

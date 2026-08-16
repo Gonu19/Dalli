@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import Run
+from app.models import Run, User
 from app.services.fallback import build_fallback_report, fatigue_label
 from app.services.metrics import compute_run_metrics
 from app.services.run_quality import assess_run_quality
@@ -71,7 +71,7 @@ def test_fallback_is_deterministic_pure_and_uses_only_supported_fields():
     assert first == second
     assert 1 <= len(first.evidence) <= 3
     assert first.hypothesis is None
-    assert first.prescription is None
+    assert first.prescription
     assert first.recovery_note is None
     assert first.is_fallback is True
     assert first.model is None
@@ -79,6 +79,56 @@ def test_fallback_is_deterministic_pure_and_uses_only_supported_fields():
     assert run.events == original_events
     visible = " ".join((first.verdict, *first.evidence, first.next_goal_text))
     assert all(term not in visible for term in ("Rhythm Score", "Fatigue Index", "downshift", "쿨다운"))
+
+
+@pytest.mark.parametrize(
+    ("purpose", "expected"),
+    [
+        ("COMPLETE", "끊지 않고 완주"),
+        ("HABIT", "다음 러닝 시점"),
+        ("WEIGHT", "지속 시간"),
+        ("FITNESS", "후반까지 유지"),
+        ("PERFORMANCE", "안정 구간의 비율"),
+    ],
+)
+def test_fallback_prescription_follows_running_purpose(purpose, expected):
+    run = app_run()
+    run.user = User(running_purpose=purpose)
+
+    content = build(run)
+
+    assert expected in content.prescription
+    assert content.prescription.endswith(".")
+    assert "체중" not in content.prescription
+    assert "칼로리" not in content.prescription
+    assert "감량" not in content.prescription
+
+
+def test_same_run_data_keeps_next_target_and_other_fallback_text_unchanged():
+    contents = []
+    for purpose in ("COMPLETE", "HABIT", "WEIGHT", "FITNESS", "PERFORMANCE"):
+        run = app_run()
+        run.user = User(running_purpose=purpose)
+        contents.append(build(run))
+
+    assert {(content.next_target_min, content.next_target_max) for content in contents} == {
+        (155, 163)
+    }
+    assert {content.verdict for content in contents} == {contents[0].verdict}
+    assert {content.evidence for content in contents} == {contents[0].evidence}
+    assert {content.next_goal_text for content in contents} == {contents[0].next_goal_text}
+    assert len({content.prescription for content in contents}) == 5
+
+
+def test_fallback_recovery_prescription_overrides_running_purpose():
+    run = app_run(
+        events=[{"t": 300, "type": "RECOVERY_MODE_ON", "reason": "downshift_exhausted"}],
+    )
+    run.user = User(running_purpose="PERFORMANCE")
+
+    content = build(run)
+
+    assert content.prescription == "지금은 회복을 우선하고, 편하게 이어가 보세요."
 
 
 @pytest.mark.parametrize(
