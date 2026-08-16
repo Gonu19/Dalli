@@ -11,6 +11,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -20,6 +21,8 @@ from app.database import clear_database_caches
 from app.main import create_app
 from app.models import Plan, Report, Run
 from app.services.auth import decode_access_token
+
+TEST_JWT_SECRET = "bep14-postgres-test-secret-with-32-bytes"
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +34,7 @@ def bep14_postgres_engine():
         pytest.fail("TEST_DATABASE_URL must point to a database whose name contains 'test'")
     previous = {name: os.environ.get(name) for name in ("DATABASE_URL", "JWT_SECRET")}
     os.environ["DATABASE_URL"] = database_url
-    os.environ["JWT_SECRET"] = "bep14-postgres-test-secret-with-32-bytes"
+    os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     clear_settings_cache()
     clear_database_caches()
     command.upgrade(Config("alembic.ini"), "head")
@@ -55,7 +58,7 @@ def _auth(device: str) -> tuple[str, UUID]:
         response = client.post("/auth/device", json={"device_uuid": device})
     token = response.json()["access_token"]
     user_id = UUID(
-        decode_access_token(token, "bep14-postgres-test-secret-with-32-bytes")["sub"]
+        decode_access_token(token, SecretStr(TEST_JWT_SECRET))["sub"]
     )
     return token, user_id
 

@@ -74,12 +74,8 @@ class Run(Base):
     rhythm_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     late_drop_rate: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     fatigue_index: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
-    intervention_count: Mapped[int | None] = mapped_column(
-        SmallInteger, server_default=text("0")
-    )
-    downshift_count: Mapped[int | None] = mapped_column(
-        SmallInteger, server_default=text("0")
-    )
+    intervention_count: Mapped[int | None] = mapped_column(SmallInteger)
+    downshift_count: Mapped[int | None] = mapped_column(SmallInteger)
     samples: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     events: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     memo: Mapped[str | None] = mapped_column(Text)

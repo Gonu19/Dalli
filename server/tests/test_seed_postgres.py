@@ -94,16 +94,36 @@ def test_seed_is_idempotent_preserves_general_data_and_relationships(seed_postgr
 @pytest.mark.postgres
 def test_seed_refuses_identifier_collision(seed_postgres_engine) -> None:
     with Session(seed_postgres_engine) as session:
+        run_seed(app_env="test", session=session)
+        expected_counts = _counts(session)
         existing = session.get(User, PRIMARY_USER_ID)
-        existing.device_uuid = f"changed-{uuid4()}"
-        session.add(User(device_uuid=PRIMARY_DEVICE_UUID))
-        session.commit()
-        with pytest.raises(SeedError, match="device_uuid 충돌"):
-            run_seed(app_env="test", session=session)
-        session.rollback()
-        session.delete(session.scalar(select(User).where(User.device_uuid == PRIMARY_DEVICE_UUID)))
-        existing.device_uuid = PRIMARY_DEVICE_UUID
-        session.commit()
+        try:
+            existing.device_uuid = f"changed-{uuid4()}"
+            session.add(User(device_uuid=PRIMARY_DEVICE_UUID))
+            session.commit()
+            with pytest.raises(SeedError, match="device_uuid 충돌"):
+                run_seed(app_env="test", session=session)
+        finally:
+            session.rollback()
+            collision_user = session.scalar(
+                select(User).where(
+                    User.device_uuid == PRIMARY_DEVICE_UUID,
+                    User.id != PRIMARY_USER_ID,
+                )
+            )
+            if collision_user is not None:
+                session.delete(collision_user)
+                session.flush()
+            existing = session.get(User, PRIMARY_USER_ID)
+            existing.device_uuid = PRIMARY_DEVICE_UUID
+            session.commit()
+
+        assert session.get(User, PRIMARY_USER_ID).device_uuid == PRIMARY_DEVICE_UUID
+        assert session.scalar(
+            select(func.count()).select_from(User).where(User.device_uuid == PRIMARY_DEVICE_UUID)
+        ) == 1
+        run_seed(app_env="test", session=session)
+        assert _counts(session) == expected_counts
 
 
 @pytest.mark.postgres

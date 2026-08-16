@@ -98,8 +98,8 @@ CREATE TABLE runs (
     rhythm_score        NUMERIC(4,3),
     late_drop_rate      NUMERIC(4,3),
     fatigue_index       NUMERIC(4,3),
-    intervention_count  SMALLINT DEFAULT 0,
-    downshift_count     SMALLINT DEFAULT 0,
+    intervention_count  SMALLINT,
+    downshift_count     SMALLINT,
 
     samples             JSONB,
     events              JSONB,
