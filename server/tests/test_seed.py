@@ -17,9 +17,19 @@ def test_seed_accepts_only_development_and_test(value: str) -> None:
     assert validate_seed_environment(value) in {"development", "test"}
 
 
-def test_cli_rejects_missing_environment_before_loading_database(monkeypatch) -> None:
+def test_cli_rejects_missing_environment_before_loading_database(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    def fail_if_settings_are_loaded():
+        pytest.fail("환경 검증 실패 전에 DB 설정을 로드했습니다.")
+
+    monkeypatch.setattr("app.seed.get_settings", fail_if_settings_are_loaded)
+
     stderr = StringIO()
     with redirect_stderr(stderr):
         result = main()
