@@ -94,10 +94,13 @@ git pull --rebase && git push
 
 ## 8. 환경변수
 ```
-app/.env      ← 커밋 OK   EXPO_PUBLIC_API_URL=https://<api-domain>
+app/.env      ← 커밋 금지  EXPO_PUBLIC_API_URL=https://<api-domain>
 server/.env   ← 커밋 금지  DATABASE_URL / JWT_SECRET / OPENAI_API_KEY
 ```
-- `server/.env.example`만 커밋. 실값은 EC2에 직접 설정.
+- **`.env.example`만 커밋한다.** 앱도 서버도 같다. 실값은 각자 로컬·EC2에 직접 넣는다.
+- `app/.env`를 추적하면 개발용 터널 주소나 임시 EC2 IP가 저장소에 남는다.
+  Base URL은 사람마다 다르고 자주 바뀌므로 커밋 대상이 아니다.
+- 받은 뒤 처음 할 일: `cp app/.env.example app/.env` 후 URL 채우기.
 - 레포 private. private이어도 키 커밋 금지.
 - `EXPO_PUBLIC_*`는 앱 번들에 노출됨 → 비밀값 금지.
 

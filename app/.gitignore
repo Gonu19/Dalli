@@ -4,3 +4,7 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# 로컬 Base URL. 터널·EC2 주소가 저장소에 올라가지 않도록 추적하지 않는다.
+# 실값은 각자 로컬에서 채우고 형식은 .env.example을 따른다.
+.env
