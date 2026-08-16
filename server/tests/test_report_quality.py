@@ -3,6 +3,7 @@ from dataclasses import replace
 import pytest
 
 from app.services.llm import _safe_summary, generate_llm_report
+from app.services.fallback import build_fallback_report
 from app.services.report_quality import (
     HardGateReason,
     evaluate_outgoing_payload,
@@ -17,6 +18,8 @@ from tests.report_evaluation import (
     empty_scenario_evaluation_table,
 )
 from tests.test_llm import FakeClient, context, settings, valid_payload
+from tests.test_reports import FakeSession, app_run, client_for, user
+from tests.synthetic_scenarios import SYNTHETIC_SCENARIO_KEYS, evaluate_synthetic_scenario
 
 
 def gate_context():
@@ -267,3 +270,149 @@ def test_six_report_blind_materials_are_deterministic_and_hide_model_metadata() 
     assert len(HUMAN_RUBRIC) == 7
     assert all(not hasattr(item, "model") and not hasattr(item, "prompt") for item in first)
     assert all(not hasattr(item, "scenario_key") for item in first)
+
+
+@pytest.mark.parametrize(
+    ("field", "text", "reason"),
+    [
+        ("evidence", ["다음 리듬은 159km가 적절해요."], HardGateReason.UNSUPPORTED_NUMERIC_CLAIM),
+        ("hypothesis", "족저근막염으로 진단됩니다.", HardGateReason.MEDICAL_CLAIM_DETECTED),
+        ("verdict", "고작 이것밖에 못 달린 러닝이에요.", HardGateReason.BLAMING_LANGUAGE_DETECTED),
+        (
+            "next_goal_text",
+            "다음 목표에서는 리듬을 더 느리게 맞춰 보세요.",
+            HardGateReason.NEXT_GOAL_CONTRADICTION,
+        ),
+    ],
+)
+def test_aiq04_reproduced_validator_gaps_are_blocked(field, text, reason) -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    result = evaluate_report_output({**payload, field: text}, fallback, summary)
+    assert reason in result.reasons
+
+
+@pytest.mark.parametrize(
+    ("field", "text"),
+    [
+        ("evidence", ["안정 구간 100% (600초)", "다음 목표 리듬은 159spm이에요."]),
+        ("recovery_note", "무리하지 말고 편안하게 회복해 주세요."),
+        ("recovery_note", "불편함이 지속되면 전문가와 상담하세요."),
+        ("verdict", "목표 범위를 벗어난 구간이 있었지만 러닝을 기록했어요."),
+        ("prescription", "다음 러닝은 시작 5분 동안 같은 리듬을 유지해 보세요."),
+        ("next_goal_text", "다음 목표: 10분 완주, 리듬 159"),
+        ("next_goal_text", "다음 목표: 10분 완주, 리듬 155~163"),
+    ],
+)
+def test_aiq04_normal_korean_contrast_reports_are_not_overblocked(field, text) -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    result = evaluate_report_output({**payload, field: text}, fallback, summary)
+    assert result.passed is True
+
+
+@pytest.mark.parametrize(
+    ("field", "claim"),
+    [
+        ("verdict", "오늘의 안정 구간은 87%예요."),
+        ("evidence", ["목표보다 87spm 높았어요."]),
+        ("hypothesis", "처음 87분의 영향일 수 있어요."),
+        ("prescription", "다음에는 87km를 달려보세요."),
+        ("next_goal_text", "다음 목표: 87분 완주, 리듬 159"),
+        ("recovery_note", "87일 동안 쉬어 주세요."),
+        ("limitation", "87개 샘플이 누락됐어요."),
+    ],
+)
+def test_invented_numeric_claim_is_checked_in_every_free_text_field(field, claim) -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    result = evaluate_report_output({**payload, field: claim}, fallback, summary)
+    assert HardGateReason.UNSUPPORTED_NUMERIC_CLAIM in result.reasons
+
+
+@pytest.mark.parametrize(
+    "scenario_key",
+    [
+        key
+        for key in SYNTHETIC_SCENARIO_KEYS
+        if evaluate_synthetic_scenario(key).scenario.ai_call_allowed
+    ],
+)
+def test_aiq02_analyzable_scenarios_accept_neutral_contract_valid_reports(
+    scenario_key,
+) -> None:
+    evaluated = evaluate_synthetic_scenario(scenario_key)
+    fallback = build_fallback_report(
+        evaluated.run,
+        evaluated.quality,
+        evaluated.metrics,
+    )
+    summary = _safe_summary(
+        evaluated.run,
+        evaluated.quality,
+        evaluated.metrics,
+        fallback,
+    )
+    payload = {
+        "verdict": fallback.verdict,
+        "evidence": list(fallback.evidence),
+        "hypothesis": None,
+        "prescription": None,
+        "next_goal_text": fallback.next_goal_text,
+        "next_target_min": fallback.next_target_min,
+        "next_target_max": fallback.next_target_max,
+        "recovery_note": None,
+        "limitation": fallback.limitation,
+    }
+    result = evaluate_report_output(payload, fallback, summary)
+    assert result.passed is True, (scenario_key, result.reasons)
+
+
+@pytest.mark.parametrize(
+    "violation",
+    [
+        {"evidence": ["안정 구간 87%"]},
+        {"hypothesis": "족저근막염으로 진단됩니다."},
+        {"verdict": "고작 이것밖에 못 달린 러닝이에요."},
+        {"next_goal_text": "다음 목표에서는 리듬을 더 느리게 맞춰 보세요."},
+    ],
+)
+def test_validator_violation_persists_only_fallback_and_repeat_does_not_call_llm(
+    violation,
+    monkeypatch,
+) -> None:
+    owner = user()
+    run = app_run(owner)
+    db = FakeSession([run, None])
+    calls = 0
+
+    def evaluated_llm(current_run, quality, metrics, fallback, current_settings):
+        nonlocal calls
+        calls += 1
+        payload = valid_payload(
+            fallback.next_target_min,
+            fallback.next_target_max,
+            fallback.limitation,
+        )
+        return generate_llm_report(
+            current_run,
+            quality,
+            metrics,
+            fallback,
+            current_settings,
+            client_factory=lambda **_kwargs: FakeClient({**payload, **violation}),
+        )
+
+    monkeypatch.setattr("app.services.reports.generate_llm_report", evaluated_llm)
+    report_settings = settings()
+    created = client_for(owner, db, report_settings).post(f"/runs/{run.id}/report")
+    stored = db.added[0]
+    repeated_db = FakeSession([run, stored])
+    repeated = client_for(owner, repeated_db, report_settings).post(
+        f"/runs/{run.id}/report"
+    )
+
+    assert created.status_code == repeated.status_code == 200
+    assert created.json()["is_fallback"] is True
+    assert created.json()["model"] is None
+    assert stored.is_fallback is True and stored.model is None
+    assert repeated.json() == created.json()
+    assert calls == 1
+    assert not repeated_db.added and repeated_db.commits == 0

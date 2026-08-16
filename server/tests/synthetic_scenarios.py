@@ -10,6 +10,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from statistics import mean
 from uuid import UUID
 
@@ -45,6 +46,7 @@ class SyntheticScenario:
 @dataclass(frozen=True)
 class EvaluatedSyntheticScenario:
     scenario: SyntheticScenario
+    run: Run
     quality: RunQualityAssessment
     metrics: RunMetrics
 
@@ -332,4 +334,16 @@ def evaluate_synthetic_scenario(key: str) -> EvaluatedSyntheticScenario:
     run = Run(id=scenario.run_id, user_id=UUID("d1500000-0000-4000-8000-999999999999"), **values)
     quality = assess_run_quality(run)
     metrics = compute_run_metrics(run, quality)
-    return EvaluatedSyntheticScenario(scenario=scenario, quality=quality, metrics=metrics)
+    run.rhythm_score = None if metrics.rhythm_score is None else Decimal(str(metrics.rhythm_score))
+    run.late_drop_rate = (
+        None if metrics.late_drop_rate is None else Decimal(str(metrics.late_drop_rate))
+    )
+    run.fatigue_index = (
+        None if metrics.fatigue_index is None else Decimal(str(metrics.fatigue_index))
+    )
+    return EvaluatedSyntheticScenario(
+        scenario=scenario,
+        run=run,
+        quality=quality,
+        metrics=metrics,
+    )

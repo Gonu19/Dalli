@@ -58,6 +58,10 @@ MEDICAL_PATTERNS = (
         r"\b치료(?:가 필요|해야|하세요)",
         r"\b(?:골절|염좌|질병|부상)(?:입니다|이에요|이다)",
         r"\b(?:약|진통제)을? (?:복용|드세요)",
+        r"(?:염|증|병)(?:으로|로)?\s*진단(?:됩니다|됐습니다|되었|했)",
+        r"진단(?:됩니다|됐습니다|되었|했)(?:\.|$)",
+        r"치료(?:를|가)?\s*(?:받아야|받으세요|필요|해야|하세요)",
+        r"(?:약물|진통제|소염제)(?:을|를)?\s*(?:복용|드세요)",
     )
 )
 MEDICAL_PATTERNS = tuple(MEDICAL_PATTERNS)
@@ -70,10 +74,21 @@ BLAMING_PATTERNS = tuple(
         r"당신(?:의)? 잘못",
         r"성격(?:이|의) 문제",
         r"사용자 탓",
+        r"고작\s+.+밖에\s+못",
+        r"한심",
+        r"핑계(?:입니다|예요|다)",
+        r"정신력(?:이|은) 약",
     )
 )
-NUMBER_PATTERN = re.compile(r"(?<![\w])[-+]?\d+(?:\.\d+)?")
+NUMBER_PATTERN = re.compile(
+    r"(?<![\w])(?P<number>[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
+    r"\s*(?P<unit>spm|km|m|%|초|분|회)?",
+    re.IGNORECASE,
+)
 RHYTHM_TARGET_PATTERN = re.compile(r"리듬\s*([-+]?\d+(?:\.\d+)?)")
+RHYTHM_RANGE_PATTERN = re.compile(
+    r"리듬\s*([-+]?\d+(?:\.\d+)?)\s*(?:~|-|–)\s*([-+]?\d+(?:\.\d+)?)"
+)
 
 
 def _add_reason(reasons: list[HardGateReason], reason: HardGateReason) -> None:
@@ -123,11 +138,69 @@ def _numeric_allowlist(summary: Mapping[str, object]) -> set[str]:
     return allowed
 
 
+def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]]:
+    allowed: dict[str, set[str]] = {
+        "%": set(),
+        "초": set(),
+        "분": set(),
+        "m": set(),
+        "km": set(),
+        "spm": set(),
+        "회": set(),
+    }
+
+    def add(unit: str, value: object) -> None:
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            return
+        allowed[unit].add(_canonical_number(value))
+
+    for key in ("rhythm_score", "late_drop_rate", "fatigue_index"):
+        value = summary.get(key)
+        if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+            add("%", round(float(value) * 100))
+    for key in ("duration_sec", "active_duration_sec", "in_range_sec", "avg_pace_sec_per_km"):
+        value = summary.get(key)
+        if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+            add("초", round(float(value)))
+    for key in ("duration_sec", "active_duration_sec"):
+        value = summary.get(key)
+        if isinstance(value, (int, float, Decimal)) and float(value) % 60 == 0:
+            add("분", float(value) / 60)
+
+    goal_value = summary.get("goal_value")
+    if summary.get("goal_type") == "TIME":
+        add("초", goal_value)
+        if isinstance(goal_value, (int, float, Decimal)) and float(goal_value) % 60 == 0:
+            add("분", float(goal_value) / 60)
+    elif summary.get("goal_type") == "DISTANCE":
+        add("m", goal_value)
+        if isinstance(goal_value, (int, float, Decimal)) and float(goal_value) % 1000 == 0:
+            add("km", float(goal_value) / 1000)
+
+    distance = summary.get("distance_m")
+    add("m", distance)
+    if isinstance(distance, (int, float, Decimal)) and float(distance) % 1000 == 0:
+        add("km", float(distance) / 1000)
+    for key in (
+        "avg_cadence", "next_target_min", "next_target_max",
+        "current_target_min", "current_target_max",
+    ):
+        add("spm", summary.get(key))
+    next_min = summary.get("next_target_min")
+    next_max = summary.get("next_target_max")
+    if isinstance(next_min, int) and isinstance(next_max, int):
+        add("spm", round((next_min + next_max) / 2))
+    for key in ("intervention_count", "downshift_count"):
+        add("회", summary.get(key))
+    return allowed
+
+
 def _has_unsupported_numeric_claim(
     content: LLMReportContent,
     summary: Mapping[str, object],
 ) -> bool:
     allowed = _numeric_allowlist(summary)
+    allowed_by_unit = _numeric_unit_allowlist(summary)
     for field_name, texts in (
         ("verdict", (content.verdict,)),
         ("evidence", tuple(content.evidence)),
@@ -141,11 +214,19 @@ def _has_unsupported_numeric_claim(
             if text is None:
                 continue
             for match in NUMBER_PATTERN.finditer(text):
-                number = _canonical_number(Decimal(match.group()))
+                number = _canonical_number(Decimal(match.group("number").replace(",", "")))
+                unit = match.group("unit")
                 # CONTRACT's prescription example explicitly permits "시작 5분".
-                if field_name == "prescription" and number == "5" and "시작" in text:
+                if (
+                    field_name == "prescription"
+                    and number == "5"
+                    and unit == "분"
+                    and "시작" in text
+                ):
                     continue
-                if number not in allowed:
+                if unit is not None and number not in allowed_by_unit[unit.lower()]:
+                    return True
+                if unit is None and number not in allowed:
                     return True
     return False
 
@@ -156,9 +237,19 @@ def _next_goal_contradicts(
     summary: Mapping[str, object],
 ) -> bool:
     center = round((fallback.next_target_min + fallback.next_target_max) / 2)
-    mentioned = RHYTHM_TARGET_PATTERN.findall(content.next_goal_text)
-    if any(Decimal(value) != Decimal(center) for value in mentioned):
-        return True
+    range_match = RHYTHM_RANGE_PATTERN.search(content.next_goal_text)
+    if range_match is not None:
+        mentioned_range = tuple(Decimal(value) for value in range_match.groups())
+        protected_range = (
+            Decimal(fallback.next_target_min),
+            Decimal(fallback.next_target_max),
+        )
+        if mentioned_range != protected_range:
+            return True
+    else:
+        mentioned = RHYTHM_TARGET_PATTERN.findall(content.next_goal_text)
+        if any(Decimal(value) != Decimal(center) for value in mentioned):
+            return True
 
     current_min = summary.get("current_target_min")
     current_max = summary.get("current_target_max")
@@ -167,8 +258,12 @@ def _next_goal_contradicts(
     current_center = (current_min + current_max) / 2
     direction = center - current_center
     text = content.next_goal_text
-    says_down = any(word in text for word in ("낮추", "줄이"))
-    says_up = any(word in text for word in ("높이", "올리", "늘리"))
+    says_down = any(word in text for word in ("낮추", "줄이")) or bool(
+        re.search(r"리듬(?:을|은)?\s*(?:더\s*)?느리게", text)
+    )
+    says_up = any(word in text for word in ("높이", "올리", "늘리")) or bool(
+        re.search(r"리듬(?:을|은)?\s*(?:더\s*)?빠르게", text)
+    )
     return (direction > 0 and says_down) or (direction < 0 and says_up) or (
         direction == 0 and (says_down or says_up)
     )
