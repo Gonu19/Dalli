@@ -145,6 +145,46 @@ async function main() {
   check('멱등 재전송 후 큐 비움', [calls, queue.hasPending()], [1, false]);
 }
 
+
+// 7. 읽기 캐시 — hasPending은 렌더마다 불려도 저장소를 다시 읽지 않는다
+{
+  const storage = memoryStorage();
+  let reads = 0;
+  const counting: QueueStorage = {
+    list: () => { reads += 1; return storage.list(); },
+    write: storage.write,
+    remove: storage.remove,
+  };
+  const queue = createQueue(counting);
+
+  queue.enqueue(record('run-a'));
+  const before = reads;
+  for (let i = 0; i < 50; i += 1) queue.hasPending();
+  check('반복 조회는 저장소를 한 번만 읽는다', reads - before, 1);
+
+  // 쓰기는 캐시를 무효화한다 — 값이 낡지 않는다
+  queue.dequeue('run-a');
+  check('삭제 후 즉시 반영', queue.hasPending(), false);
+  queue.enqueue(record('run-b'));
+  check('추가 후 즉시 반영', queue.list().map((entry) => entry.record.clientRunId), ['run-b']);
+}
+
+// 8. 반환값 — 호출부가 항목을 바로 쓸 수 있어야 한다
+{
+  const storage = memoryStorage();
+  const queue = createQueue(storage, () => '2026-08-16T09:00:00Z');
+  const entry = queue.enqueue(record('run-a'));
+  check('enqueue가 항목을 돌려준다', [entry.record.clientRunId, entry.attempts, entry.savedAt], [
+    'run-a',
+    0,
+    '2026-08-16T09:00:00Z',
+  ]);
+
+  const failedEntry = queue.markFailed('run-a', new Error('offline'));
+  check('markFailed가 갱신된 항목을 돌려준다', [failedEntry?.attempts, failedEntry?.lastError], [1, 'offline']);
+  check('없는 항목이면 null', queue.markFailed('run-x', new Error('offline')), null);
+}
+
   console.log(failures === 0 ? '\nOK — 전 항목 통과' : `\nFAILED — ${failures}건`);
   if (failures > 0) process.exitCode = 1;
 }
