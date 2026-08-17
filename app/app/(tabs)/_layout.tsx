@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, typography } from '@/src/theme/tokens';
+import { colors, pressFeedback, typography } from '@/src/theme/tokens';
 
 import AnalysisScreen from './analysis';
 import HomeScreen from './index';
@@ -102,6 +102,6 @@ const styles = StyleSheet.create({
   page: { flex: 1, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.background },
   tabItem: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabPressed: { opacity: 0.65 },
+  tabPressed: pressFeedback,
   tabLabel: { ...typography.caption, fontWeight: '700' },
 });

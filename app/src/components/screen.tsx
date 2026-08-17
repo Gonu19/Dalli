@@ -9,9 +9,10 @@ type Props = {
   footer?: ReactNode;
   scroll?: boolean;
   padded?: boolean;
+  includeBottomSafeArea?: boolean;
 };
 
-export function Screen({ children, footer, scroll = true, padded = true }: Props) {
+export function Screen({ children, footer, scroll = true, padded = true, includeBottomSafeArea = true }: Props) {
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={[styles.content, !padded && styles.unpadded]}
@@ -24,7 +25,7 @@ export function Screen({ children, footer, scroll = true, padded = true }: Props
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={includeBottomSafeArea ? ['top', 'bottom'] : ['top']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.flex, Platform.OS === 'web' && styles.webFrame]}>

@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
 
 export function DalliLogo({ compact = false }: { compact?: boolean }) {
   return (
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   headerTitle: { ...typography.bodyStrong, fontSize: 16, color: colors.text },
   action: { minWidth: 44, alignItems: 'flex-end' },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -12 },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
+  pressed: pressFeedback,
   card: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface },
   cardDark: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
   sectionHeading: { ...typography.heading, color: colors.text },

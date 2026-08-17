@@ -41,15 +41,15 @@ export type UserProfile = {
 };
 
 export type UserProfilePatch = {
-  runningPurpose: RunningPurpose;
-  experienceLevel: 0 | 1 | 2;
-  maxContinuousMin: number;
-  weeklyGoalCount: number;
-  baselineCadence: number;
-  heightCm?: number;
-  weightKg?: number;
-  birthYear?: number;
-  gender?: 'M' | 'F' | 'O';
+  runningPurpose?: RunningPurpose;
+  experienceLevel?: 0 | 1 | 2;
+  maxContinuousMin?: number;
+  weeklyGoalCount?: number;
+  baselineCadence?: number;
+  heightCm?: number | null;
+  weightKg?: number | null;
+  birthYear?: number | null;
+  gender?: 'M' | 'F' | 'O' | null;
 };
 
 export type RunUpload = {
@@ -257,15 +257,15 @@ export async function patchUserProfile(token: string, profile: UserProfilePatch)
   const response = await request<UserProfileResponse>('/users/me', {
     method: 'PATCH',
     body: JSON.stringify({
-      running_purpose: profile.runningPurpose,
-      experience_level: profile.experienceLevel,
-      max_continuous_min: profile.maxContinuousMin,
-      weekly_goal_count: profile.weeklyGoalCount,
-      baseline_cadence: profile.baselineCadence,
-      height_cm: profile.heightCm ?? null,
-      weight_kg: profile.weightKg ?? null,
-      birth_year: profile.birthYear ?? null,
-      gender: profile.gender ?? null,
+      ...(profile.runningPurpose !== undefined ? { running_purpose: profile.runningPurpose } : {}),
+      ...(profile.experienceLevel !== undefined ? { experience_level: profile.experienceLevel } : {}),
+      ...(profile.maxContinuousMin !== undefined ? { max_continuous_min: profile.maxContinuousMin } : {}),
+      ...(profile.weeklyGoalCount !== undefined ? { weekly_goal_count: profile.weeklyGoalCount } : {}),
+      ...(profile.baselineCadence !== undefined ? { baseline_cadence: profile.baselineCadence } : {}),
+      ...(profile.heightCm !== undefined ? { height_cm: profile.heightCm } : {}),
+      ...(profile.weightKg !== undefined ? { weight_kg: profile.weightKg } : {}),
+      ...(profile.birthYear !== undefined ? { birth_year: profile.birthYear } : {}),
+      ...(profile.gender !== undefined ? { gender: profile.gender } : {}),
     }),
   }, token);
   return mapUserProfile(response);

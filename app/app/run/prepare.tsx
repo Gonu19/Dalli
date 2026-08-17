@@ -9,7 +9,7 @@ import { WheelPickerModal } from '@/src/components/wheel-picker-modal';
 import { CONDITION_VALUE } from '@/src/engine/constants';
 import type { ConditionLevel } from '@/src/engine/types';
 import { startTrackedRun } from '@/src/store/runController';
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const timeOptions = Array.from({ length: 24 }, (_, index) => String((index + 1) * 5));
 const cadenceControls = [
@@ -102,18 +102,18 @@ function Toggle({ label, copy, value, onChange }: { label: string; copy: string;
 }
 
 const styles = StyleSheet.create({
-  settings: { position: 'absolute', right: 26, top: 32, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  iconPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
-  header: { position: 'absolute', top: 23, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700' },
-  goalCard: { position: 'absolute', left: 28, right: 28, top: 153, height: 246, borderRadius: 20, backgroundColor: colors.white, padding: 18 },
+  settings: { position: 'absolute', right: 26, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: pressFeedback,
+  header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700' },
+  goalCard: { position: 'absolute', left: 28, right: 28, top: 153 - navigationHeader.contentLift, height: 246, borderRadius: 20, backgroundColor: colors.white, padding: 18 },
   cardTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
   valueRow: { position: 'absolute', left: 0, right: 0, top: 55, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   value: { fontSize: 36, fontWeight: '800', color: colors.primary },
   unit: { fontSize: 13, fontWeight: '700', color: colors.inkMuted, marginTop: 14 },
   controls: { position: 'absolute', left: 18, right: 18, top: 113, flexDirection: 'row', justifyContent: 'space-between' },
   control: { width: 54, height: 34, borderWidth: 1, borderColor: colors.border, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  controlPressed: { backgroundColor: 'rgba(28,26,26,.12)', borderColor: 'rgba(28,26,26,.28)', transform: [{ scale: 0.96 }] },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  controlPressed: pressFeedback,
+  buttonPressed: pressFeedback,
   controlText: { fontSize: 13, fontWeight: '700', color: colors.ink },
   line: { position: 'absolute', left: 18, right: 18, top: 168, height: 1, backgroundColor: colors.border },
   timeTitle: { position: 'absolute', left: 18, top: 198, fontSize: 17, fontWeight: '700', color: colors.ink },
@@ -121,10 +121,10 @@ const styles = StyleSheet.create({
   time: { marginLeft: 17, fontSize: 14, fontWeight: '700', color: colors.ink },
   timeUnit: { position: 'absolute', right: 28, fontSize: 13, fontWeight: '700', color: colors.inkMuted },
   timeChevron: { position: 'absolute', right: 8 },
-  guide: { position: 'absolute', left: 29, right: 27, top: 425, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
+  guide: { position: 'absolute', left: 29, right: 27, top: 425 - navigationHeader.contentLift, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
   toggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: colors.ink },
   toggleCopy: { fontSize: 12, color: 'rgba(28,26,26,.58)', marginTop: 2 },
-  start: { position: 'absolute', left: 28, right: 27, top: 646, height: 52, borderRadius: 18, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 11 },
+  start: { position: 'absolute', left: 28, right: 27, top: 646 - navigationHeader.contentLift, height: 52, borderRadius: 18, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 11 },
   startText: { color: colors.white, fontSize: 17, fontWeight: '700' },
 });

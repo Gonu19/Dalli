@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
 
 type Props = {
   children: ReactNode;
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.primary },
   secondary: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
   text: { backgroundColor: 'transparent' },
-  pressed: { opacity: 0.82 },
+  pressed: pressFeedback,
   disabled: { opacity: 0.45 },
   label: typography.button,
   primaryLabel: { color: colors.white },

@@ -20,4 +20,4 @@ export default function ExperienceScreen() {
     <Text onPress={() => router.replace('/onboarding/cadence')} style={styles.skip}>전체 건너뛰기</Text>
   </FigmaScreen>;
 }
-const styles=StyleSheet.create({title:{position:'absolute',left:27,right:27,top:108,color:colors.white,fontSize:20,fontWeight:'800',textAlign:'center'},options:{position:'absolute',left:38,top:185,right:30},button:{top:606},skip:{position:'absolute',top:679,alignSelf:'center',color:'#A0A0A0',fontSize:13,textDecorationLine:'underline'}});
+const styles=StyleSheet.create({title:{position:'absolute',left:27,right:27,top:88,color:colors.white,fontSize:20,fontWeight:'800',textAlign:'center'},options:{position:'absolute',left:38,top:165,right:30},button:{top:586},skip:{position:'absolute',top:659,alignSelf:'center',color:'#A0A0A0',fontSize:13,textDecorationLine:'underline'}});

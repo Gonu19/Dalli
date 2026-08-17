@@ -9,7 +9,7 @@ import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
 import { Screen } from '@/src/components/screen';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 export default function Analysis() {
   const router = useRouter();
@@ -18,9 +18,14 @@ export default function Analysis() {
   const remove = useDeleteRun(token);
   const scrollY = useRef(new Animated.Value(0)).current;
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
-  const avg = appRuns.length
-    ? Math.round(appRuns.reduce((sum, run) => sum + (run.avgCadence ?? 0), 0) / appRuns.length)
-    : 0;
+  const measuredCadences = appRuns.flatMap((run) => run.avgCadence === null ? [] : [run.avgCadence]);
+  const avg = measuredCadences.length
+    ? Math.round(measuredCadences.reduce((sum, cadence) => sum + cadence, 0) / measuredCadences.length)
+    : null;
+  const measuredRhythmScores = appRuns.flatMap((run) => run.rhythmScore === null ? [] : [run.rhythmScore]);
+  const avgRhythmScore = measuredRhythmScores.length
+    ? Math.round(measuredRhythmScores.reduce((sum, score) => sum + score, 0) / measuredRhythmScores.length * 100)
+    : null;
 
   const confirm = (run: RunListItem) => Alert.alert(
     '이 러닝을 삭제할까요?',
@@ -39,9 +44,9 @@ export default function Analysis() {
     router.push({ pathname: '/run/report', params: { runId: run.id } });
   };
 
-  return <Screen padded={false} scroll={false}>
+  return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
     <View style={styles.frame}>
-      <FigmaLogo top={31} left={24} />
+      <FigmaLogo left={24} />
       <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
         <Ionicons color={colors.white} name="settings-outline" size={26} />
       </Pressable>
@@ -52,12 +57,16 @@ export default function Analysis() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.section}>나의 총 러닝 분석</Text>
-        {runs.data?.length === 0
+        {runs.isLoading
+          ? <View style={styles.emptySummary}><Text style={styles.emptyText}>러닝 기록을 불러오는 중이에요</Text></View>
+          : runs.error
+            ? <Pressable onPress={() => void runs.refetch()} style={({ pressed }) => [styles.emptySummary, pressed && styles.buttonPressed]}><Text style={styles.emptyText}>기록을 불러오지 못했어요 · 다시 시도</Text></Pressable>
+          : runs.data?.length === 0
           ? <View style={styles.emptySummary}><Text style={styles.emptyText}>아직 러닝 기록이 없어요</Text></View>
           : <View style={styles.summary}>
               <Summary value={String(appRuns.filter((run) => run.completed).length)} label="완주 횟수" accent />
-              <Summary value={String(avg || 157)} label="평균 SPM" />
-              <Summary value="80%" label="목표 유지율" />
+              <Summary value={avg === null ? '—' : String(avg)} label="평균 spm" />
+              <Summary value={avgRhythmScore === null ? '—' : `${avgRhythmScore}%`} label="평균 안정 구간" />
             </View>}
         <Text style={[styles.section, { marginTop: 28 }]}>러닝 분석</Text>
         {runs.data?.length === 0
@@ -94,7 +103,7 @@ export default function Analysis() {
               <View style={styles.line} />
               <View style={styles.metrics}>
                 <Metric value={run.distanceM === null ? '—' : (run.distanceM / 1000).toFixed(2)} label="KM" />
-                <Metric value={run.avgCadence === null ? '7’35”' : formatPace(run.durationSec, run.distanceM)} label="평균 페이스" />
+                <Metric value={formatPace(run.durationSec, run.distanceM)} label="평균 페이스" />
                 <Metric value={formatTime(run.durationSec)} label="시간" />
               </View>
             </Pressable>)}
@@ -134,9 +143,9 @@ function formatPace(seconds: number, distance: number | null) {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  settings: { position: 'absolute', right: 25, top: 31, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  iconPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
-  content: { paddingTop: 102, paddingHorizontal: 27, paddingBottom: 40 },
+  settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  iconPressed: pressFeedback,
+  content: { paddingTop: 102 - navigationHeader.contentLift, paddingHorizontal: 27, paddingBottom: 40 },
   section: { color: colors.white, fontSize: 17, fontWeight: '700', marginLeft: 10 },
   summary: { height: 86, borderRadius: 20, backgroundColor: colors.white, marginTop: 15, flexDirection: 'row' },
   summaryItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -149,16 +158,16 @@ const styles = StyleSheet.create({
   emptyLine2: { position: 'absolute', top: 212, alignSelf: 'center', color: '#9A9A9A', fontSize: 15 },
   prepare: { position: 'absolute', left: 37, right: 39, top: 264, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,122,89,.85)', alignItems: 'center', justifyContent: 'center' },
   prepareText: { color: colors.white, fontSize: 15, fontWeight: '700' },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  buttonPressed: pressFeedback,
   card: { height: 136, borderRadius: 20, backgroundColor: colors.white, marginTop: 13, padding: 26, position: 'relative' },
-  cardPressed: { opacity: 0.88 },
+  cardPressed: pressFeedback,
   date: { fontSize: 13, fontWeight: '700', color: colors.ink },
   day: { fontSize: 13, color: '#747474', marginTop: 6 },
   sourceBadge: { position: 'absolute', right: 132, top: 20, height: 24, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   manualBadge: { backgroundColor: '#E9E9E9' },
   sourceBadgeText: { fontSize: 11, fontWeight: '700', color: colors.inkMuted },
   detail: { position: 'absolute', right: 26, top: 16, width: 93, height: 36, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  detailPressed: { opacity: 0.7, transform: [{ scale: 0.97 }] },
+  detailPressed: pressFeedback,
   detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   line: { position: 'absolute', left: 26, right: 26, top: 65, height: 1, backgroundColor: colors.border },
   metrics: { position: 'absolute', left: 26, right: 20, top: 77, flexDirection: 'row' },

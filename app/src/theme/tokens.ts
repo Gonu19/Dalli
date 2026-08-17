@@ -59,3 +59,20 @@ export const shadows = {
     elevation: 2,
   },
 } as const;
+
+/** 모든 Pressable이 홈의 `러닝 준비하기` 버튼과 같은 눌림 피드백을 사용한다. */
+export const pressFeedback = {
+  opacity: 0.72,
+  transform: [{ scale: 0.98 }],
+};
+
+/** iOS safe area 바로 아래의 표준 44pt 내비게이션 영역. */
+export const navigationHeader = {
+  height: 44,
+  titleTop: 11,
+  logoTop: 5,
+  backTop: 6,
+  actionTop: 2,
+  compactActionTop: 4,
+  contentLift: 20,
+} as const;

@@ -3,20 +3,20 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const logo = require('@/assets/images/dalli-logo.png');
 let previousOnboardingStep = 0;
 
-export function FigmaScreen({ children }: { children?: ReactNode }) {
-  return <SafeAreaView style={styles.safe}><View style={styles.frame}>{children}</View></SafeAreaView>;
+export function FigmaScreen({ children, includeBottomSafeArea = true }: { children?: ReactNode; includeBottomSafeArea?: boolean }) {
+  return <SafeAreaView edges={includeBottomSafeArea ? ['top', 'bottom'] : ['top']} style={styles.safe}><View style={styles.frame}>{children}</View></SafeAreaView>;
 }
 
-export function FigmaLogo({ top = 34, left = 31, centered = false }: { top?: number; left?: number; centered?: boolean }) {
+export function FigmaLogo({ top = navigationHeader.logoTop, left = 31, centered = false }: { top?: number; left?: number; centered?: boolean }) {
   return <Image accessibilityLabel="달리" resizeMode="contain" source={logo} style={[styles.logo, centered ? styles.logoCentered : { left }, { top }]} />;
 }
 
-export function FigmaBack({ onPress, top = 20, left = 27 }: { onPress: () => void; top?: number; left?: number }) {
+export function FigmaBack({ onPress, top = navigationHeader.backTop, left = 27 }: { onPress: () => void; top?: number; left?: number }) {
   return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={onPress} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.pressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
 }
 
@@ -35,7 +35,7 @@ export function OnboardingTop({ step, onBack }: { step: number; onBack: () => vo
   const width = progress.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
   return <>
     <FigmaBack onPress={onBack} />
-    <FigmaLogo centered top={25} />
+    <FigmaLogo centered />
     <View style={styles.progressTrack}><Animated.View style={[styles.progressFill, { width }]} /></View>
     <Text style={styles.progressText}>{step} / 5</Text>
   </>;
@@ -55,10 +55,10 @@ const styles = StyleSheet.create({
   logo: { position: 'absolute', zIndex: 10, width: 60, height: 34 },
   logoCentered: { left: '50%', transform: [{ translateX: -30 }] },
   back: { position: 'absolute', zIndex: 10, width: 30, height: 32, alignItems: 'flex-start', justifyContent: 'center' },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
-  progressTrack: { position: 'absolute', left: 27, right: 58, top: 76, height: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 38, overflow: 'hidden' },
+  pressed: pressFeedback,
+  progressTrack: { position: 'absolute', left: 27, right: 58, top: 76 - navigationHeader.contentLift, height: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 38, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 38 },
-  progressText: { position: 'absolute', right: 27, top: 70, color: 'rgba(255,255,255,0.75)', fontSize: 12 },
+  progressText: { position: 'absolute', right: 27, top: 70 - navigationHeader.contentLift, color: 'rgba(255,255,255,0.75)', fontSize: 12 },
   button: { position: 'absolute', left: 27, right: 28, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
   secondary: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.white },
   disabled: { backgroundColor: '#494747', borderColor: '#494747' },

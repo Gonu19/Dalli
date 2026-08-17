@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
 
 type Props = {
   label: string;
@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   selected: { borderColor: 'rgba(255,122,89,0.28)', backgroundColor: colors.primarySoft },
-  pressed: { opacity: 0.78 },
+  pressed: pressFeedback,
   label: { ...typography.bodyStrong, color: colors.text },
   selectedLabel: { color: colors.primary },
   radio: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },

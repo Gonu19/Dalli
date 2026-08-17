@@ -2,12 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useCreateReport, useRunDetail } from '@/src/api/queries';
+import { useCreateReport, useProfile, useRunDetail, useRuns, useUpdateProfile } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 export default function Report() {
   const router = useRouter();
@@ -17,6 +17,9 @@ export default function Report() {
   const local = params.runId ? null : result;
   const runId = params.runId ?? local?.uploaded?.id ?? null;
   const detail = useRunDetail(token, params.runId ?? null);
+  const profile = useProfile(token);
+  const runs = useRuns(token);
+  const updateProfile = useUpdateProfile(token);
   const create = useCreateReport(token);
   const requested = useRef(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -32,9 +35,17 @@ export default function Report() {
   }, [create, detail.data, local?.report, params.runId, runId, setReport]);
 
   const record = local?.record;
-  const seconds = record?.durationSec ?? detail.data?.durationSec ?? 1800;
-  const cadence = record?.avgCadence ?? detail.data?.avgCadence ?? 160;
-  const pace = detail.data?.avgPaceSecPerKm ?? 455;
+  const seconds = record?.durationSec ?? detail.data?.durationSec ?? null;
+  const cadence = record?.avgCadence ?? detail.data?.avgCadence ?? null;
+  const pace = record?.avgPaceSecPerKm ?? detail.data?.avgPaceSecPerKm ?? null;
+  const rhythmScore = local?.uploaded?.rhythmScore ?? detail.data?.rhythmScore ?? null;
+  const report = local?.report ?? detail.data?.report ?? create.data;
+  const measuredBaseline = !local?.simulated && record?.measuredBaseline !== null
+    && runs.data?.filter((run) => run.source === 'APP').length === 1
+    ? record?.measuredBaseline
+    : null;
+  const shouldConfirmBaseline = measuredBaseline !== null
+    && profile.data?.baselineCadence !== measuredBaseline;
   const header = params.runId ? '상세보기' : '러닝 리포트';
 
   return <FigmaScreen>
@@ -47,34 +58,35 @@ export default function Report() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>오늘의 기본 러닝 결과</Text>
+      {shouldConfirmBaseline ? <View style={styles.baselineCard}>
+        <Text style={styles.baselineTitle}>나의 기준 리듬을 찾았어요</Text>
+        <Text style={styles.baselineValue}>{measuredBaseline} <Text style={styles.baselineUnit}>spm</Text></Text>
+        <Text style={styles.baselineCopy}>현재 설정 {profile.data?.baselineCadence ?? '—'} spm · 확인한 뒤 다음 러닝부터 적용해요.</Text>
+        <Pressable
+          disabled={updateProfile.isPending}
+          onPress={() => updateProfile.mutate({ baselineCadence: measuredBaseline })}
+          style={({ pressed }) => [styles.confirmBaseline, (pressed || updateProfile.isPending) && styles.buttonPressed]}
+        >
+          <Text style={styles.confirmBaselineText}>{updateProfile.isPending ? '저장 중...' : '이 리듬으로 확정하기'}</Text>
+        </Pressable>
+        {updateProfile.error ? <Text style={styles.inlineError}>저장하지 못했어요. 다시 눌러 주세요.</Text> : null}
+      </View> : null}
       <View style={styles.grid}>
-        <Metric label="실제 러닝 시간" value={`${Math.round(seconds / 60)}`} unit="분" />
-        <Metric label="목표 유지 비율" value="100" unit="%" />
-        <Metric label="평균 케이던스" value={`${cadence ?? 160}`} unit="SPM" accent />
+        <Metric label="실제 러닝 시간" value={seconds === null ? '—' : `${Math.round(seconds / 60)}`} unit={seconds === null ? undefined : '분'} />
+        <Metric label="안정 구간" value={formatPercent(rhythmScore)} unit={rhythmScore === null ? undefined : '%'} />
+        <Metric label="평균 리듬" value={cadence === null ? '—' : `${Math.round(cadence)}`} unit={cadence === null ? undefined : 'spm'} accent />
         <Metric label="평균 페이스" value={formatPace(pace)} />
       </View>
-      <View style={styles.chart}>
-        <Text style={styles.chartTitle}>변화 그래프</Text>
-        <View style={styles.plot}>
-          <View style={styles.yAxis} />
-          <View style={styles.xAxis} />
-          <Polyline color={colors.primary} points={[62, 62, 42, 79, 60, 50, 38, 48, 60]} />
-          <Polyline color="#2196F3" points={[45, 45, 25, 70, 48, 31, 45, 57, 39]} />
-          <Polyline color="#20DD2B" points={[125, 96, 104, 70, 70, 83, 55, 55, 25]} />
-          <Text style={styles.axisText}>0        10        15        20        30       분</Text>
-        </View>
-        <View style={styles.legend}>
-          <Legend color={colors.primary} label="케이던스 변화" />
-          <Legend color="#2196F3" label="페이스 변화" />
-          <Legend color="#20DD2B" label="목표 유지율" />
-        </View>
-      </View>
+      <View style={styles.dataNotice}><Text style={styles.dataNoticeTitle}>변화 그래프</Text><Text style={styles.dataNoticeText}>실제 샘플 그래프는 준비 중이에요. 측정되지 않은 값은 표시하지 않아요.</Text></View>
+      {create.isPending ? <Text style={styles.reportState}>AI 리포트를 만들고 있어요...</Text> : null}
+      {create.error ? <Pressable onPress={() => runId && create.mutate(runId)} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>AI 리포트 다시 만들기</Text></Pressable> : null}
     </Animated.ScrollView>
     <ScrollHeaderScrim scrollY={scrollY} />
     <View style={styles.floatingActions}>
       <Pressable
+        disabled={!report}
         onPress={() => router.push({ pathname: '/run/ai', params: { runId: runId ?? '' } })}
-        style={({ pressed }) => [styles.ai, pressed && styles.buttonPressed]}
+        style={({ pressed }) => [styles.ai, !report && styles.disabledButton, pressed && styles.buttonPressed]}
       >
         <Text style={styles.buttonText}>AI 상세 리포트 보기</Text>
       </Pressable>
@@ -98,54 +110,43 @@ function Metric({ label, value, unit, accent = false }: { label: string; value: 
   </View>;
 }
 
-function Polyline({ color, points }: { color: string; points: number[] }) {
-  return <View style={StyleSheet.absoluteFill}>
-    {points.slice(0, -1).map((point, index) => {
-      const next = points[index + 1];
-      const dx = 25;
-      const dy = next - point;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      return <View key={index} style={{ position: 'absolute', left: 22 + index * 25, top: 20 + point, width: length, height: 2, backgroundColor: color, transform: [{ rotate: `${angle}deg` }], transformOrigin: 'left center' }} />;
-    })}
-  </View>;
-}
-
-function Legend({ color, label }: { color: string; label: string }) {
-  return <View style={styles.legendItem}>
-    <View style={[styles.legendDot, { backgroundColor: color }]} />
-    <Text style={styles.legendText}>{label}</Text>
-  </View>;
-}
-
 function formatPace(value: number | null) {
   if (!value) return '—';
   return `${Math.floor(value / 60)}’${String(Math.round(value % 60)).padStart(2, '0')}”`;
 }
 
+function formatPercent(value: number | null) {
+  return value === null ? '—' : String(Math.round(value * 100));
+}
+
 const styles = StyleSheet.create({
-  header: { position: 'absolute', top: 23, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700', zIndex: 10 },
-  content: { paddingTop: 78, paddingHorizontal: 27, paddingBottom: 176 },
+  header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700', zIndex: 10 },
+  content: { paddingTop: 78 - navigationHeader.contentLift, paddingHorizontal: 27, paddingBottom: 176 },
   title: { color: colors.white, fontSize: 22, fontWeight: '800' },
+  baselineCard: { borderRadius: 24, backgroundColor: colors.white, marginTop: 20, padding: 20 },
+  baselineTitle: { color: colors.ink, fontSize: 17, fontWeight: '700' },
+  baselineValue: { color: colors.primary, fontSize: 32, fontWeight: '800', marginTop: 8 },
+  baselineUnit: { color: colors.inkMuted, fontSize: 14 },
+  baselineCopy: { color: colors.inkMuted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  confirmBaseline: { height: 42, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  confirmBaselineText: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  inlineError: { color: colors.danger, fontSize: 12, marginTop: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginTop: 22 },
   metric: { width: '47.5%', height: 94, borderRadius: 20, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 17 },
   metricLabel: { color: 'rgba(255,255,255,.68)', fontSize: 12 },
   metricRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 5, gap: 5 },
   metricValue: { color: colors.white, fontSize: 32, fontWeight: '700' },
   metricUnit: { color: colors.white, fontSize: 17, fontWeight: '700', marginBottom: 4 },
-  chart: { height: 307, borderRadius: 30, backgroundColor: colors.white, padding: 21, marginTop: 28 },
-  chartTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
-  plot: { position: 'absolute', left: 21, right: 20, top: 62, height: 204, borderRadius: 30, backgroundColor: 'rgba(221,224,225,.3)', overflow: 'hidden' },
-  yAxis: { position: 'absolute', left: 22, top: 18, bottom: 28, width: 1.5, backgroundColor: colors.ink },
-  xAxis: { position: 'absolute', left: 22, right: 25, bottom: 28, height: 1.5, backgroundColor: colors.ink },
-  axisText: { position: 'absolute', left: 19, right: 10, bottom: 8, fontSize: 11, color: colors.ink },
-  legend: { position: 'absolute', left: 24, right: 10, bottom: 9, flexDirection: 'row', gap: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendText: { fontSize: 12, color: colors.ink },
+  dataNotice: { minHeight: 112, borderRadius: 24, backgroundColor: colors.white, padding: 21, marginTop: 28 },
+  dataNoticeTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
+  dataNoticeText: { color: colors.inkMuted, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  reportState: { color: colors.textMuted, fontSize: 13, marginTop: 18, textAlign: 'center' },
+  retry: { height: 42, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  retryText: { color: colors.primary, fontSize: 14, fontWeight: '700' },
   floatingActions: { position: 'absolute', left: 27, right: 27, bottom: 24, gap: 12 },
   ai: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 8 },
   home: { height: 52, borderRadius: 18, borderWidth: 0.5, borderColor: colors.white, backgroundColor: 'rgba(28,26,26,.92)', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 12, elevation: 8 },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
+  buttonPressed: pressFeedback,
+  disabledButton: { opacity: 0.45 },
   buttonText: { color: colors.white, fontSize: 17, fontWeight: '700' },
 });

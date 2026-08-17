@@ -43,7 +43,7 @@
 > 실제 칼로리 계산에는 `weight_kg`만 필요하다. 나머지는 지금 쓰이지 않는다.
 
 ### `/onboarding/cadence` 기준 리듬
-- Rule-based 추천 baseline **중심값 1개** 표시 + **±5 spm 범위, 1 spm 단위** 수동 조절
+- Rule-based 추천 baseline **중심값 1개** 표시 + **추천값 기준 ±10 spm, 절대 130~185**, 버튼 `−5 / −1 / +1 / +5`
 - 안내: "첫 러닝에서 실제 리듬을 측정해 기준을 확정합니다"
 - 완료 → `POST /auth/device` → `PATCH /users/me` → `/`
 

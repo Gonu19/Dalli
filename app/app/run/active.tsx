@@ -21,7 +21,7 @@ import {
 import { useRunStore } from '@/src/store/runStore';
 import { useSimulationStore } from '@/src/store/simulation';
 import { dequeueRun } from '@/src/store/upload-queue';
-import { colors, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
 
 export default function ActiveRunScreen() {
   const router = useRouter();
@@ -111,7 +111,7 @@ export default function ActiveRunScreen() {
     <Screen padded={false} scroll={false}>
       <View style={styles.activeRoot}>
       <View style={styles.contentTop}>
-        <FigmaLogo top={34} left={14} />
+        <FigmaLogo left={14} />
         <Pressable accessibilityLabel="가이드" onPress={() => setShowGuide((value) => !value)} style={({ pressed }) => [styles.help, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={26} /></Pressable>
         <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="settings-outline" size={26} /></Pressable>
         {simulationActive ? <Text style={styles.badge}>시연</Text> : null}
@@ -198,10 +198,10 @@ function formatPace(value: number) {
 
 const styles = StyleSheet.create({
   activeRoot: { flex: 1, overflow: 'hidden', backgroundColor: colors.background },
-  contentTop: { zIndex: 2, paddingHorizontal: 20, paddingTop: 100 },
-  help: { position: 'absolute', right: 63, top: 34, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  settings: { position: 'absolute', right: 14, top: 34, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  iconPressed: { opacity: 0.72, transform: [{ scale: 0.94 }] },
+  contentTop: { zIndex: 2, paddingHorizontal: 20, paddingTop: 100 - navigationHeader.contentLift },
+  help: { position: 'absolute', right: 63, top: navigationHeader.compactActionTop, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  settings: { position: 'absolute', right: 14, top: navigationHeader.compactActionTop, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  iconPressed: pressFeedback,
   time: { fontSize: 64, lineHeight: 76, fontWeight: '800', color: colors.text, marginTop: 20 },
   badge: { position: 'absolute', left: 95, top: 38, ...typography.caption, color: colors.primary },
   notice: { ...typography.bodyStrong, color: colors.primary, textAlign: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
@@ -213,15 +213,15 @@ const styles = StyleSheet.create({
   metricLabel: { ...typography.caption, color: colors.text },
   metricValue: { ...typography.subhead, fontWeight: '700', color: colors.text },
   metricHighlighted: { color: colors.primary },
-  map: { position: 'absolute', left: 0, right: 0, top: 321, width: '100%', bottom: 0 },
-  mapShade: { position: 'absolute', left: 0, right: 0, top: 321, height: 50, backgroundColor: 'rgba(28,26,26,0.2)' },
-  guide: { position: 'absolute', left: 29, right: 27, top: 341, height: 203, padding: 21, borderRadius: 20, backgroundColor: colors.white, zIndex: 2 },
+  map: { position: 'absolute', left: 0, right: 0, top: 321 - navigationHeader.contentLift, width: '100%', bottom: 0 },
+  mapShade: { position: 'absolute', left: 0, right: 0, top: 321 - navigationHeader.contentLift, height: 50, backgroundColor: 'rgba(28,26,26,0.2)' },
+  guide: { position: 'absolute', left: 29, right: 27, top: 341 - navigationHeader.contentLift, height: 203, padding: 21, borderRadius: 20, backgroundColor: colors.white, zIndex: 2 },
   guideTitle: { color: colors.ink, fontSize: 17, fontWeight: '700', marginBottom: 7 },
   guideToggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
   guideLabel: { color: colors.ink, fontSize: 15, fontWeight: '700' }, guideCopy: { color: 'rgba(28,26,26,.58)', fontSize: 12 },
   controls: { position: 'absolute', left: 13, right: 13, bottom: 20, zIndex: 3, flexDirection: 'row', gap: 10 },
   runButton: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  buttonPressed: pressFeedback,
   pauseButton: { backgroundColor: colors.background },
   finishButton: { backgroundColor: colors.primary },
   runButtonText: { ...typography.button, color: colors.white },
@@ -237,5 +237,5 @@ const styles = StyleSheet.create({
   sheetDangerButtonLabel: { color: colors.white },
   sheetTextButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   sheetDangerText: { ...typography.button, color: '#D94444' },
-  sheetButtonPressed: { opacity: 0.72 },
+  sheetButtonPressed: pressFeedback,
 });

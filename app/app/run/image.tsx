@@ -6,7 +6,7 @@ import { Animated, ImageBackground, Pressable, StyleSheet, Text, View } from 're
 import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const photo = require('@/assets/images/run-share-sample.png');
 
@@ -34,11 +34,11 @@ export default function ResultImage() {
         <FigmaLogo top={13} left={9} />
         <View style={styles.overlay}>
           <Text style={styles.photoLabel}>활동 시간</Text>
-          <Text style={styles.photoValue}>{format(record?.durationSec ?? 1800)}</Text>
+          <Text style={styles.photoValue}>{record ? format(record.durationSec) : '—'}</Text>
           <Text style={styles.photoLabel}>거리</Text>
-          <Text style={styles.photoValue}>{record?.distanceM === null ? '—' : `${((record?.distanceM ?? 1000) / 1000).toFixed(2)} km`}</Text>
+          <Text style={styles.photoValue}>{record?.distanceM == null ? '—' : `${(record.distanceM / 1000).toFixed(2)} km`}</Text>
           <Text style={styles.photoLabel}>평균 케이던스</Text>
-          <Text style={styles.photoValue}>{record?.avgCadence ?? 160} SPM</Text>
+          <Text style={styles.photoValue}>{record?.avgCadence == null ? '—' : `${Math.round(record.avgCadence)} spm`}</Text>
         </View>
       </ImageBackground>
       <Text style={styles.title}>이미지에 포함할 지표</Text>
@@ -67,8 +67,8 @@ function format(value: number) {
 }
 
 const styles = StyleSheet.create({
-  header: { position: 'absolute', top: 23, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700', zIndex: 10 },
-  content: { paddingTop: 95, paddingHorizontal: 28, paddingBottom: 36 },
+  header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700', zIndex: 10 },
+  content: { paddingTop: 95 - navigationHeader.contentLift, paddingHorizontal: 28, paddingBottom: 36 },
   photo: { width: 267, height: 360, alignSelf: 'center', overflow: 'hidden' },
   photoShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.22)' },
   overlay: { position: 'absolute', left: 24, bottom: 18, gap: 2 },
@@ -80,6 +80,6 @@ const styles = StyleSheet.create({
   chipText: { color: colors.white, fontSize: 14, fontWeight: '700' },
   save: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 30 },
   report: { height: 52, borderRadius: 18, borderWidth: 0.5, borderColor: colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  buttonPressed: { opacity: 0.72, transform: [{ scale: 0.99 }] },
+  buttonPressed: pressFeedback,
   buttonText: { color: colors.white, fontSize: 17, fontWeight: '700' },
 });

@@ -4,7 +4,7 @@ import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/src/theme/tokens';
+import { colors, pressFeedback } from '@/src/theme/tokens';
 
 const PICKER_HEIGHT = 216;
 
@@ -64,7 +64,7 @@ function NativePickerColumn({ column, index, onChange }: { column: WheelColumn; 
 
 const styles = StyleSheet.create({
   modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'transparent' },
-  pressed: { opacity: 0.65, transform: [{ scale: 0.97 }] },
+  pressed: pressFeedback,
   backdrop: { ...StyleSheet.absoluteFillObject },
   glassSheet: { height: 326, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
   header: { height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },

@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FigmaButton, FigmaScreen, OnboardingTop } from '@/src/components/figma-ui';
 import { useOnboarding, type Gender } from '@/src/components/onboarding-provider';
 import { WheelPickerModal, type WheelColumn } from '@/src/components/wheel-picker-modal';
-import { colors } from '@/src/theme/tokens';
+import { colors, pressFeedback } from '@/src/theme/tokens';
 
 const years = Array.from({ length: 76 }, (_, index) => String(1940 + index));
 const months = Array.from({ length: 12 }, (_, index) => String(index + 1));
@@ -40,10 +40,10 @@ export default function BodyInfoScreen() {
     <Text style={styles.title}>신체 정보를 입력해주세요</Text><Text style={styles.subtitle}>케이던스를 제안하는 기준으로 사용돼요</Text>
     <Text style={styles.labelGender}>성별</Text>
     <View style={styles.gender}>{([['M','남성'],['F','여성'],['O','선택하지 않음']] as const).map(([value, label]) => <Pressable key={value} onPress={() => setGender(value)} style={({ pressed }) => [styles.genderItem, pressed && styles.pressed]}><View style={[styles.radio, gender === value && styles.radioOn]}>{gender === value ? <View style={styles.dot}/> : null}</View><Text style={[styles.genderText, gender === value && styles.selected]}>{label}</Text></Pressable>)}</View>
-    <View style={[styles.field, { left: 38, top: 294, width: 124 }]}><Text style={styles.fieldLabel}>성함</Text><View style={styles.inputWrap}><TextInput onChangeText={setName} placeholder="입력해 주세요" placeholderTextColor="rgba(255,255,255,.35)" style={styles.input} value={name}/></View></View>
-    <PickerField label="생년월일" value={birth ? `${birth.year}. ${pad(birth.month)}. ${pad(birth.day)}` : undefined} left={237} top={294} width={124} onPress={() => setPicker('birth')}/>
-    <PickerField label="신장" value={height?.toString()} left={38} top={392} width={124} unit="cm" onPress={() => setPicker('height')}/>
-    <PickerField label="체중" value={weight?.toString()} left={237} top={392} width={124} unit="kg" onPress={() => setPicker('weight')}/>
+    <View style={[styles.field, { left: 38, top: 274, width: 124 }]}><Text style={styles.fieldLabel}>성함</Text><View style={styles.inputWrap}><TextInput onChangeText={setName} placeholder="입력해 주세요" placeholderTextColor="rgba(255,255,255,.35)" style={styles.input} value={name}/></View></View>
+    <PickerField label="생년월일" value={birth ? `${birth.year}. ${pad(birth.month)}. ${pad(birth.day)}` : undefined} left={237} top={274} width={124} onPress={() => setPicker('birth')}/>
+    <PickerField label="신장" value={height?.toString()} left={38} top={372} width={124} unit="cm" onPress={() => setPicker('height')}/>
+    <PickerField label="체중" value={weight?.toString()} left={237} top={372} width={124} unit="kg" onPress={() => setPicker('weight')}/>
     <FigmaButton disabled={!complete} onPress={next} style={styles.button}>다음</FigmaButton>
     {picker ? <WheelPickerModal
       columns={columns}
@@ -87,8 +87,8 @@ function getColumns(picker: PickerType | null, birth: { year: number; month: num
 function pad(value: number) { return String(value).padStart(2, '0'); }
 
 const styles = StyleSheet.create({
-  title: { position: 'absolute', left: 27, right: 27, top: 108, color: colors.white, fontSize: 20, fontWeight: '800', textAlign: 'center' }, subtitle: { position: 'absolute', left: 27, right: 27, top: 143, color: colors.white, fontSize: 14, textAlign: 'center' }, pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  labelGender: { position: 'absolute', left: 38, top: 203, color: colors.white, fontSize: 17, fontWeight: '700' }, gender: { position: 'absolute', left: 38, right: 35, top: 233, flexDirection: 'row', justifyContent: 'space-between' }, genderItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  title: { position: 'absolute', left: 27, right: 27, top: 88, color: colors.white, fontSize: 20, fontWeight: '800', textAlign: 'center' }, subtitle: { position: 'absolute', left: 27, right: 27, top: 123, color: colors.white, fontSize: 14, textAlign: 'center' }, pressed: pressFeedback,
+  labelGender: { position: 'absolute', left: 38, top: 183, color: colors.white, fontSize: 17, fontWeight: '700' }, gender: { position: 'absolute', left: 38, right: 35, top: 213, flexDirection: 'row', justifyContent: 'space-between' }, genderItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' }, radioOn: { borderColor: colors.primary }, dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }, genderText: { color: colors.white, fontSize: 15, fontWeight: '700' }, selected: { color: colors.primary },
-  field: { position: 'absolute' }, fieldLabel: { color: colors.white, fontSize: 17, fontWeight: '700', marginBottom: 14 }, inputWrap: { height: 43, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', borderRadius: 11, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: colors.white, fontSize: 15, fontWeight: '700', paddingHorizontal: 12 }, pickerValue: { flex: 1, color: colors.white, fontSize: 13, fontWeight: '700', paddingLeft: 10 }, placeholder: { color: 'rgba(255,255,255,.45)', fontSize: 12 }, unit: { color: colors.white, fontSize: 13, fontWeight: '700', marginRight: 25 }, chevron: { position: 'absolute', right: 8 }, button: { top: 606 },
+  field: { position: 'absolute' }, fieldLabel: { color: colors.white, fontSize: 17, fontWeight: '700', marginBottom: 14 }, inputWrap: { height: 43, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)', borderRadius: 11, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: colors.white, fontSize: 15, fontWeight: '700', paddingHorizontal: 12 }, pickerValue: { flex: 1, color: colors.white, fontSize: 13, fontWeight: '700', paddingLeft: 10 }, placeholder: { color: 'rgba(255,255,255,.45)', fontSize: 12 }, unit: { color: colors.white, fontSize: 13, fontWeight: '700', marginRight: 25 }, chevron: { position: 'absolute', right: 8 }, button: { top: 586 },
 });

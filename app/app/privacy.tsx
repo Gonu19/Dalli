@@ -13,7 +13,7 @@ import { getProfilePhotoUri, setProfilePhotoUri } from '@/src/components/profile
 import { PurposePickerModal, purposeLabel } from '@/src/components/purpose-picker-modal';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import { WheelPickerModal, type WheelColumn } from '@/src/components/wheel-picker-modal';
-import { colors } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const years = Array.from({ length: 76 }, (_, index) => String(1940 + index));
 const months = Array.from({ length: 12 }, (_, index) => String(index + 1));
@@ -21,8 +21,6 @@ const days = Array.from({ length: 31 }, (_, index) => String(index + 1));
 const heightIntegers = Array.from({ length: 91 }, (_, index) => String(130 + index));
 const weightIntegers = Array.from({ length: 116 }, (_, index) => String(35 + index));
 const decimals = Array.from({ length: 10 }, (_, index) => String(index));
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 type BirthDate = { year: number; month: number; day: number };
 type PickerType = 'birth' | 'height' | 'weight';
 type Gender = 'M' | 'F' | 'O';
@@ -52,7 +50,6 @@ function PrivacyForm({ profile, token, onClose }: {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoPicking, setPhotoPicking] = useState(false);
   const [picker, setPicker] = useState<PickerType | null>(null);
-  const saveScale = useRef(new Animated.Value(1)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
   const columns = getColumns(picker, birth, height, weight);
 
@@ -63,14 +60,6 @@ function PrivacyForm({ profile, token, onClose }: {
     });
     return () => { mounted = false; };
   }, []);
-
-  const animateSave = (toValue: number) => Animated.spring(saveScale, {
-    damping: 14,
-    mass: 0.45,
-    stiffness: 360,
-    toValue,
-    useNativeDriver: true,
-  }).start();
 
   const save = () => update.mutateAsync({
     runningPurpose: purpose,
@@ -161,14 +150,12 @@ function PrivacyForm({ profile, token, onClose }: {
     <ScrollHeaderScrim scrollY={scrollY} />
     <FigmaBack onPress={onClose} />
     <Text style={styles.header}>개인정보 수정</Text>
-    <AnimatedPressable
+    <Pressable
       accessibilityRole="button"
       disabled={update.isPending}
       onPress={() => void save()}
-      onPressIn={() => animateSave(0.9)}
-      onPressOut={() => animateSave(1)}
-      style={[styles.save, update.isPending && styles.savePending, { transform: [{ scale: saveScale }] }]}
-    ><Text style={styles.saveText}>{update.isPending ? '저장 중' : '저장'}</Text></AnimatedPressable>
+      style={({ pressed }) => [styles.save, update.isPending && styles.savePending, pressed && !update.isPending && styles.pressed]}
+    ><Text style={styles.saveText}>{update.isPending ? '저장 중' : '저장'}</Text></Pressable>
     {picker ? <WheelPickerModal
       columns={columns}
       onCancel={() => setPicker(null)}
@@ -225,11 +212,11 @@ function pad(value: number) {
 }
 
 const styles = StyleSheet.create({
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  content: { minHeight: 810, paddingBottom: 125 },
-  header: { position: 'absolute', top: 23, alignSelf: 'center', zIndex: 10, color: colors.white, fontSize: 17, fontWeight: '700' },
+  pressed: pressFeedback,
+  content: { minHeight: 810, paddingBottom: 125, transform: [{ translateY: -navigationHeader.contentLift }] },
+  header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', zIndex: 10, color: colors.white, fontSize: 17, fontWeight: '700' },
   avatar: { position: 'absolute', left: 40, top: 93, width: 90, height: 90, borderRadius: 45, backgroundColor: colors.primary, alignItems: 'center' },
-  avatarPressed: { opacity: 0.78, transform: [{ scale: 0.95 }] },
+  avatarPressed: pressFeedback,
   avatarImage: { width: 90, height: 90, borderRadius: 45 },
   cameraBadge: { position: 'absolute', right: -2, bottom: 1, width: 29, height: 29, borderRadius: 15, borderWidth: 2, borderColor: colors.black, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   head: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.black, marginTop: 19 },

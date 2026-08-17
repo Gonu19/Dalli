@@ -3,7 +3,7 @@ import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { RunningPurpose } from '@/src/api/client';
-import { colors } from '@/src/theme/tokens';
+import { colors, pressFeedback } from '@/src/theme/tokens';
 
 const accessibleOrange = '#C64B2F';
 
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   options: { gap: 7, marginTop: 18 },
   option: { minHeight: 62, borderRadius: 18, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,.6)' },
   optionSelected: { borderColor: 'rgba(198,75,47,.72)', backgroundColor: 'rgba(255,122,89,.16)' },
-  optionPressed: { transform: [{ scale: 0.98 }], backgroundColor: 'rgba(28,26,26,.1)' },
+  optionPressed: pressFeedback,
   icon: { width: 38, height: 38, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,.72)' },
   iconSelected: { backgroundColor: colors.primary },
   optionCopy: { flex: 1 },
