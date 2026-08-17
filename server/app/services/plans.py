@@ -78,7 +78,14 @@ def create_plan(db: Session, user: User, payload: PlanCreate) -> PlanResponse:
         raise
 
 
-def list_plans(db: Session, user: User, date_from, date_to) -> PlanListResponse:
+def list_plans(
+    db: Session,
+    user: User,
+    date_from,
+    date_to,
+    *,
+    today: date | None = None,
+) -> PlanListResponse:
     if date_from > date_to:
         raise ApplicationError(
             code="VALIDATION_ERROR", message="from은 to보다 늦을 수 없습니다.", status_code=422
@@ -89,7 +96,7 @@ def list_plans(db: Session, user: User, date_from, date_to) -> PlanListResponse:
         .options(selectinload(Plan.run))
         .order_by(Plan.planned_date, Plan.id)
     ).all()
-    today = datetime.now(KST).date()
+    today = today or datetime.now(KST).date()
     return PlanListResponse(
         items=[plan_response(plan, derive_status=True, today=today) for plan in plans]
     )

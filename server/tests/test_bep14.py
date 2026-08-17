@@ -8,7 +8,7 @@ from app.main import create_app
 from app.models import Run
 from app.schemas.plans import PlanCreate, PlanUpdate
 from app.services.calendar import month_bounds_utc
-from app.services.plans import effective_plan_status
+from app.services.plans import effective_plan_status, list_plans
 from app.services.runs import _decode_cursor, _encode_cursor
 from app.services.stats import _utc_boundaries
 
@@ -86,6 +86,43 @@ def test_plan_status_derivation_preserves_explicit_done_or_skipped(
         )
         == expected
     )
+
+
+def test_list_plans_uses_injected_today_without_writing_stored_status() -> None:
+    user = type("UserStub", (), {"id": uuid4()})()
+    plan = type(
+        "PlanStub",
+        (),
+        {
+            "id": uuid4(),
+            "user_id": user.id,
+            "planned_date": date(2026, 8, 16),
+            "goal_type": "TIME",
+            "goal_value": 600,
+            "memo": None,
+            "status": "PLANNED",
+            "run": None,
+        },
+    )()
+
+    class ScalarResult:
+        def all(self):
+            return [plan]
+
+    class ReadOnlySession:
+        def scalars(self, _query):
+            return ScalarResult()
+
+    response = list_plans(
+        ReadOnlySession(),
+        user,
+        date(2026, 8, 1),
+        date(2026, 8, 31),
+        today=date(2026, 8, 17),
+    )
+
+    assert response.items[0].status == "SKIPPED"
+    assert plan.status == "PLANNED"
 
 
 def test_plan_contract_rejects_invalid_goal_and_undocumented_patch_fields() -> None:
