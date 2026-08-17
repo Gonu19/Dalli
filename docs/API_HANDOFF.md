@@ -21,7 +21,7 @@
 | 러닝 목적 | `COMPLETE \| HABIT \| WEIGHT \| FITNESS \| PERFORMANCE` |
 | 컨디션 | 피곤함 `1`, 보통 `3`, 가벼움 `5` |
 | 러닝 업로드 | 같은 `client_run_id` 재전송 가능. 최초 201, 기존 데이터 200 |
-| 리포트 생성 | 최초 생성 후 같은 run 재호출은 기존 리포트 200 |
+| 리포트 생성 | 정상·fallback·기존 리포트 재요청 모두 200 |
 | 분석 불가 | 러닝은 저장된다. 지표는 `null`, 사유는 `analysis_limitation`/리포트 `limitation` |
 | 계획 | 사용자별 날짜당 1개, 계획당 연결 러닝 1개 |
 | 수기 기록 | 목표·케이던스·samples/events·AI 리포트 없음 |
@@ -54,7 +54,7 @@
 | GET | `/runs?limit=&cursor=` | O | 200 | 분석 목록·최근 러닝 |
 | GET | `/runs/{run_id}` | O | 200 | 러닝 상세 |
 | DELETE | `/runs/{run_id}` | O | 204 | 기록 삭제 |
-| POST | `/runs/{run_id}/report` | O | 201/200 | 리포트 생성·기존 조회 |
+| POST | `/runs/{run_id}/report` | O | 200 | 리포트 생성·기존 조회 |
 | GET | `/runs/{run_id}/report` | O | 200 | 저장된 리포트 조회 |
 | GET | `/plans?from=&to=` | O | 200 | 홈·기록 |
 | POST | `/plans` | O | 201 | 계획 생성 |
@@ -144,3 +144,41 @@ npx openapi-typescript http://localhost:8000/openapi.json -o app/src/types/api.t
 핵심 schema가 포함되는지만 확인한 뒤 임시 파일을 폐기한다. 프로젝트에 도구가
 설치되어 있으면 해당 버전을 우선 사용하고, 없으면 `npx`가 임시로 내려받은 버전을
 사용한다. 이를 위해 최초 실행 시 npm registry 네트워크 접근이 필요할 수 있다.
+
+## 9. 현재 백엔드·fixture·Mock 상태
+
+### 상태 코드·OpenAPI 확인
+
+- 실제 FastAPI `POST /runs/{run_id}/report`는 정상 LLM, disabled/failure fallback,
+  기존 리포트 재요청 모두 `200`이다. `GET /runs/{run_id}/report`도 성공 시 `200`이다.
+- 실제 FastAPI `POST /runs`만 최초 생성 `201`, 동일 사용자·`client_run_id` 재요청
+  `200`이다. report POST의 규칙과 섞지 않는다.
+- report 라우터의 POST 성공 코드는 `200` 하나이며, 관련 테스트가 `200`·인증·not
+  found·validation 응답을 확인한다. run 테스트는 최초 `201`·재요청 `200`을 확인한다.
+- 전체 계약·응답 필드·enum·nullable 규칙은 [`CONTRACT.md`](CONTRACT.md)가 우선한다.
+
+### Alembic·Seed
+
+- `server/`에서 확인한 `alembic history`는
+  `0001_initial_schema -> 5675c9406342`이며, `alembic heads`의 단일 head는
+  `5675c9406342`다.
+- 로컬 실행 절차는 `server/README.md`를 따른다. migration은 `alembic upgrade head`로
+  별도 실행하고, 이번 문서 정리에서는 migration 파일을 수정하거나 DB에 적용하지
+  않았다.
+- Seed 실행 위치는 `server/`이며 명령은 `python -m app.seed`다. `.env`의
+  `APP_ENV=development` 또는 `APP_ENV=test`에서만 실행할 수 있고, 실행 전 현재
+  Alembic head를 요구한다. 운영·공유 DB에서는 실행하지 않는다.
+
+### fixture·Mock 지원 범위와 차이
+
+- [`api-fixtures.json`](mock-data/api-fixtures.json)의 report `normal`, `fallback`,
+  `insufficient_data`는 모두 `200`이며, 각각 `is_fallback`과 `limitation` 규칙을
+  반영한다. run `created`는 `201`, `idempotent`는 `200`이다.
+- `server/app/mock_main.py`는 보호 endpoint의 Bearer 인증, run의 메모리 기반
+  `client_run_id` 멱등성, report의 정상/fallback/insufficient_data 시나리오와
+  저장 후 재조회 동작을 지원한다. `X-Mock-Scenario`는 Mock 전용이며 production
+  요청에는 사용하지 않는다.
+- 다음은 현재 Mock의 제한이며 이번 범위에서는 코드를 수정하지 않았다
+  (`fixture/Mock 결함`): 저장되지 않은 report의 GET을 실제 API의 `404` 대신 normal
+  fixture `200`으로 반환하고, 요청의 전체 필드·enum·nullable 검증과 404/409 등 모든
+  backend 오류 경로를 완전히 재현하지 않는다. 실 API 검증 결과로 오인하지 않는다.

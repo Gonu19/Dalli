@@ -36,7 +36,11 @@
 cd app && npm i && npx expo start
 
 # server
-cd server && cp .env.example .env && docker compose up -d && alembic upgrade head && python seed.py
+cd server
+cp .env.example .env      # APP_ENV=development 확인
+docker compose up -d
+alembic upgrade head
+python -m app.seed         # development/test 전용; 운영·공유 DB에서는 실행 금지
 ```
 
 ## 팀
