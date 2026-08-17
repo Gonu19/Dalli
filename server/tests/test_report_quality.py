@@ -93,6 +93,28 @@ def test_unsupported_numeric_claim_is_rejected_but_documented_rounding_passes() 
     assert unsupported.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
 
 
+def test_routine_numbers_are_allowed_in_habit_evidence_only() -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    routine_summary = {
+        **summary,
+        "this_week_plan_done": 1,
+        "this_week_plan_total": 2,
+    }
+    non_habit = evaluate_report_output(
+        {**payload, "evidence": ["이번 주 2회 중 1회 계획을 완료했어요."]},
+        fallback,
+        routine_summary,
+    )
+    habit = evaluate_report_output(
+        {**payload, "evidence": ["이번 주 2회 중 1회 계획을 완료했어요."]},
+        fallback,
+        {**routine_summary, "running_purpose": "HABIT"},
+    )
+
+    assert non_habit.reasons == (HardGateReason.ROUTINE_EVIDENCE_NOT_ALLOWED,)
+    assert habit.passed is True
+
+
 @pytest.mark.parametrize(
     ("field", "text", "reason"),
     [

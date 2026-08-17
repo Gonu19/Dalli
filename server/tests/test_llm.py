@@ -177,6 +177,37 @@ def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:
     assert summary["days_since_last_run"] == 3
 
 
+@pytest.mark.parametrize(
+    "purpose",
+    ("COMPLETE", "HABIT", "WEIGHT", "FITNESS", "PERFORMANCE"),
+)
+def test_safe_summary_includes_common_routine_fields_for_every_purpose(purpose) -> None:
+    owner = User(
+        id=uuid4(),
+        device_uuid=f"summary-{purpose.lower()}",
+        running_purpose=purpose,
+        weekly_goal_count=3,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    current = run()
+    current.user = owner
+    owner.runs = [current]
+    owner.plans = []
+
+    quality = assess_run_quality(current)
+    metrics = compute_run_metrics(current, quality)
+    fallback = build_fallback_report(current, quality, metrics)
+    summary = _safe_summary(current, quality, metrics, fallback, now=NOW)
+
+    assert summary["running_purpose"] == purpose
+    assert summary["weekly_goal_count"] == 3
+    assert summary["this_week_run_count"] == 1
+    assert summary["days_since_last_run"] is None
+    assert summary["this_week_plan_done"] == 0
+    assert summary["this_week_plan_total"] == 0
+
+
 def test_safe_summary_reuses_kst_week_counts_for_runs_and_plans() -> None:
     reference = datetime(2026, 8, 18, 3, tzinfo=timezone.utc)
     owner = User(

@@ -31,6 +31,7 @@ class LLMReportContent(BaseModel):
 class HardGateReason(StrEnum):
     SCHEMA_INVALID = "SCHEMA_INVALID"
     EVIDENCE_COUNT_INVALID = "EVIDENCE_COUNT_INVALID"
+    ROUTINE_EVIDENCE_NOT_ALLOWED = "ROUTINE_EVIDENCE_NOT_ALLOWED"
     PROTECTED_VALUE_CHANGED = "PROTECTED_VALUE_CHANGED"
     LIMITATION_CHANGED = "LIMITATION_CHANGED"
     UNSUPPORTED_NUMERIC_CLAIM = "UNSUPPORTED_NUMERIC_CLAIM"
@@ -88,6 +89,15 @@ NUMBER_PATTERN = re.compile(
 RHYTHM_TARGET_PATTERN = re.compile(r"리듬\s*([-+]?\d+(?:\.\d+)?)")
 RHYTHM_RANGE_PATTERN = re.compile(
     r"리듬\s*([-+]?\d+(?:\.\d+)?)\s*(?:~|-|–)\s*([-+]?\d+(?:\.\d+)?)"
+)
+ROUTINE_EVIDENCE_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"(?:이번\s*주|주간).{0,30}\d+\s*(?:회|일|개)?",
+        r"\d+\s*회\s*중\s*\d+\s*회",
+        r"(?:계획|플랜).{0,30}\d+\s*(?:개|회|일)?",
+        r"(?:간격|직전\s*러닝|마지막\s*러닝|쉬고).{0,30}\d+\s*일",
+    )
 )
 
 
@@ -190,7 +200,14 @@ def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]
     next_max = summary.get("next_target_max")
     if isinstance(next_min, int) and isinstance(next_max, int):
         add("spm", round((next_min + next_max) / 2))
-    for key in ("intervention_count", "downshift_count"):
+    for key in (
+        "intervention_count",
+        "downshift_count",
+        "weekly_goal_count",
+        "this_week_run_count",
+        "this_week_plan_done",
+        "this_week_plan_total",
+    ):
         add("회", summary.get(key))
     return allowed
 
@@ -229,6 +246,19 @@ def _has_unsupported_numeric_claim(
                 if unit is None and number not in allowed:
                     return True
     return False
+
+
+def _has_forbidden_routine_evidence(
+    content: LLMReportContent,
+    summary: Mapping[str, object],
+) -> bool:
+    if summary.get("running_purpose") == "HABIT":
+        return False
+    return any(
+        pattern.search(evidence) is not None
+        for evidence in content.evidence
+        for pattern in ROUTINE_EVIDENCE_PATTERNS
+    )
 
 
 def _next_goal_contradicts(
@@ -294,6 +324,8 @@ def evaluate_report_output(
         _add_reason(reasons, HardGateReason.LIMITATION_CHANGED)
     if _has_unsupported_numeric_claim(content, summary):
         _add_reason(reasons, HardGateReason.UNSUPPORTED_NUMERIC_CLAIM)
+    if _has_forbidden_routine_evidence(content, summary):
+        _add_reason(reasons, HardGateReason.ROUTINE_EVIDENCE_NOT_ALLOWED)
     joined = " ".join(_all_text(content))
     if any(pattern.search(joined) for pattern in MEDICAL_PATTERNS):
         _add_reason(reasons, HardGateReason.MEDICAL_CLAIM_DETECTED)
