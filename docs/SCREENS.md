@@ -5,7 +5,7 @@
 ## 라우팅 트리
 | 경로 | 파일 | 화면 |
 | --- | --- | --- |
-| — | `app/_layout.tsx` | 루트 (Provider, 온보딩 여부 분기, **미완료 세션 복구**) |
+| — | `app/_layout.tsx` | 루트 (Provider, 온보딩 여부 분기, **미완료 세션 자동 저장·재업로드**) |
 | `/onboarding` | `app/onboarding/index.tsx` | 목적·경험·목표 입력 |
 | `/onboarding/body` | `app/onboarding/body.tsx` | **신체 정보 (선택·건너뛰기 가능)** |
 | `/onboarding/cadence` | `app/onboarding/cadence.tsx` | 기준 리듬 확인 |
@@ -19,7 +19,7 @@
 | `/settings` | `app/settings.tsx` | 설정 (신체 정보 수정·보완) |
 
 기본 탭 = 홈(가운데). 온보딩 미완료면 루트에서 `/onboarding`으로 redirect.
-**앱 강제 종료 등으로 미완료 로컬 세션이 남아 있으면 루트에서 `재개 / 저장 / 버리기` 시트를 먼저 띄운다.**
+**앱 강제 종료 등으로 미완료 로컬 세션이 남아 있으면 끊긴 지점까지를 `completed: false`로 자동 저장하고 업로드 큐에 넣는다.** 끊긴 동안의 시간·걸음을 알 수 없어 지표가 왜곡되므로 세션을 이어서 재개하지 않는다. 3분 미만 조각은 분석 불가 기록이므로 복구하지 않는다.
 
 ## 화면 명세
 

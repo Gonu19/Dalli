@@ -17,7 +17,7 @@ export default function ExperienceScreen() {
     <Text style={styles.title}>현재 러닝 경험을 선택해주세요</Text>
     <View style={styles.options}>{options.map((item, index) => <FigmaRadio key={item.label} label={item.label} selected={selected === index} onPress={() => updateDraft({ experienceChoice: index, experienceLevel: item.level, maxContinuousMin: item.minutes })} />)}</View>
     <FigmaButton disabled={selected === undefined} onPress={() => router.push('/onboarding/purpose')} style={styles.button}>다음</FigmaButton>
-    <Text onPress={() => router.replace('/onboarding/cadence')} style={styles.skip}>전체 건너뛰기</Text>
+    <Text onPress={() => { updateDraft({ purpose: 'COMPLETE', experienceLevel: 0, maxContinuousMin: 10, weeklyGoalCount: 3 }); router.replace('/onboarding/cadence'); }} style={styles.skip}>전체 건너뛰기</Text>
   </FigmaScreen>;
 }
 const styles=StyleSheet.create({title:{position:'absolute',left:27,right:27,top:88,color:colors.white,fontSize:20,fontWeight:'800',textAlign:'center'},options:{position:'absolute',left:38,top:165,right:30},button:{top:586},skip:{position:'absolute',top:659,alignSelf:'center',color:'#A0A0A0',fontSize:13,textDecorationLine:'underline'}});
