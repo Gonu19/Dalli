@@ -1,4 +1,5 @@
-import MapView, { Polyline } from 'react-native-maps';
+import MapView, { Polyline, type Region } from 'react-native-maps';
+import { useEffect, useRef } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { getRoutePath, type RoutePoint } from '@/src/store/runController';
@@ -33,6 +34,18 @@ type Props = {
  */
 export function RunMap({ live = false, style, interactive = false }: Props) {
   const path = getRoutePath();
+  const mapRef = useRef<MapView>(null);
+  const framedCount = useRef(0);
+
+  /**
+   * `initialRegion`은 마운트 때 한 번만 적용된다. 첫 GPS fix는 그 뒤에 오므로
+   * 그것만 두면 지도가 전 세계 뷰에 머문다. 점이 들어올 때마다 카메라를 옮긴다.
+   */
+  useEffect(() => {
+    if (path.length === 0 || path.length === framedCount.current) return;
+    framedCount.current = path.length;
+    mapRef.current?.animateToRegion(regionFor(path), 500);
+  }, [path]);
 
   if (path.length === 0 && !live) {
     return (
@@ -47,6 +60,7 @@ export function RunMap({ live = false, style, interactive = false }: Props) {
       <MapView
         followsUserLocation={live}
         initialRegion={path.length > 0 ? regionFor(path) : undefined}
+        ref={mapRef}
         pitchEnabled={false}
         pointerEvents={interactive ? 'auto' : 'none'}
         rotateEnabled={false}
@@ -64,7 +78,7 @@ export function RunMap({ live = false, style, interactive = false }: Props) {
 }
 
 /** 경로 전체가 보이도록 중심과 배율을 잡는다. */
-function regionFor(path: readonly RoutePoint[]) {
+function regionFor(path: readonly RoutePoint[]): Region {
   const latitudes = path.map((point) => point.latitude);
   const longitudes = path.map((point) => point.longitude);
 
