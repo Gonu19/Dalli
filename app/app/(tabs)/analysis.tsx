@@ -10,7 +10,7 @@ import { FigmaLogo } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, pressFeedback } from '@/src/theme/tokens';
 
 export default function Analysis() {
   const router = useRouter();
@@ -39,7 +39,7 @@ export default function Analysis() {
 
   return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
     <View style={styles.frame}>
-      <FigmaLogo left={24} />
+      <FigmaLogo top={31} left={24} />
       <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
         <Ionicons color={colors.white} name="settings-outline" size={26} />
       </Pressable>
@@ -130,9 +130,9 @@ function formatTime(value: number) {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  settings: { position: 'absolute', right: 25, top: 31, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   iconPressed: compactPressFeedback,
-  content: { paddingTop: 102 - navigationHeader.contentLift, paddingHorizontal: 27, paddingBottom: 40 },
+  content: { paddingTop: 102, paddingHorizontal: 27, paddingBottom: 40 },
   section: { color: colors.white, fontSize: 17, fontWeight: '700', marginLeft: 10 },
   summary: { height: 86, borderRadius: 20, backgroundColor: colors.white, marginTop: 15, flexDirection: 'row' },
   summaryItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
