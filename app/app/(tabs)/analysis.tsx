@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRef } from 'react';
-import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunListItem } from '@/src/api/client';
 import { useDeleteRun, useRuns } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
@@ -63,7 +64,7 @@ export default function Analysis() {
         <Text style={[styles.section, { marginTop: 28 }]}>러닝 분석</Text>
         {runs.data?.length === 0
           ? <View style={styles.empty}>
-              <FigmaLogo top={83} left={119} />
+              <FigmaLogo centered top={83} />
               <Text style={styles.emptyLine}>첫 러닝을 완료하면 분석이 생겨요!</Text>
               <Text style={styles.emptyLine2}>달리와 함께 달려볼까요?</Text>
               <Pressable onPress={() => router.push('/')} style={({ pressed }) => [styles.prepare, pressed && styles.buttonPressed]}>

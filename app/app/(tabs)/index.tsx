@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
 import { usePlans, useProfile, useRuns, useStats } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
 import { StatePanel } from '@/src/components/state-panel';
 import type { ConditionLevel } from '@/src/engine/types';

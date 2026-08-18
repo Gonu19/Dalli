@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Linking, StyleSheet, Text, View } from 'react-native';
 import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
@@ -11,6 +12,19 @@ export default function Finish(){
   const router=useRouter();
   const{result,setPhotoUri}=useRunResult();
   const[picking,setPicking]=useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void ImagePicker.getPendingResultAsync().then((pending) => {
+      if (!active || pending === null || 'code' in pending || pending.canceled || !pending.assets?.[0]?.uri) return;
+      setPhotoUri(pending.assets[0].uri);
+      router.replace('/run/image');
+    }).catch(() => {
+      // 복구 실패는 러닝 결과 화면을 막지 않는다.
+    });
+    return () => { active = false; };
+  }, [router, setPhotoUri]);
+
   if(!result)return <FigmaScreen/>;
   const r=result.record;
   const minutes=Math.round(r.durationSec/60);
@@ -33,8 +47,8 @@ export default function Finish(){
         return;
       }
       const picked = source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [9, 16], mediaTypes: ['images'], quality: 0.9 })
-        : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [9, 16], mediaTypes: ['images'], quality: 0.9 });
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
       if (picked.canceled || !picked.assets[0]?.uri) return;
       setPhotoUri(picked.assets[0].uri);
       router.push('/run/image');

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
+import { triggerSelectionHaptic } from './haptics';
 
 type Props = {
   label: string;
@@ -13,7 +14,10 @@ export function ChoiceCard({ label, selected, onPress }: Props) {
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
-      onPress={onPress}
+      onPress={() => {
+        triggerSelectionHaptic();
+        onPress();
+      }}
       style={({ pressed }) => [styles.card, selected && styles.selected, pressed && styles.pressed]}>
       <View style={[styles.radio, selected && styles.radioSelected]}>{selected ? <View style={styles.dot} /> : null}</View>
       <Text style={[styles.label, selected && styles.selectedLabel]}>{label}</Text>

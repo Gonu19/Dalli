@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { FigmaButton, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useProfile } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { useSimulationStore } from '@/src/store/simulation';

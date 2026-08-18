@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { FigmaButton, FigmaScreen, OnboardingTop } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useOnboarding, type Gender } from '@/src/components/onboarding-provider';
 import { WheelPickerModal, type WheelColumn } from '@/src/components/wheel-picker-modal';
 import { colors, pressFeedback } from '@/src/theme/tokens';

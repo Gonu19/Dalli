@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, compactPressFeedback, typography } from '@/src/theme/tokens';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 
 import AnalysisScreen from './analysis';
 import HomeScreen from './index';

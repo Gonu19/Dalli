@@ -2,9 +2,10 @@ import { Picker } from '@react-native-picker/picker';
 import { GlassView } from 'expo-glass-effect';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 
 import { colors, pressFeedback } from '@/src/theme/tokens';
+import { HapticPressable as Pressable } from './haptics';
 
 const PICKER_HEIGHT = 216;
 

@@ -3,12 +3,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useProfile, useUpdateProfile } from '@/src/api/queries';
 import type { RunningPurpose } from '@/src/api/client';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { getProfilePhotoUri, setProfilePhotoUri } from '@/src/components/profile-photo';
 import { PurposePickerModal, purposeLabel } from '@/src/components/purpose-picker-modal';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';

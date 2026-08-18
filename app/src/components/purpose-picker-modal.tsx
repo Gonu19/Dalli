@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, View } from 'react-native';
 
 import type { RunningPurpose } from '@/src/api/client';
 import { colors, pressFeedback } from '@/src/theme/tokens';
+import { HapticPressable as Pressable } from './haptics';
 
 const accessibleOrange = '#C64B2F';
 

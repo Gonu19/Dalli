@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { usePreferences } from '@/src/components/preferences-provider';
 import { WheelPickerModal } from '@/src/components/wheel-picker-modal';
 import { CONDITION_VALUE } from '@/src/engine/constants';
@@ -28,8 +29,7 @@ export default function RunPrepare() {
   const [cadence, setCadence] = useState<number | null>(referenceCadence);
   const [minutes, setMinutes] = useState<number | null>(null);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
-  const [vibration, setVibration] = useState(false);
-  const { voiceEnabled, metronomeEnabled, setVoiceEnabled, setMetronomeEnabled } = usePreferences();
+  const { voiceEnabled, metronomeEnabled, hapticsEnabled, setVoiceEnabled, setMetronomeEnabled, setHapticsEnabled } = usePreferences();
 
   const begin = async () => {
     if (cadence === null || minutes === null) return;
@@ -78,7 +78,7 @@ export default function RunPrepare() {
       <Text style={styles.cardTitle}>러닝 가이드 방식</Text>
       <Toggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled} />
       <Toggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled} />
-      <Toggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={vibration} onChange={setVibration} />
+      <Toggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled} />
     </View>
     <Pressable disabled={cadence === null || minutes === null} onPress={() => void begin()} style={({ pressed }) => [styles.start, (cadence === null || minutes === null) && styles.disabledStart, pressed && styles.buttonPressed]}>
       <Ionicons color={colors.white} name="play" size={20} /><Text style={styles.startText}>러닝 시작하기</Text>

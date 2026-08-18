@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Image, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { isOfflineError, type CalendarDay } from '@/src/api/client';
 import { useCalendar, useCreateManualRun, useCreatePlan, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
-import { FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
-import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
+import { Screen } from '@/src/components/screen';
 import { StatePanel } from '@/src/components/state-panel';
 import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
@@ -80,10 +80,12 @@ export default function RecordScreen() {
     }
   };
 
-  if (calendar.isPending || stats.isPending) return <FigmaScreen includeBottomSafeArea={false}><StatePanel loading title="기록을 불러오는 중이에요" body="캘린더와 누적 활동일을 확인하고 있어요." /></FigmaScreen>;
-  if (calendar.error || stats.error) return <FigmaScreen includeBottomSafeArea={false}><StatePanel title={isOfflineError(calendar.error ?? stats.error) ? '오프라인 상태예요' : '기록을 불러오지 못했어요'} body="저장된 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="다시 시도" onAction={() => { void calendar.refetch(); void stats.refetch(); }} /></FigmaScreen>;
+  if (calendar.isPending || stats.isPending) return <Screen includeBottomSafeArea={false}><StatePanel loading title="기록을 불러오는 중이에요" body="캘린더와 누적 활동일을 확인하고 있어요." /></Screen>;
+  if (calendar.error || stats.error) return <Screen includeBottomSafeArea={false}><StatePanel title={isOfflineError(calendar.error ?? stats.error) ? '오프라인 상태예요' : '기록을 불러오지 못했어요'} body="저장된 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="다시 시도" onAction={() => { void calendar.refetch(); void stats.refetch(); }} /></Screen>;
 
-  return <FigmaScreen includeBottomSafeArea={false}>
+  return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
+    <View style={styles.frame}>
+    <View pointerEvents="none" style={styles.headerSurface} />
     <Text style={styles.header}>누적 <Text style={styles.headerAccent}>달리 데이</Text> {stats.data?.dalliDays ?? '—'}일</Text>
     <Animated.ScrollView
       contentContainerStyle={styles.scrollContent}
@@ -164,8 +166,6 @@ export default function RecordScreen() {
       </View>
     </View>
     </Animated.ScrollView>
-    <ScrollHeaderScrim scrollY={scrollY} />
-
     <Modal animationType="fade" transparent visible={isModalOpen} onRequestClose={() => setForm(null)}>
       <View style={styles.overlay}><Pressable style={StyleSheet.absoluteFill} onPress={() => setForm(null)}/><Animated.View style={[styles.modalCard,{opacity:modalProgress,transform:[{translateY:modalProgress.interpolate({inputRange:[0,1],outputRange:[34,0]})},{scale:modalProgress.interpolate({inputRange:[0,1],outputRange:[.97,1]})}]}]}>
         <View style={styles.modalTabs}>
@@ -180,7 +180,8 @@ export default function RecordScreen() {
         <Pressable disabled={Number(minutes) <= 0 || isSaving} onPress={() => void save()} style={({ pressed }) => [styles.save, (pressed || isSaving) && styles.buttonPressed, (Number(minutes) <= 0 || isSaving) && styles.buttonDisabled]}><Text style={styles.saveText}>{isSaving ? '저장 중...' : '저장'}</Text></Pressable>
       </Animated.View></View>
     </Modal>
-  </FigmaScreen>;
+    </View>
+  </Screen>;
 }
 
 function Legend({ color, label, outline = false }: { color: string; label: string; outline?: boolean }) { return <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: outline ? 'transparent' : color, borderColor: color }]}/><Text style={styles.legendText}>{label}</Text></View>; }
@@ -212,8 +213,10 @@ function formatUserLabel(id: string | undefined) {
 function makeClientRunId() { return globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 const styles = StyleSheet.create({
+  frame: { flex: 1, position: 'relative' },
   scrollContent: { minHeight: 883 }, screenContent: { position: 'relative', height: 883 },
-  header: { position: 'absolute', top: navigationHeader.titleTop, left: 27, zIndex: 10, color: colors.white, fontSize: 22, lineHeight: 28, fontWeight: '800' }, headerAccent: { color: colors.primary },
+  header: { position: 'absolute', top: navigationHeader.titleTop, left: 27, zIndex: 10, color: colors.white, fontSize: 25, lineHeight: 32, fontWeight: '800' }, headerAccent: { color: colors.primary },
+  headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: 'rgba(28,26,26,.76)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
   profileCard: { position: 'absolute', top: 84, left: 24, right: 24, height: 111, borderRadius: 24, backgroundColor: colors.primary, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 48, height: 48, borderRadius: 24 }, runner: { color: colors.white, fontSize: 17, fontWeight: '800', marginTop: 2 }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 5 }, profileActions: { position: 'absolute', right: 16, bottom: 11 }, profileButton: { minWidth: 104, height: 32, borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' }, profileButtonText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
   calendarCard: { position: 'absolute', top: 223, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { backgroundColor: '#1C1A1A' }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#1C1A1A' }, holidayDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#D94B4B' }, planDot: { backgroundColor: '#9B9B9B' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },

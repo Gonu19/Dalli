@@ -6,12 +6,15 @@ import { configureCues } from '../native/cue-player';
 
 const VOICE_KEY = 'dalli.voiceEnabled';
 const METRONOME_KEY = 'dalli.metronomeEnabled';
+const HAPTICS_KEY = 'dalli.hapticsEnabled';
 
 type ContextValue = {
   voiceEnabled: boolean;
   metronomeEnabled: boolean;
+  hapticsEnabled: boolean;
   setVoiceEnabled: (enabled: boolean) => void;
   setMetronomeEnabled: (enabled: boolean) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
 };
 
 const PreferencesContext = createContext<ContextValue | null>(null);
@@ -32,14 +35,17 @@ async function setPreference(key: string, value: string) {
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [voiceEnabled, setVoiceState] = useState(true);
   const [metronomeEnabled, setMetronomeState] = useState(false);
+  const [hapticsEnabled, setHapticsState] = useState(false);
 
   useEffect(() => {
     void Promise.all([
       getPreference(VOICE_KEY),
       getPreference(METRONOME_KEY),
-    ]).then(([voice, metronome]) => {
+      getPreference(HAPTICS_KEY),
+    ]).then(([voice, metronome, haptics]) => {
       if (voice !== null) setVoiceState(voice === 'true');
       if (metronome !== null) setMetronomeState(metronome === 'true');
+      if (haptics !== null) setHapticsState(haptics === 'true');
     });
   }, []);
 
@@ -53,6 +59,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     void setPreference(METRONOME_KEY, String(enabled));
   }, []);
 
+  const setHapticsEnabled = useCallback((enabled: boolean) => {
+    setHapticsState(enabled);
+    void setPreference(HAPTICS_KEY, String(enabled));
+  }, []);
+
   useEffect(() => {
     configureCues({ voice: voiceEnabled, metronome: metronomeEnabled });
   }, [metronomeEnabled, voiceEnabled]);
@@ -60,9 +71,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     voiceEnabled,
     metronomeEnabled,
+    hapticsEnabled,
     setVoiceEnabled,
     setMetronomeEnabled,
-  }), [metronomeEnabled, setMetronomeEnabled, setVoiceEnabled, voiceEnabled]);
+    setHapticsEnabled,
+  }), [hapticsEnabled, metronomeEnabled, setHapticsEnabled, setMetronomeEnabled, setVoiceEnabled, voiceEnabled]);
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
 }
