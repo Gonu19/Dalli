@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useUploadRun } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
@@ -9,6 +9,7 @@ import { PrimaryButton } from '@/src/components/primary-button';
 import { usePreferences } from '@/src/components/preferences-provider';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
+import { RunMap } from '@/src/components/run-map';
 import { Screen } from '@/src/components/screen';
 import type { JudgeVerdict } from '@/src/engine/types';
 import { attachCues } from '@/src/store/cue-bridge';
@@ -129,7 +130,7 @@ export default function ActiveRunScreen() {
       </View>
       </View>
 
-      {!showGuide ? <Image resizeMode="cover" source={require('@/assets/images/run-map.png')} style={styles.map} /> : null}
+      {!showGuide ? <RunMap live style={styles.map} /> : null}
       {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={vibration} onChange={setVibration}/></View> : null}
       <View style={styles.mapShade} />
       <View style={styles.controls}>

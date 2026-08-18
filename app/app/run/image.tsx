@@ -5,6 +5,7 @@ import { Animated, ImageBackground, Pressable, StyleSheet, Text, View } from 're
 
 import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
+import { RunMap } from '@/src/components/run-map';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
@@ -32,6 +33,8 @@ export default function ResultImage() {
       >
         <View style={styles.photoShade} />
         <FigmaLogo top={13} left={9} />
+        {/* 종료 직후의 경로 스냅샷. 좌표는 메모리에만 있고 서버로 가지 않는다 (`ENGINE.md` §10). */}
+        <View style={styles.routeCard}><RunMap style={styles.routeMap} /></View>
         <View style={styles.overlay}>
           <Text style={styles.photoLabel}>활동 시간</Text>
           <Text style={styles.photoValue}>{record ? format(record.durationSec) : '—'}</Text>
@@ -72,6 +75,8 @@ const styles = StyleSheet.create({
   photo: { width: 267, height: 360, alignSelf: 'center', overflow: 'hidden' },
   photoShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.22)' },
   overlay: { position: 'absolute', left: 24, bottom: 18, gap: 2 },
+  routeCard: { position: 'absolute', right: 12, top: 12, width: 96, height: 96, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,.6)' },
+  routeMap: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%' },
   photoLabel: { color: colors.white, fontSize: 12, marginTop: 6 },
   photoValue: { color: colors.white, fontSize: 17, fontWeight: '700' },
   title: { color: colors.white, fontSize: 17, fontWeight: '700', marginTop: 28 },
