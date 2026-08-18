@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { isOfflineError, type CalendarDay } from '@/src/api/client';
-import { useCalendar, useCreateManualRun, useCreatePlan, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
+import { useCalendar, useCreateManualRun, useCreatePlan, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaScreen } from '@/src/components/figma-ui';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
@@ -22,6 +22,7 @@ export default function RecordScreen() {
   const month = viewDate.getMonth() + 1;
   const calendar = useCalendar(token, year, month);
   const stats = useStats(token);
+  const profile = useProfile(token);
   const createPlan = useCreatePlan(token);
   const updatePlan = useUpdatePlan(token);
   const createManual = useCreateManualRun(token);
@@ -39,6 +40,7 @@ export default function RecordScreen() {
   const selectedRun = selected?.runs[0] ?? null;
   const runDetail = useRunDetail(token, selectedRun?.id ?? null);
   const isSaving = createPlan.isPending || createManual.isPending;
+  const profileLabel = profile.data?.name?.trim() || formatUserLabel(profile.data?.id);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -96,7 +98,7 @@ export default function RecordScreen() {
       <View style={styles.avatar}>{profilePhotoUri
         ? <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage}/>
         : <Ionicons color="#1C1A1A" name="person" size={27}/>}</View>
-      <View><Text style={styles.runner}>내 러닝 프로필</Text><Text style={styles.profileCopy}>저장된 러닝과 계획을 확인할 수 있어요</Text></View>
+      <View><Text style={styles.runner}>{profileLabel}</Text><Text style={styles.profileCopy}>저장된 러닝과 계획을 확인할 수 있어요</Text></View>
       <View style={styles.profileActions}>
         <Pressable
           accessibilityRole="button"
@@ -201,6 +203,10 @@ function getHolidayName(year: number, month: number, day: number) {
 }
 function buildMonth(year: number, month: number) { const first = new Date(year, month - 1, 1).getDay(); const count = new Date(year, month, 0).getDate(); return [...Array<null>(first).fill(null), ...Array.from({ length: count }, (_, i) => i + 1)]; }
 function toDateKey(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+function formatUserLabel(id: string | undefined) {
+  const compactId = id?.replaceAll('-', '').slice(0, 6);
+  return `user-${compactId || '000000'}`;
+}
 function makeClientRunId() { return globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 const styles = StyleSheet.create({
