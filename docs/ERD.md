@@ -15,10 +15,13 @@ erDiagram
         uuid id PK
         text device_uuid UK
         text running_purpose
+        text name
         smallint baseline_cadence
         smallint height_cm
         numeric weight_kg
         smallint birth_year
+        smallint birth_month
+        smallint birth_day
         text gender
     }
     runs {
@@ -57,9 +60,12 @@ CREATE TABLE users (
     max_continuous_min  SMALLINT,
     weekly_goal_count   SMALLINT,
     baseline_cadence    SMALLINT,        -- Onboarding baseline (spm)
+    name                TEXT,
     height_cm           SMALLINT,
     weight_kg           NUMERIC(4,1),
     birth_year          SMALLINT,
+    birth_month         SMALLINT,
+    birth_day           SMALLINT,
     gender              TEXT CHECK (gender IN ('M', 'F', 'O')),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()

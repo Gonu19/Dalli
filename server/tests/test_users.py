@@ -24,9 +24,12 @@ PROFILE_FIELDS = {
     "max_continuous_min",
     "weekly_goal_count",
     "baseline_cadence",
+    "name",
     "height_cm",
     "weight_kg",
     "birth_year",
+    "birth_month",
+    "birth_day",
     "gender",
 }
 
@@ -135,9 +138,12 @@ def test_get_onboarded_profile_matches_fixture_and_serializes_weight_as_number()
         max_continuous_min=10,
         weekly_goal_count=3,
         baseline_cadence=157,
+        name="홍길동",
         height_cm=165,
         weight_kg=Decimal("54.0"),
         birth_year=2004,
+        birth_month=5,
+        birth_day=12,
         gender="F",
     )
     response = client_for(current_user, ProfileSession()).get("/users/me")
@@ -207,6 +213,9 @@ def test_full_patch_persists_fixture_and_matches_followup_get() -> None:
         ("weekly_goal_count", 4),
         ("baseline_cadence", 160),
         ("height_cm", 170),
+        ("name", "홍길동"),
+        ("birth_month", 5),
+        ("birth_day", 12),
     ],
 )
 def test_partial_patch_only_changes_explicit_field(field: str, value: object) -> None:
@@ -278,6 +287,10 @@ def test_empty_and_same_value_patch_are_noops() -> None:
         {"weight_kg": 1000.0},
         {"weight_kg": 54.05},
         {"weight_kg": "54.0"},
+        {"birth_month": 0},
+        {"birth_month": 13},
+        {"birth_day": 0},
+        {"birth_day": 32},
         {"unknown": "value"},
         {"onboarded": True},
         {"id": str(uuid4())},

@@ -38,9 +38,12 @@ class User(Base):
     max_continuous_min: Mapped[int | None] = mapped_column(SmallInteger)
     weekly_goal_count: Mapped[int | None] = mapped_column(SmallInteger)
     baseline_cadence: Mapped[int | None] = mapped_column(SmallInteger)
+    name: Mapped[str | None] = mapped_column(Text)
     height_cm: Mapped[int | None] = mapped_column(SmallInteger)
     weight_kg: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
     birth_year: Mapped[int | None] = mapped_column(SmallInteger)
+    birth_month: Mapped[int | None] = mapped_column(SmallInteger)
+    birth_day: Mapped[int | None] = mapped_column(SmallInteger)
     gender: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

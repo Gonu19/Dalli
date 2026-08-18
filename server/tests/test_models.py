@@ -14,7 +14,8 @@ def test_model_column_sets_match_erd() -> None:
     assert set(User.__table__.columns.keys()) == {
         "id", "device_uuid", "running_purpose", "experience_level",
         "max_continuous_min", "weekly_goal_count", "baseline_cadence",
-        "height_cm", "weight_kg", "birth_year", "gender", "created_at",
+        "name", "height_cm", "weight_kg", "birth_year", "birth_month",
+        "birth_day", "gender", "created_at",
         "updated_at",
     }
     assert set(Plan.__table__.columns.keys()) == {

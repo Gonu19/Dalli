@@ -30,9 +30,12 @@ def user_me_response(user: User) -> UserMeResponse:
         max_continuous_min=user.max_continuous_min,
         weekly_goal_count=user.weekly_goal_count,
         baseline_cadence=user.baseline_cadence,
+        name=user.name,
         height_cm=user.height_cm,
         weight_kg=user.weight_kg,
         birth_year=user.birth_year,
+        birth_month=user.birth_month,
+        birth_day=user.birth_day,
         gender=user.gender,
     )
 

@@ -9,9 +9,12 @@
       "max_continuous_min": 10,
       "weekly_goal_count": 3,
       "baseline_cadence": 157,
+      "name": "홍길동",
       "height_cm": 165,
       "weight_kg": 54.0,
       "birth_year": 2004,
+      "birth_month": 5,
+      "birth_day": 12,
       "gender": "F"
     },
     "create_app_run_minimum_analyzable": {
@@ -115,9 +118,12 @@
         "max_continuous_min": null,
         "weekly_goal_count": null,
         "baseline_cadence": null,
+        "name": null,
         "height_cm": null,
         "weight_kg": null,
         "birth_year": null,
+        "birth_month": null,
+        "birth_day": null,
         "gender": null
       }
     },
@@ -131,9 +137,12 @@
         "max_continuous_min": 10,
         "weekly_goal_count": 3,
         "baseline_cadence": 157,
+        "name": "홍길동",
         "height_cm": 165,
         "weight_kg": 54.0,
         "birth_year": 2004,
+        "birth_month": 5,
+        "birth_day": 12,
         "gender": "F"
       }
     }

@@ -32,10 +32,16 @@ def test_mock_auth_and_onboarding_flow() -> None:
             "max_continuous_min": 10,
             "weekly_goal_count": 3,
             "baseline_cadence": 157,
+            "name": "홍길동",
+            "birth_month": 5,
+            "birth_day": 12,
         },
     )
     assert updated.status_code == 200
     assert updated.json()["onboarded"] is True
+    assert updated.json()["name"] == "홍길동"
+    assert updated.json()["birth_month"] == 5
+    assert updated.json()["birth_day"] == 12
 
 
 def test_mock_run_upload_is_idempotent() -> None:

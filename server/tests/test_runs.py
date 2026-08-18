@@ -299,6 +299,24 @@ def test_sample_allows_missing_gps_values_used_by_frontend():
     assert parsed.samples[0].d is None and parsed.samples[1].d is None
 
 
+def test_app_run_with_all_gps_values_missing_is_saved():
+    current_user = user()
+    payload = app_payload(
+        distance_m=None,
+        avg_pace_sec_per_km=None,
+        samples=[{"t": t, "c": 157, "p": None, "d": None} for t in range(0, 180, 5)],
+    )
+    db = FakeSession([None])
+
+    response = client_for(current_user, db).post("/runs", json=payload)
+    stored = db.added[0]
+
+    assert response.status_code == 201
+    assert stored.distance_m is None
+    assert stored.avg_pace_sec_per_km is None
+    assert all(sample["p"] is None and sample["d"] is None for sample in stored.samples)
+
+
 def test_plan_is_owned_locked_linked_and_marked_done_without_copying_goal():
     current_user = user()
     plan = Plan(id=uuid4(), user_id=current_user.id, status="PLANNED", goal_type="TIME", goal_value=1200)

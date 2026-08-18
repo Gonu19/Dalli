@@ -64,12 +64,19 @@
   "max_continuous_min": 10,
   "weekly_goal_count": 3,
   "baseline_cadence": 157,
-  "height_cm": 165, "weight_kg": 54.0, "birth_year": 2004, "gender": "F"
+  "name": "홍길동",
+  "height_cm": 165, "weight_kg": 54.0,
+  "birth_year": 2004, "birth_month": 5, "birth_day": 12,
+  "gender": "F"
 }
 ```
 `PATCH /users/me` — `onboarded`를 제외한 위 필드 부분 수정. 첫 유효 APP 러닝의 `baseline_cadence`는 `POST /runs` 처리 중 서버가 자동 확정해 저장하며, PATCH는 사용자의 수동 변경·초기 설정에 사용한다. POST 응답 필드는 변경하지 않는다.
 
 `running_purpose`: `COMPLETE | HABIT | WEIGHT | FITNESS | PERFORMANCE`.
+
+`name`, `birth_year`, `birth_month`, `birth_day`, `height_cm`, `weight_kg`, `gender`는
+선택 프로필 필드이며 저장·응답에서 `null`을 허용한다. `birth_month`는 1~12,
+`birth_day`는 1~31이다. `PATCH /users/me`는 이 필드들을 부분 수정할 수 있다.
 
 확정 타입 규칙:
 

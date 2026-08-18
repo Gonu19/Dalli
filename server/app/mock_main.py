@@ -94,9 +94,12 @@ def create_mock_app() -> FastAPI:
             "max_continuous_min",
             "weekly_goal_count",
             "baseline_cadence",
+            "name",
             "height_cm",
             "weight_kg",
             "birth_year",
+            "birth_month",
+            "birth_day",
             "gender",
         }
         profile.update({key: value for key, value in payload.items() if key in allowed})
