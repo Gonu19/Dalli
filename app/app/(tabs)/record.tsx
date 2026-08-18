@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Image, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { isOfflineError, type CalendarDay } from '@/src/api/client';
-import { useCalendar, useCreateManualRun, useCreatePlan, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
+import { useCalendar, useCreateManualRun, useCreatePlan, useDeletePlan, useDeleteRun, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
@@ -16,6 +16,7 @@ const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default function RecordScreen() {
   const { token } = useAuth();
+  const router = useRouter();
   const today = new Date();
   const [viewDate, setViewDate] = useState(today);
   const year = viewDate.getFullYear();
@@ -25,7 +26,9 @@ export default function RecordScreen() {
   const profile = useProfile(token);
   const createPlan = useCreatePlan(token);
   const updatePlan = useUpdatePlan(token);
+  const deletePlan = useDeletePlan(token);
   const createManual = useCreateManualRun(token);
+  const deleteRun = useDeleteRun(token);
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
   const [form, setForm] = useState<'plan' | 'manual' | null>(null);
   const [minutes, setMinutes] = useState('');
@@ -104,10 +107,11 @@ export default function RecordScreen() {
       <View style={styles.profileActions}>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setForm('plan')}
+          accessibilityLabel="개인정보 수정"
+          onPress={() => router.push('/privacy')}
           style={({ pressed }) => [styles.profileButton, pressed && styles.buttonPressed]}
         >
-          <Text style={styles.profileButtonText}>+ 계획/기록</Text>
+          <Ionicons color={colors.primary} name="create-outline" size={18} />
         </Pressable>
       </View>
       </View>
@@ -130,17 +134,18 @@ export default function RecordScreen() {
         const holiday = getHolidayName(year, month, day);
         return <Pressable key={day} onPress={() => setSelectedDate(date)} style={({ pressed }) => [styles.dayCell, pressed && styles.dayPressed]}>
           <View style={[styles.dayCircle, isSelected && styles.selectedCircle, appRun && styles.completedCircle, holiday && styles.holidayCircle]}><Text style={[styles.dayText, holiday && styles.holidayText, (isSelected || appRun) && styles.white]}>{day}</Text></View>
-          {(manualRun || planned) && <View style={[styles.dot, planned && styles.planDot]}/>}
+          {manualRun && <View style={[styles.dot, styles.manualDot]}/>}
+          {planned && <View style={[styles.dot, styles.planDot]}/>}
           {holiday ? <View style={styles.holidayDot}/> : null}
         </Pressable>;
       })}</View>
-      <View style={styles.legend}><Legend color={colors.primary} label="완료"/><Legend color="#1C1A1A" label="직접 기록" outline/><Legend color="#9B9B9B" label="계획"/><Legend color="#D94B4B" label="공휴일"/></View>
+      <View style={styles.legend}><Legend color={colors.primary} label="완료"/><Legend color="#FFC2B3" label="직접 기록"/><Legend color={colors.primary} label="예정 계획" outline/></View>
       </View>
 
       <View style={styles.detailCard}>
       <View style={styles.detailHeader}>
-        <View style={[styles.detailMarker, selectedRun?.source === 'MANUAL' && styles.manualMarker]}/>
-        <Text numberOfLines={1} style={styles.detailDate}>{selectedDate} 일정 및 기록</Text>
+        <View style={[styles.detailMarker, selectedRun?.source === 'MANUAL' && styles.manualMarker, selected?.plan && !selectedRun && styles.planMarker]}/>
+        <Text numberOfLines={1} style={styles.detailDate}>{selectedDate} 계획 및 기록</Text>
         {selectedRun ? <Text style={styles.detailMeta}>{selectedRun.source === 'MANUAL' ? '수기 기록 · 달리 데이 제외' : '앱 기록 · 달리 데이 포함'}</Text> : null}
       </View>
 
@@ -148,21 +153,59 @@ export default function RecordScreen() {
         <Text style={styles.runTitle}>러닝 계획</Text>
         <Text style={styles.runMetrics}>{formatPlanGoal(selected.plan)}</Text>
         <Text style={styles.detailCopy}>{selected.plan.status === 'PLANNED' ? '예정된 러닝이에요' : selected.plan.status === 'DONE' ? '완료된 계획이에요' : '건너뛴 계획이에요'}</Text>
-        <Pressable
-          accessibilityRole="button"
-          disabled={updatePlan.isPending}
-          onPress={() => void updatePlan.mutateAsync({ planId: selected.plan!.id, status: selected.plan!.status === 'DONE' ? 'PLANNED' : 'DONE' })}
-          style={({ pressed }) => [styles.doneButton, selected.plan!.status === 'DONE' && styles.undoButton, updatePlan.isPending && styles.buttonDisabled, pressed && !updatePlan.isPending && styles.buttonPressed]}
-        ><Text style={[styles.doneText, selected.plan.status === 'DONE' && styles.undoText]}>{updatePlan.isPending ? '처리 중' : selected.plan.status === 'DONE' ? '완료 취소' : '완료 처리'}</Text></Pressable>
+        <View style={styles.planActions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={deletePlan.isPending}
+            onPress={() => Alert.alert('계획을 삭제할까요?', '삭제한 계획은 복구할 수 없어요.', [
+              { text: '취소', style: 'cancel' },
+              { text: '삭제', style: 'destructive', onPress: () => void deletePlan.mutateAsync(selected.plan!.id) },
+            ])}
+            style={({ pressed }) => [styles.deleteButton, deletePlan.isPending && styles.buttonDisabled, pressed && !deletePlan.isPending && styles.buttonPressed]}
+          >
+            <Text style={styles.deleteText}>{deletePlan.isPending ? '삭제 중' : '계획 삭제'}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={updatePlan.isPending}
+            onPress={() => void updatePlan.mutateAsync({ planId: selected.plan!.id, status: selected.plan!.status === 'DONE' ? 'PLANNED' : 'DONE' })}
+            style={({ pressed }) => [styles.doneButton, selected.plan!.status === 'DONE' && styles.undoButton, updatePlan.isPending && styles.buttonDisabled, pressed && !updatePlan.isPending && styles.buttonPressed]}
+          ><Text style={[styles.doneText, selected.plan.status === 'DONE' && styles.undoText]}>{updatePlan.isPending ? '처리 중' : selected.plan.status === 'DONE' ? '완료 취소' : '완료 처리'}</Text></Pressable>
+        </View>
       </View> : null}
       {selectedRun ? <View style={[styles.runSummary, selected?.plan && styles.runSummaryWithPlan]}>
         <Text numberOfLines={1} style={styles.runTitle}>{runDetail.data?.memo?.trim() || (selectedRun.source === 'MANUAL' ? '직접 기록한 러닝' : '달리와 함께한 러닝')}</Text>
         <Text style={styles.runMetrics}>{formatMinutes(selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
         <Text numberOfLines={1} style={styles.detailCopy}>{describeRunCondition(runDetail.data?.condition, selectedRun.source)}</Text>
+        <Pressable
+          accessibilityRole="button"
+          disabled={deleteRun.isPending}
+          onPress={() => Alert.alert('기록을 삭제할까요?', '삭제한 러닝 기록과 분석은 복구할 수 없어요.', [
+            { text: '취소', style: 'cancel' },
+            { text: '삭제', style: 'destructive', onPress: () => void deleteRun.mutateAsync(selectedRun.id) },
+          ])}
+          style={({ pressed }) => [styles.deleteButton, styles.runDeleteButton, deleteRun.isPending && styles.buttonDisabled, pressed && !deleteRun.isPending && styles.buttonPressed]}
+        >
+          <Text style={styles.deleteText}>{deleteRun.isPending ? '삭제 중' : '기록 삭제'}</Text>
+        </Pressable>
       </View> : null}
       {!selectedRun && !selected?.plan ? <View style={styles.emptyDetail}>
-        <Text style={styles.detailCopy}>아직 등록된 일정이나 기록이 없어요</Text>
+        <Text style={[styles.detailCopy, styles.emptyDetailCopy]}>아직 등록된 일정이나 기록이 없어요</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setForm('plan')}
+          style={({ pressed }) => [styles.detailActionButton, styles.emptyActionButton, pressed && styles.buttonPressed]}
+        >
+          <Text style={styles.detailActionText}>+ 계획/기록</Text>
+        </Pressable>
       </View> : null}
+      {selectedRun || selected?.plan ? <Pressable
+        accessibilityRole="button"
+        onPress={() => setForm('plan')}
+        style={({ pressed }) => [styles.detailActionButton, pressed && styles.buttonPressed]}
+      >
+        <Text style={styles.detailActionText}>+ 계획/기록</Text>
+      </Pressable> : null}
       </View>
     </View>
     </Animated.ScrollView>
@@ -214,12 +257,12 @@ function makeClientRunId() { return globalThis.crypto?.randomUUID?.() ?? `manual
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  scrollContent: { minHeight: 883 }, screenContent: { position: 'relative', height: 883 },
+    scrollContent: { minHeight: 980 }, screenContent: { position: 'relative', height: 980 },
   header: { position: 'absolute', top: navigationHeader.titleTop, left: 27, zIndex: 10, color: colors.white, fontSize: 25, lineHeight: 32, fontWeight: '800' }, headerAccent: { color: colors.primary },
   headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: 'rgba(28,26,26,.76)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
-  profileCard: { position: 'absolute', top: 84, left: 24, right: 24, height: 111, borderRadius: 24, backgroundColor: colors.primary, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 48, height: 48, borderRadius: 24 }, runner: { color: colors.white, fontSize: 17, fontWeight: '800', marginTop: 2 }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 5 }, profileActions: { position: 'absolute', right: 16, bottom: 11 }, profileButton: { minWidth: 104, height: 32, borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' }, profileButtonText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
-  calendarCard: { position: 'absolute', top: 223, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { backgroundColor: '#1C1A1A' }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#1C1A1A' }, holidayDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#D94B4B' }, planDot: { backgroundColor: '#9B9B9B' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
-  detailCard: { position: 'absolute', top: 624, left: 24, right: 24, minHeight: 180, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 14, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, planSummary: { position: 'relative', marginTop: 15, paddingRight: 84 }, runSummary: { marginTop: 15 }, runSummaryWithPlan: { marginTop: 13, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#ECECEC' }, runTitle: { color: '#1C1A1A', fontSize: 13, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 11.5, marginTop: 5 }, emptyDetail: { flex: 1, justifyContent: 'center' }, doneButton: { position: 'absolute', right: 0, top: 0, minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
+  profileCard: { position: 'absolute', top: 84, left: 24, right: 24, height: 88, borderRadius: 22, backgroundColor: colors.primary, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 42, height: 42, borderRadius: 21 }, runner: { color: colors.white, fontSize: 16, fontWeight: '800' }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 11.5, marginTop: 4 }, profileActions: { position: 'absolute', right: 16, top: 28 }, profileButton: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  calendarCard: { position: 'absolute', top: 200, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#1C1A1A' }, manualDot: { backgroundColor: '#FFC2B3' }, holidayDot: { position: 'absolute', bottom: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#D94B4B' }, planDot: { width: 6, height: 6, bottom: 2, borderRadius: 3, backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.primary, borderStyle: 'solid' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
+  detailCard: { position: 'absolute', top: 601, left: 24, right: 24, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, planMarker: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.primary }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 16, lineHeight: 21, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, planSummary: { position: 'relative', marginTop: 15 }, planActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }, runSummary: { marginTop: 15 }, runSummaryWithPlan: { marginTop: 13, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#ECECEC' }, runTitle: { color: '#1C1A1A', fontSize: 14, lineHeight: 19, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 12, lineHeight: 17, marginTop: 5 }, emptyDetailCopy: { flex: 1, marginTop: 0 }, deleteButton: { alignSelf: 'flex-start', minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 0 }, runDeleteButton: { marginTop: 12 }, deleteText: { color: colors.primary, fontSize: 12, fontWeight: '800' }, emptyDetail: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, emptyActionButton: { marginTop: 0 }, detailActionButton: { alignSelf: 'flex-end', minWidth: 104, height: 32, borderRadius: 10, paddingHorizontal: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 15 }, detailActionText: { color: colors.white, fontSize: 13, fontWeight: '800' }, doneButton: { minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.62)', alignItems: 'center', justifyContent: 'center' }, modalCard: { width: 346, minHeight: 465, borderRadius: 28, backgroundColor: colors.white, padding: 24 }, modalTabs: { flexDirection: 'row', height: 44, backgroundColor: '#F2F2F2', borderRadius: 13, padding: 3 }, modalTab: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, activeTab: { backgroundColor: colors.primary }, tabText: { color: '#777777', fontSize: 14, fontWeight: '800' }, activeTabText: { color: colors.white }, modalTitle: { color: '#1C1A1A', fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 20 }, inputLabel: { color: '#1C1A1A', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 8 }, inputRow: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: '#1C1A1A', paddingHorizontal: 13, fontSize: 15, fontWeight: '700' }, unit: { color: '#686868', marginRight: 14, fontSize: 13 }, memo: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, paddingHorizontal: 13, color: '#1C1A1A', fontSize: 15 }, error: { color: '#D64545', fontSize: 12, marginTop: 5 }, save: { height: 50, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }, saveText: { color: colors.white, fontSize: 17, fontWeight: '800' }, buttonPressed: pressFeedback,
 });
