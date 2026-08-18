@@ -164,7 +164,7 @@ export default function RecordScreen() {
       </View>
     </View>
     </Animated.ScrollView>
-    <ScrollHeaderScrim height={70} scrollY={scrollY} />
+    <ScrollHeaderScrim scrollY={scrollY} />
 
     <Modal animationType="fade" transparent visible={isModalOpen} onRequestClose={() => setForm(null)}>
       <View style={styles.overlay}><Pressable style={StyleSheet.absoluteFill} onPress={() => setForm(null)}/><Animated.View style={[styles.modalCard,{opacity:modalProgress,transform:[{translateY:modalProgress.interpolate({inputRange:[0,1],outputRange:[34,0]})},{scale:modalProgress.interpolate({inputRange:[0,1],outputRange:[.97,1]})}]}]}>
