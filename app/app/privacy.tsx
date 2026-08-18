@@ -166,7 +166,7 @@ function PrivacyForm({ profile, token, onClose }: {
           const requestedDay = Number(days[indexes[2]]);
           setBirth({ year, month, day: Math.min(requestedDay, new Date(year, month, 0).getDate()) });
         }
-        if (picker === 'height') setHeight(Number(`${heightIntegers[indexes[0]]}.${decimals[indexes[1]]}`));
+        if (picker === 'height') setHeight(Number(heightIntegers[indexes[0]]));
         if (picker === 'weight') setWeight(Number(`${weightIntegers[indexes[0]]}.${decimals[indexes[1]]}`));
         setPicker(null);
       }}
@@ -194,7 +194,7 @@ function getColumns(picker: PickerType | null, birth: BirthDate | null, height: 
   ];
   if (picker === 'height') {
     const current = height ?? 170;
-    return [{ values: heightIntegers, initialIndex: Math.max(0, heightIntegers.indexOf(String(Math.floor(current)))) }, { values: decimals, initialIndex: decimalIndex(current), prefix: '.', suffix: ' cm' }];
+    return [{ values: heightIntegers, initialIndex: Math.max(0, heightIntegers.indexOf(String(Math.round(current)))), suffix: ' cm' }];
   }
   if (picker === 'weight') {
     const current = weight ?? 60;
