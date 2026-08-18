@@ -1,20 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { isOfflineError, type CalendarDay } from '@/src/api/client';
 import { useCalendar, useCreateManualRun, useCreatePlan, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
-import { FigmaScreen } from '@/src/components/figma-ui';
+import { FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import { StatePanel } from '@/src/components/state-panel';
-import { colors, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default function RecordScreen() {
+  const router = useRouter();
   const { token } = useAuth();
   const today = new Date();
   const [viewDate, setViewDate] = useState(today);
@@ -84,6 +85,10 @@ export default function RecordScreen() {
   if (calendar.error || stats.error) return <FigmaScreen includeBottomSafeArea={false}><StatePanel title={isOfflineError(calendar.error ?? stats.error) ? '오프라인 상태예요' : '기록을 불러오지 못했어요'} body="저장된 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="다시 시도" onAction={() => { void calendar.refetch(); void stats.refetch(); }} /></FigmaScreen>;
 
   return <FigmaScreen includeBottomSafeArea={false}>
+    <FigmaLogo left={24} />
+    <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
+      <Ionicons color={colors.white} name="settings-outline" size={26} />
+    </Pressable>
     <Text style={styles.header}>누적 <Text style={styles.headerAccent}>달리 데이</Text> {stats.data?.dalliDays ?? '—'}일</Text>
     <Animated.ScrollView
       contentContainerStyle={styles.scrollContent}
@@ -142,23 +147,25 @@ export default function RecordScreen() {
         {selectedRun ? <Text style={styles.detailMeta}>{selectedRun.source === 'MANUAL' ? '수기 기록 · 달리 데이 제외' : '앱 기록 · 달리 데이 포함'}</Text> : null}
       </View>
 
-      {selectedRun ? <View style={styles.runSummary}>
-        <Text numberOfLines={1} style={styles.runTitle}>{runDetail.data?.memo?.trim() || (selectedRun.source === 'MANUAL' ? '직접 기록한 러닝' : '달리와 함께한 러닝')}</Text>
-        <Text style={styles.runMetrics}>{formatMinutes(selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
-        <Text numberOfLines={1} style={styles.detailCopy}>{describeRunCondition(runDetail.data?.condition, selectedRun.source)}</Text>
-      </View> : selected?.plan ? <View style={styles.runSummary}>
+      {selected?.plan ? <View style={styles.planSummary}>
         <Text style={styles.runTitle}>러닝 계획</Text>
         <Text style={styles.runMetrics}>{formatPlanGoal(selected.plan)}</Text>
-        <Text style={styles.detailCopy}>{selected.plan.status === 'PLANNED' ? '예정된 러닝이에요' : '완료된 계획이에요'}</Text>
+        <Text style={styles.detailCopy}>{selected.plan.status === 'PLANNED' ? '예정된 러닝이에요' : selected.plan.status === 'DONE' ? '완료된 계획이에요' : '건너뛴 계획이에요'}</Text>
         <Pressable
           accessibilityRole="button"
           disabled={updatePlan.isPending}
           onPress={() => void updatePlan.mutateAsync({ planId: selected.plan!.id, status: selected.plan!.status === 'DONE' ? 'PLANNED' : 'DONE' })}
           style={({ pressed }) => [styles.doneButton, selected.plan!.status === 'DONE' && styles.undoButton, updatePlan.isPending && styles.buttonDisabled, pressed && !updatePlan.isPending && styles.buttonPressed]}
         ><Text style={[styles.doneText, selected.plan.status === 'DONE' && styles.undoText]}>{updatePlan.isPending ? '처리 중' : selected.plan.status === 'DONE' ? '완료 취소' : '완료 처리'}</Text></Pressable>
-      </View> : <View style={styles.emptyDetail}>
+      </View> : null}
+      {selectedRun ? <View style={[styles.runSummary, selected?.plan && styles.runSummaryWithPlan]}>
+        <Text numberOfLines={1} style={styles.runTitle}>{runDetail.data?.memo?.trim() || (selectedRun.source === 'MANUAL' ? '직접 기록한 러닝' : '달리와 함께한 러닝')}</Text>
+        <Text style={styles.runMetrics}>{formatMinutes(selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
+        <Text numberOfLines={1} style={styles.detailCopy}>{describeRunCondition(runDetail.data?.condition, selectedRun.source)}</Text>
+      </View> : null}
+      {!selectedRun && !selected?.plan ? <View style={styles.emptyDetail}>
         <Text style={styles.detailCopy}>아직 등록된 일정이나 기록이 없어요</Text>
-      </View>}
+      </View> : null}
       </View>
     </View>
     </Animated.ScrollView>
@@ -210,11 +217,12 @@ function formatUserLabel(id: string | undefined) {
 function makeClientRunId() { return globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 const styles = StyleSheet.create({
-  scrollContent: { minHeight: 770 }, screenContent: { position: 'relative', height: 770 },
-  header: { position: 'absolute', top: 14, left: 27, zIndex: 10, color: colors.white, fontSize: 22, fontWeight: '800' }, headerAccent: { color: colors.primary },
-  profileCard: { position: 'absolute', top: 70, left: 24, right: 24, height: 111, borderRadius: 24, backgroundColor: colors.primary, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
+  scrollContent: { minHeight: 840 }, screenContent: { position: 'relative', height: 840 },
+  settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 }, iconPressed: compactPressFeedback,
+  header: { position: 'absolute', top: 82, left: 27, zIndex: 10, color: colors.white, fontSize: 17, fontWeight: '700' }, headerAccent: { color: colors.primary },
+  profileCard: { position: 'absolute', top: 116, left: 24, right: 24, height: 111, borderRadius: 24, backgroundColor: colors.primary, padding: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 48, height: 48, borderRadius: 24 }, runner: { color: colors.white, fontSize: 17, fontWeight: '800', marginTop: 2 }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 12, marginTop: 5 }, profileActions: { position: 'absolute', right: 16, bottom: 11 }, profileButton: { minWidth: 104, height: 32, borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' }, profileButtonText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
-  calendarCard: { position: 'absolute', top: 194, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { backgroundColor: '#1C1A1A' }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#1C1A1A' }, holidayDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#D94B4B' }, planDot: { backgroundColor: '#9B9B9B' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
-  detailCard: { position: 'absolute', top: 581, left: 24, right: 24, height: 140, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 14, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, runSummary: { marginTop: 15 }, runTitle: { color: '#1C1A1A', fontSize: 13, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 11.5, marginTop: 5 }, emptyDetail: { flex: 1, justifyContent: 'center' }, doneButton: { position: 'absolute', right: 0, top: 15, minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
+  calendarCard: { position: 'absolute', top: 240, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { backgroundColor: '#1C1A1A' }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#1C1A1A' }, holidayDot: { backgroundColor: '#D94B4B' }, planDot: { backgroundColor: '#9B9B9B' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
+  detailCard: { position: 'absolute', top: 629, left: 24, right: 24, minHeight: 180, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 14, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, planSummary: { position: 'relative', marginTop: 15, paddingRight: 84 }, runSummary: { marginTop: 15 }, runSummaryWithPlan: { marginTop: 13, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#ECECEC' }, runTitle: { color: '#1C1A1A', fontSize: 13, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 11.5, marginTop: 5 }, emptyDetail: { flex: 1, justifyContent: 'center' }, doneButton: { position: 'absolute', right: 0, top: 0, minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.62)', alignItems: 'center', justifyContent: 'center' }, modalCard: { width: 346, minHeight: 465, borderRadius: 28, backgroundColor: colors.white, padding: 24 }, modalTabs: { flexDirection: 'row', height: 44, backgroundColor: '#F2F2F2', borderRadius: 13, padding: 3 }, modalTab: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, activeTab: { backgroundColor: colors.primary }, tabText: { color: '#777777', fontSize: 14, fontWeight: '800' }, activeTabText: { color: colors.white }, modalTitle: { color: '#1C1A1A', fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 20 }, inputLabel: { color: '#1C1A1A', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 8 }, inputRow: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: '#1C1A1A', paddingHorizontal: 13, fontSize: 15, fontWeight: '700' }, unit: { color: '#686868', marginRight: 14, fontSize: 13 }, memo: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, paddingHorizontal: 13, color: '#1C1A1A', fontSize: 15 }, error: { color: '#D64545', fontSize: 12, marginTop: 5 }, save: { height: 50, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }, saveText: { color: colors.white, fontSize: 17, fontWeight: '800' }, buttonPressed: pressFeedback,
 });
