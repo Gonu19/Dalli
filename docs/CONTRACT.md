@@ -71,6 +71,11 @@
 
 `running_purpose`: `COMPLETE | HABIT | WEIGHT | FITNESS | PERFORMANCE`.
 
+확정 타입 규칙:
+
+- `experience_level`의 non-null 값은 `0 | 1 | 2`다. 프로필 응답과 PATCH의 명시적 null은 허용한다.
+- `weight_kg`는 JSON `number | null`이다. JSON 문자열은 허용하지 않으며 소수 첫째 자리까지다.
+
 `onboarded`는 저장 컬럼이 아닌 서버 계산값이다. 다음 필드가 모두 `null`이 아니면 `true`다.
 `running_purpose`, `experience_level`, `max_continuous_min`, `weekly_goal_count`, `baseline_cadence`.
 선택 입력인 신체 정보는 계산에서 제외한다.
@@ -133,6 +138,10 @@
 
 `analysis_limitation` enum: `null | MANUAL_RUN | TOO_SHORT | INSUFFICIENT_SENSOR_DATA`.
 두 조건이 함께 실패하면 `TOO_SHORT`를 우선한다.
+
+`condition`은 APP 러닝에서 필수이며 `1 | 3 | 5`만 허용한다(피곤함 1 / 보통 3 / 가벼움 5).
+MANUAL 러닝에서는 생략하거나 `null`이다. `samples`의 `t`, `c`, `p`는 정수이고 `d`는
+GPS 누락 시 `null`을 허용하는 숫자다.
 
 유효 러닝이어도 LDR은 `ENGINE.md` §12에 따라 6분 미만 또는 유효 샘플 30개 미만이면 `null`이다.
 이 경우 RS는 계산할 수 있지만 FI는 `null`이며 리포트 `limitation`에 사유를 표시한다.

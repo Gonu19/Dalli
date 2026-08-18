@@ -11,6 +11,8 @@ from app.schemas.reports import ReportResponse
 FiniteNumber = Annotated[float, Field(allow_inf_nan=False)]
 SmallIntegerValue = Annotated[int, Field(strict=True, ge=-32768, le=32767)]
 IntegerValue = Annotated[int, Field(strict=True, ge=-2147483648, le=2147483647)]
+SampleIntegerValue = Annotated[int, Field(strict=True)]
+ConditionValue = Literal[1, 3, 5]
 AnalysisLimitation = Literal["MANUAL_RUN", "TOO_SHORT", "INSUFFICIENT_SENSOR_DATA"]
 EventType = Literal[
     "RUN_START", "TOO_FAST", "TOO_SLOW", "TARGET_ADJUSTED",
@@ -21,9 +23,9 @@ EventType = Literal[
 class RunSample(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    t: FiniteNumber
-    c: FiniteNumber
-    p: FiniteNumber | None = None
+    t: SampleIntegerValue
+    c: SampleIntegerValue
+    p: SampleIntegerValue | None = None
     d: FiniteNumber | None = None
 
 
@@ -54,7 +56,7 @@ class RunCreateBase(BaseModel):
     started_at: datetime
     duration_sec: IntegerValue
     distance_m: IntegerValue | None = None
-    condition: SmallIntegerValue | None = None
+    condition: ConditionValue | None = None
     memo: str | None = None
 
 
@@ -63,7 +65,7 @@ class AppRunCreate(RunCreateBase):
     ended_at: datetime | None = None
     goal_type: Literal["TIME", "DISTANCE"]
     goal_value: IntegerValue
-    condition: SmallIntegerValue
+    condition: ConditionValue
     target_cadence_min: SmallIntegerValue
     target_cadence_max: SmallIntegerValue
     final_target_min: SmallIntegerValue
@@ -130,7 +132,7 @@ class RunDetailResponse(BaseModel):
     ended_at: datetime | None
     goal_type: Literal["TIME", "DISTANCE"] | None
     goal_value: int | None
-    condition: int | None
+    condition: ConditionValue | None
     target_cadence_min: int | None
     target_cadence_max: int | None
     final_target_min: int | None

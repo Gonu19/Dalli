@@ -272,6 +272,7 @@ def test_empty_and_same_value_patch_are_noops() -> None:
         {"running_purpose": "complete"},
         {"gender": "X"},
         {"experience_level": "0"},
+        {"experience_level": 3},
         {"weekly_goal_count": 1.5},
         {"height_cm": 32768},
         {"weight_kg": 1000.0},

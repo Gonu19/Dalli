@@ -169,6 +169,7 @@ def test_request_schema_required_optional_nullable_enum_and_jsonb_shapes() -> No
     } <= set(app_run["required"])
     assert app_run["properties"]["source"]["const"] == "APP"
     assert app_run["properties"]["goal_type"]["enum"] == ["TIME", "DISTANCE"]
+    assert app_run["properties"]["condition"]["enum"] == [1, 3, 5]
     assert app_run["properties"]["started_at"]["format"] == "date-time"
     assert app_run["properties"]["plan_id"]["anyOf"][0]["format"] == "uuid"
     assert app_run["properties"]["samples"]["type"] == "array"
@@ -177,6 +178,10 @@ def test_request_schema_required_optional_nullable_enum_and_jsonb_shapes() -> No
     sample = components["RunSample"]
     event = components["RunEvent"]
     assert set(sample["required"]) == {"t", "c"}
+    assert sample["properties"]["t"]["type"] == "integer"
+    assert sample["properties"]["c"]["type"] == "integer"
+    assert sample["properties"]["p"]["anyOf"][0]["type"] == "integer"
+    assert sample["properties"]["d"]["anyOf"][0]["type"] == "number"
     assert _is_nullable(sample["properties"]["p"])
     assert event["properties"]["type"]["enum"] == [
         "RUN_START", "TOO_FAST", "TOO_SLOW", "TARGET_ADJUSTED",
@@ -193,6 +198,10 @@ def test_request_schema_required_optional_nullable_enum_and_jsonb_shapes() -> No
     assert plan_update["properties"]["status"]["enum"] == ["PLANNED", "DONE", "SKIPPED"]
     assert not _is_nullable(plan_update["properties"]["status"])
 
+    manual_run = components["ManualRunCreate"]
+    condition_options = manual_run["properties"]["condition"]["anyOf"]
+    assert next(option for option in condition_options if "enum" in option)["enum"] == [1, 3, 5]
+
 
 def test_response_schema_formats_nullable_and_report_shapes() -> None:
     components = _schema()["components"]["schemas"]
@@ -203,6 +212,13 @@ def test_response_schema_formats_nullable_and_report_shapes() -> None:
     user = components["UserMeResponse"]
     assert user["properties"]["id"]["format"] == "uuid"
     assert _is_nullable(user["properties"]["running_purpose"])
+    assert user["properties"]["experience_level"]["anyOf"][0]["enum"] == [0, 1, 2]
+    assert user["properties"]["weight_kg"]["anyOf"][0]["type"] == "number"
+    assert all(option.get("type") != "string" for option in user["properties"]["weight_kg"]["anyOf"])
+    user_update = components["UserMeUpdate"]
+    assert user_update["properties"]["experience_level"]["anyOf"][0]["enum"] == [0, 1, 2]
+    assert user_update["properties"]["weight_kg"]["anyOf"][0]["type"] == "number"
+    assert all(option.get("type") != "string" for option in user_update["properties"]["weight_kg"]["anyOf"])
 
     detail = components["RunDetailResponse"]
     assert detail["properties"]["started_at"]["format"] == "date-time"
