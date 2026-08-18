@@ -22,6 +22,20 @@ export type RoutePoint = { latitude: number; longitude: number };
 /** 경로 배열 상한. 1초 간격 20분이면 1200점이라 여유가 있다. */
 const MAX_ROUTE_POINTS = 5_000;
 
+/**
+ * 지도 첫 화면용 좌표. fix를 기다리지 않고 **마지막으로 알려진 위치**를 즉시 준다.
+ * 없으면 `null` — 그 경우 지도는 첫 fix까지 기본 뷰로 남는다.
+ */
+export async function getLastKnownPoint(): Promise<RoutePoint | null> {
+  try {
+    const position = await Location.getLastKnownPositionAsync();
+    if (position === null) return null;
+    return { latitude: position.coords.latitude, longitude: position.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
 export class LocationTracker {
   private subscription: Location.LocationSubscription | null = null;
   private previous: { lat: number; lon: number } | null = null;

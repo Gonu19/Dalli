@@ -134,6 +134,7 @@ export function getRoutePath(): readonly RoutePoint[] {
 }
 
 export type { RoutePoint } from '../native/location';
+export { getLastKnownPoint } from '../native/location';
 
 /** 화면이 예기치 않게 사라졌을 때의 정리용. 기록은 남기지 않는다. */
 export function detachSensor(): void {
