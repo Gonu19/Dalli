@@ -72,7 +72,7 @@ function AppNavigator() {
     <>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'slide_from_left' }} />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="run/active" options={{ gestureEnabled: false }} />
         <Stack.Screen name="run/finish" options={{ gestureEnabled: false }} />
