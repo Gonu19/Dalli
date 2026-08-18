@@ -9,6 +9,7 @@ from app.services.metrics import (
     compute_fatigue_index,
     compute_in_range_sec,
     compute_late_drop_rate,
+    compute_measured_baseline,
     compute_rhythm_score,
     compute_run_metrics,
 )
@@ -167,6 +168,39 @@ def test_late_drop_duration_and_sample_count_boundaries():
     assert compute_late_drop_rate(ldr_values(), 359) is None
     assert compute_late_drop_rate(ldr_values(29), 360) is None
     assert compute_late_drop_rate(ldr_values(30), 360) == pytest.approx(0.1)
+
+
+def baseline_values(count=30, cadence=157):
+    return [{"t": 90 + index * 5, "c": cadence} for index in range(count)]
+
+
+@pytest.mark.parametrize(
+    ("duration", "values", "expected"),
+    [
+        (359, baseline_values(), None),
+        (360, baseline_values(29), None),
+        (360, baseline_values(), 157),
+    ],
+)
+def test_measured_baseline_requires_six_minutes_and_thirty_valid_samples(
+    duration, values, expected
+):
+    assert compute_measured_baseline(values, duration) == expected
+
+
+def test_measured_baseline_uses_window_boundaries_stopping_filter_and_js_rounding():
+    values = [
+        {"t": 89, "c": 999},
+        {"t": 90, "c": 50},
+        {"t": 270, "c": 157},
+        {"t": 275, "c": 999},
+        {"t": 95, "c": 49},
+    ] + [
+        {"t": 100 + index * 5, "c": 156 if index < 14 else 157}
+        for index in range(29)
+    ]
+
+    assert compute_measured_baseline(values, 360) == 157
 
 
 @pytest.mark.parametrize(

@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.exceptions import ApplicationError
 from app.models import Plan, Run, User
@@ -21,7 +22,7 @@ from app.schemas.runs import (
     RunListItem,
     RunListResponse,
 )
-from app.services.metrics import compute_run_metrics
+from app.services.metrics import compute_measured_baseline, compute_run_metrics
 from app.services.reports import report_response
 from app.services.run_quality import assess_run_quality
 
@@ -214,6 +215,18 @@ def save_run(db: Session, user: User, payload: RunCreate) -> RunSaveResult:
     run.late_drop_rate = _metric_decimal(metrics.late_drop_rate)
     run.fatigue_index = _metric_decimal(metrics.fatigue_index)
     db.add(run)
+    if user.baseline_cadence is None and run.source == "APP":
+        measured_baseline = compute_measured_baseline(run.samples, run.duration_sec)
+        if measured_baseline is not None:
+            updated_at = datetime.now(timezone.utc)
+            baseline_update = db.execute(
+                update(User)
+                .where(User.id == user.id, User.baseline_cadence.is_(None))
+                .values(baseline_cadence=measured_baseline, updated_at=updated_at)
+            )
+            if baseline_update.rowcount == 1:
+                set_committed_value(user, "baseline_cadence", measured_baseline)
+                set_committed_value(user, "updated_at", updated_at)
     if plan is not None:
         plan.status = "DONE"
         plan.updated_at = datetime.now(timezone.utc)

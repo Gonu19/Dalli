@@ -80,6 +80,38 @@ def test_mock_short_app_run_returns_too_short_fixture() -> None:
     assert boundary.json()["is_analyzable"] is True
 
 
+def test_mock_first_eligible_run_auto_persists_baseline_once() -> None:
+    client = TestClient(create_mock_app())
+    samples = [{"t": t, "c": 157} for t in range(0, 360, 5)]
+
+    first = client.post(
+        "/runs",
+        headers=AUTH,
+        json={
+            "client_run_id": "device-run-baseline-1",
+            "source": "APP",
+            "duration_sec": 360,
+            "samples": samples,
+        },
+    )
+    second = client.post(
+        "/runs",
+        headers=AUTH,
+        json={
+            "client_run_id": "device-run-baseline-2",
+            "source": "APP",
+            "duration_sec": 360,
+            "samples": [{"t": t, "c": 170} for t in range(0, 360, 5)],
+        },
+    )
+    profile = client.get("/users/me", headers=AUTH)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert "baseline_cadence" not in first.json()
+    assert profile.json()["baseline_cadence"] == 157
+
+
 def test_mock_protected_route_requires_bearer_token() -> None:
     client = TestClient(create_mock_app())
     response = client.get("/stats")

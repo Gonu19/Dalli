@@ -20,6 +20,7 @@ from fastapi import FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.exceptions import register_exception_handlers
+from app.services.metrics import compute_measured_baseline
 from app.services.plans import effective_plan_status
 
 
@@ -137,6 +138,20 @@ def create_mock_app() -> FastAPI:
             scenario = "created"
         result = _body(fixtures, "runs", scenario)
         result["client_run_id"] = client_run_id
+        if profile.get("baseline_cadence") is None and payload.get("source") == "APP":
+            measured_baseline = compute_measured_baseline(
+                payload.get("samples"), payload.get("duration_sec")
+            )
+            if measured_baseline is not None:
+                profile["baseline_cadence"] = measured_baseline
+                required = {
+                    "running_purpose",
+                    "experience_level",
+                    "max_continuous_min",
+                    "weekly_goal_count",
+                    "baseline_cadence",
+                }
+                profile["onboarded"] = all(profile.get(key) is not None for key in required)
         runs_by_client_id[client_run_id] = result
         response.status_code = status.HTTP_201_CREATED
         return deepcopy(result)

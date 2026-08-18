@@ -18,6 +18,11 @@ SAMPLE_BUCKET_SEC = 5.0
 WARMUP_SEC = 90.0
 MIN_LATE_DROP_DURATION_SEC = 360.0
 MIN_LATE_DROP_SAMPLES = 30
+BASELINE_WINDOW_START_SEC = 90.0
+BASELINE_WINDOW_END_SEC = 270.0
+BASELINE_MIN_DURATION_SEC = 360.0
+BASELINE_MIN_SAMPLES = 30
+BASELINE_MIN_CADENCE = 50.0
 
 
 class RunMetricsInput(Protocol):
@@ -88,6 +93,29 @@ def _normalized_samples(samples: object, duration_sec: object) -> tuple[MetricSa
         # cadence makes the result deterministic regardless of input ordering.
         by_time[sample_time] = min(cadence, by_time.get(sample_time, cadence))
     return tuple(MetricSample(t, by_time[t]) for t in sorted(by_time))
+
+
+def compute_measured_baseline(samples: object, duration_sec: object) -> int | None:
+    """Return the first eligible run's measured baseline, or ``None``.
+
+    The server mirrors ENGINE.md §2: use the 90–270 second window, discard
+    stopping samples below 50 spm, require a six-minute run and 30 valid
+    samples, then round the median to the integer cadence stored in users.
+    """
+    if _duration(duration_sec) < BASELINE_MIN_DURATION_SEC:
+        return None
+
+    valid = [
+        sample.cadence
+        for sample in _normalized_samples(samples, duration_sec)
+        if BASELINE_WINDOW_START_SEC <= sample.t <= BASELINE_WINDOW_END_SEC
+        and sample.cadence >= BASELINE_MIN_CADENCE
+    ]
+    if len(valid) < BASELINE_MIN_SAMPLES:
+        return None
+
+    value = median(valid)
+    return None if value is None else int(value + 0.5)
 
 
 def _target_adjustments(events: object, duration_sec: object) -> tuple[TargetAdjustment, ...]:

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -61,6 +62,7 @@ class FakeSession:
     def __init__(self, scalars=None):
         self.scalars = list(scalars or [])
         self.added = []
+        self.executed = []
         self.commits = 0
         self.rollbacks = 0
 
@@ -70,6 +72,10 @@ class FakeSession:
 
     def add(self, value):
         self.added.append(value)
+
+    def execute(self, statement):
+        self.executed.append(statement)
+        return SimpleNamespace(rowcount=1)
 
     def commit(self):
         self.commits += 1
@@ -154,6 +160,40 @@ def test_new_analyzable_run_stores_metrics_and_repeat_keeps_existing_values():
     assert repeated.status_code == 200
     assert repeated.json()["rhythm_score"] == 0.321
     assert repeat_db.commits == 0 and not repeat_db.added
+
+
+def test_first_eligible_app_run_auto_persists_baseline_without_changing_response():
+    current_user = user()
+    payload = app_payload(
+        duration_sec=360,
+        goal_value=360,
+        samples=[{"t": t, "c": 157, "p": None, "d": None} for t in range(0, 360, 5)],
+    )
+    db = FakeSession([None])
+
+    result = save_run(db, current_user, TypeAdapter(RunCreate).validate_python(payload))
+
+    assert result.created is True
+    assert current_user.baseline_cadence == 157
+    assert db.commits == 1
+    response = run_response(result.run)
+    assert not hasattr(response, "baseline_cadence")
+
+
+def test_existing_baseline_is_not_overwritten_by_later_app_run():
+    current_user = user()
+    current_user.baseline_cadence = 149
+    payload = app_payload(
+        duration_sec=360,
+        goal_value=360,
+        samples=[{"t": t, "c": 170, "p": None, "d": None} for t in range(0, 360, 5)],
+    )
+    db = FakeSession([None])
+
+    save_run(db, current_user, TypeAdapter(RunCreate).validate_python(payload))
+
+    assert current_user.baseline_cadence == 149
+    assert not db.executed
 
 
 @pytest.mark.parametrize(

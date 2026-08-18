@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.config import clear_settings_cache
 from app.database import clear_database_caches
 from app.main import create_app
-from app.models import Plan, Run
+from app.models import Plan, Run, User
 from app.services.auth import decode_access_token
 
 TEST_JWT_SECRET = "postgres-runs-test-secret-with-32-bytes"
@@ -172,6 +172,46 @@ def test_six_minute_app_run_persists_numeric_metrics(postgres_runs_environment) 
     assert stored.rhythm_score == Decimal("1.000")
     assert stored.late_drop_rate == Decimal("0.100")
     assert stored.fatigue_index == Decimal("0.140")
+
+
+@pytest.mark.postgres
+def test_first_eligible_app_run_auto_persists_baseline_and_later_runs_do_not_overwrite(
+    postgres_runs_environment,
+) -> None:
+    token, user_id = authenticate(f"runs-baseline-{uuid4()}")
+
+    def payload(client_run_id: str, cadence: int) -> dict:
+        value = app_payload(client_run_id)
+        value.update(
+            duration_sec=360,
+            goal_value=360,
+            samples=[{"t": t, "c": cadence, "p": None, "d": None} for t in range(0, 360, 5)],
+            events=[
+                {"t": 0, "type": "RUN_START", "payload": {"min": 153, "max": 161}},
+                {"t": 360, "type": "RUN_END", "payload": {"completed": True}},
+            ],
+        )
+        return value
+
+    with TestClient(create_app()) as client:
+        first = client.post(
+            "/runs",
+            json=payload(f"baseline-first-{uuid4()}", 157),
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        second = client.post(
+            "/runs",
+            json=payload(f"baseline-second-{uuid4()}", 170),
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert "baseline_cadence" not in first.json()
+    with Session(postgres_runs_environment) as session:
+        stored_user = session.get(User, user_id)
+    assert stored_user is not None
+    assert stored_user.baseline_cadence == 157
 
 
 @pytest.mark.postgres

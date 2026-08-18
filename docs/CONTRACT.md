@@ -67,7 +67,7 @@
   "height_cm": 165, "weight_kg": 54.0, "birth_year": 2004, "gender": "F"
 }
 ```
-`PATCH /users/me` — `onboarded`를 제외한 위 필드 부분 수정. `baseline_cadence`는 첫 러닝 확정 후 클라이언트가 PATCH.
+`PATCH /users/me` — `onboarded`를 제외한 위 필드 부분 수정. 첫 유효 APP 러닝의 `baseline_cadence`는 `POST /runs` 처리 중 서버가 자동 확정해 저장하며, PATCH는 사용자의 수동 변경·초기 설정에 사용한다. POST 응답 필드는 변경하지 않는다.
 
 `running_purpose`: `COMPLETE | HABIT | WEIGHT | FITNESS | PERFORMANCE`.
 
