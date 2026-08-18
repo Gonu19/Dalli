@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.config import Settings
 from app.services.llm import LLMReportContent
+from app.services.usage_harness import AttemptStatus
 from tests.aiq06_runner import (
     build_aiq06_preflight,
     run_aiq06_evaluation,
@@ -143,3 +144,20 @@ def test_cost_cap_is_blocked_before_any_call() -> None:
     )
     assert preflight.approved is False
     assert "cost_cap_exceeded" in preflight.block_reasons
+
+
+def test_runner_records_provider_timeout_as_timeout_not_validator_failure(tmp_path: Path) -> None:
+    preflight = build_aiq06_preflight(settings=settings(), live_execution_allowed=True)
+
+    def timeout(*_args, **_kwargs):
+        raise TimeoutError("test timeout")
+
+    records = run_aiq06_evaluation(
+        settings=settings(),
+        preflight=preflight,
+        output_dir=tmp_path / "timeout-evaluation",
+        report_generator=timeout,
+    )
+
+    assert all(record.attempt_status == AttemptStatus.TIMEOUT for record in records)
+    assert all(record.hard_gate_passed is None for record in records)

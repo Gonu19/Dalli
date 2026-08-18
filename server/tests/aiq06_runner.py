@@ -62,6 +62,24 @@ class _ReasonCapture(logging.Handler):
                     self.reason_codes.append(value)
 
 
+def _failure_exception(reason_codes: list[str]) -> Exception:
+    """Turn swallowed production failure codes into safe attempt statuses."""
+    if "LLM_DEADLINE_EXCEEDED" in reason_codes:
+        return TimeoutError("evaluation request timed out")
+    named_types = {
+        "rate_limit": "RateLimitError",
+        "authentication": "AuthenticationError",
+        "connection": "APIConnectionError",
+        "provider_status": "APIStatusError",
+        "EVALUATOR_ERROR": "EvaluatorError",
+    }
+    for reason in reason_codes:
+        type_name = named_types.get(reason)
+        if type_name is not None:
+            return type(type_name, (Exception,), {})()
+    return type("ProviderError", (Exception,), {})()
+
+
 def _report_dict(report: object) -> dict[str, object]:
     fields = (
         "verdict",
@@ -177,6 +195,12 @@ def run_aiq06_evaluation(
 
         report = content if content is not None else fallback
         reports[scenario_key] = _report_dict(report)
+        record_exception = exception
+        if record_exception is None and content is None and not responses:
+            record_exception = _failure_exception(reason_capture.reason_codes)
+        hard_gate_passed = (
+            True if content is not None else False if responses else None
+        )
         record = build_attempt_record(
             evaluation_run_id=preflight.evaluation_run_id,
             scenario_id=scenario_key,
@@ -187,8 +211,8 @@ def run_aiq06_evaluation(
             ended_at=ended_at,
             response=responses[-1] if responses else None,
             report=report,
-            exception=exception,
-            hard_gate_passed=content is not None if exception is None else False,
+            exception=record_exception,
+            hard_gate_passed=hard_gate_passed,
             reason_codes=reason_capture.reason_codes,
             fallback_used=content is None,
             pricing=GPT_4O_MINI_PRICING,
