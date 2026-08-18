@@ -258,7 +258,7 @@ def run_aiq06_evaluation(
             reserved_max_cost=reserved_cost,
             prior_confirmed_cost=confirmed_cost,
             prior_upper_bound=upper_bound,
-            human_evaluation_target=True,
+            human_evaluation_target=content is not None,
         )
         records.append(record)
         attempt_writer.append(record)
