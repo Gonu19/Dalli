@@ -113,6 +113,22 @@ check('공백 직후 판정 보류', useRunStore.getState().verdict, 'UNAVAILABL
 check('UNAVAILABLE이면 cadence 미노출', useRunStore.getState().cadence, null);
 check('직전까지는 정상 판정이었다', blind.verdict, 'IN_RANGE');
 
+// 5-2. 실센서처럼 소수 경과 초가 들어와도 기록은 정수 초로 남는다
+{
+  const store = useRunStore.getState();
+  store.reset();
+  store.start({ ...baseOptions, clientRunId: 'fractional-run' });
+  for (let i = 0; i <= 60; i += 1) {
+    // 1초 타이머가 실제로는 1.017초씩 밀린다
+    useRunStore.getState().ingest({ elapsedSec: i * 1.017, cadence: 157 });
+  }
+  const fractional = useRunStore.getState();
+  check('샘플 t는 정수', fractional.samples.every((sample) => Number.isInteger(sample.t)), true);
+  check('이벤트 t도 정수', fractional.events.every((event) => Number.isInteger(event.t)), true);
+  const record = useRunStore.getState().finish(false, '2026-08-17T09:20:00Z');
+  check('마지막 샘플이 duration을 넘지 않는다', (record?.samples ?? []).every((sample) => sample.t <= (record?.durationSec ?? 0)), true);
+}
+
 // 6. 종료 — 업로드 재료가 CONTRACT 필드를 채운다
 drive(1200, (t) => (t < 400 ? 157 : 150));
 const record = useRunStore.getState().finish(true, '2026-08-14T09:20:30Z');

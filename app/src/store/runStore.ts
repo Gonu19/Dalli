@@ -227,7 +227,11 @@ export const useRunStore = create<RunStore>((set, get) => ({
     const result = judge(current.judgeState, { elapsedSec: activeSec, cadence, ...goalProgress(current, sample) });
     current.judgeState = result.state;
 
-    const events = [...previous.events, ...result.events.map((event) => ({ ...event, t: totalSec }))];
+    // 시각은 정수 초로 남긴다. 실센서의 경과 초는 30.017처럼 소수가 나오는데,
+    // 서버의 커버리지 계산이 `0 <= t <= duration_sec`와 t 중복 제거를 쓰므로
+    // 반올림된 duration과 어긋나는 마지막 샘플이 생긴다 (`CONTRACT.md` 유효 러닝).
+    const stampedSec = Math.round(totalSec);
+    const events = [...previous.events, ...result.events.map((event) => ({ ...event, t: stampedSec }))];
 
     // samples는 5초 간격 (`ENGINE.md` §1). 소스 tick이 1초여도 저장 주기는 5초다.
     let samples = previous.samples;
@@ -240,7 +244,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
       current.cadenceCount += 1;
       samples = [
         ...samples,
-        { t: totalSec, c: Math.round(cadence), p: sample.pace ?? null, d: sample.dist ?? null },
+        { t: stampedSec, c: Math.round(cadence), p: sample.pace ?? null, d: sample.dist ?? null },
       ];
     }
 
@@ -267,7 +271,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     current.pausedAtSec = current.lastSourceSec;
     set((previous) => ({
       runState: 'PAUSED',
-      events: [...previous.events, { t: current.lastSourceSec, type: 'PAUSE', payload: {} }],
+      events: [...previous.events, { t: Math.round(current.lastSourceSec), type: 'PAUSE', payload: {} }],
     }));
   },
 
@@ -281,7 +285,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     }
     set((previous) => ({
       runState: 'RUNNING',
-      events: [...previous.events, { t: current.lastSourceSec, type: 'RESUME', payload: {} }],
+      events: [...previous.events, { t: Math.round(current.lastSourceSec), type: 'RESUME', payload: {} }],
     }));
   },
 
@@ -293,7 +297,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     const totalSec = current.lastSourceSec;
     const events: RunEvent[] = [
       ...previous.events,
-      { t: totalSec, type: 'RUN_END', payload: { completed } },
+      { t: Math.round(totalSec), type: 'RUN_END', payload: { completed } },
     ];
 
     const record = buildRecord(snapshotOf(current, previous, totalSec), completed, events, endedAt);
