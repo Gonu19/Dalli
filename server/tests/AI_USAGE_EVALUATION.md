@@ -80,12 +80,12 @@ python -m tests.aiq06_runner --allow-live --delay-sec 15 --output-dir <evaluatio
 `$0.01`·현재 모델 가격표를 모두 통과할 때만 6회 호출한다. `--delay-sec`는 호출 사이의
 고정 대기이며, rate-limit reset 헤더가 확인되면 그 값에 맞춰 조정한다.
 
-AIQ-08 Prompt v2 비교 실행은 baseline과 동일한 6개 시나리오에 별도 버전을 명시한다.
+AIQ-08 Prompt v2.1 비교 실행은 baseline과 동일한 6개 시나리오에 별도 버전을 명시한다.
 실제 호출은 별도 승인 후에만 실행하며, baseline 결과와 다른 출력 디렉터리에 보관한다.
 
 ```powershell
 python -m tests.aiq06_runner --allow-live --delay-sec 60 `
-  --prompt-version AIQ-08-prompt-v2 --output-dir <aiq-08-evaluation-dir>
+  --prompt-version AIQ-08-prompt-v2.1 --output-dir <aiq-08-evaluation-dir>
 ```
 
 ## Fake 우선 실행
