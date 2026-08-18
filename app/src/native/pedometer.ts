@@ -60,19 +60,42 @@ export class PedometerSource implements CadenceSource {
     }
 
     this.timer = setInterval(() => {
-      const now = Date.now();
-      const deltaSec = (now - this.lastTickMs) / 1000;
-      if (deltaSec <= 0) return;
-
-      const deltaSteps = Math.max(0, this.cumulativeSteps - this.lastSteps);
-      this.lastTickMs = now;
-      this.lastSteps = this.cumulativeSteps;
-
-      cb({
-        elapsedSec: (now - this.startedAtMs) / 1000,
-        cadence: (deltaSteps / deltaSec) * 60,
-      });
+      void this.tick(cb);
     }, tickSec * 1000);
+  }
+
+  /**
+   * 1초 tick — 누적 걸음 차분으로 순간 SPM을 만든다.
+   *
+   * `watchStepCount`가 조용한 기기가 있다. iOS는 걸음을 배치로 올려보내는데,
+   * 구독이 늦게 붙거나 이벤트가 유실되면 누적값이 0에 머문다. 그러면 화면이
+   * 계속 0을 가리키고 사용자는 "측정이 안 된다"고 느낀다.
+   *
+   * 그래서 **시작 시각부터의 누적 걸음을 직접 조회한 값과 큰 쪽을 쓴다.**
+   * 조회가 실패하면 구독값으로 그대로 간다 — 어느 한쪽이 죽어도 측정이 멈추지 않는다.
+   */
+  private async tick(cb: (sample: CadenceSample) => void): Promise<void> {
+    const now = Date.now();
+    const deltaSec = (now - this.lastTickMs) / 1000;
+    if (deltaSec <= 0) return;
+
+    let cumulative = this.cumulativeSteps;
+    try {
+      const queried = await Pedometer.getStepCountAsync(new Date(this.startedAtMs), new Date(now));
+      if (queried?.steps !== undefined) cumulative = Math.max(cumulative, queried.steps);
+    } catch {
+      // 과거 구간 조회를 지원하지 않는 기기도 있다. 구독값만으로 계속한다.
+    }
+
+    const deltaSteps = Math.max(0, cumulative - this.lastSteps);
+    this.lastTickMs = now;
+    this.lastSteps = cumulative;
+    this.cumulativeSteps = cumulative;
+
+    cb({
+      elapsedSec: (now - this.startedAtMs) / 1000,
+      cadence: (deltaSteps / deltaSec) * 60,
+    });
   }
 
   stop(): void {
