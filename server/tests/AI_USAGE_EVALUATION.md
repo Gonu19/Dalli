@@ -66,17 +66,19 @@ fallback·hard gate 결과, reason code, SDK response/request id(있을 때만),
 `tests/aiq06_runner.py`가 고정된 6개 baseline 시나리오를 이 harness에 연결한다.
 기본 실행은 preflight만 출력하고 외부 호출을 하지 않는다. 실제 호출은 로컬 개발 키와
 `LLM_ENABLED=true`가 설정된 상태에서 `--allow-live`와 명시적인 `--output-dir`를 함께
-지정해야 한다. 출력 디렉터리에는 `preflight.json`, 안전한 `attempts.jsonl`, 집계
-`summary.json`, 사람 평가용 `blind_materials.json`, 사후 대조용 `blind_mapping.json`만
+지정해야 한다. 출력 디렉터리에는 `preflight.json`, 안전한 `attempts.jsonl`, provider 오류의
+비밀 없는 rate-limit 진단을 담은 `provider_diagnostics.jsonl`, 집계 `summary.json`, 사람
+평가용 `blind_materials.json`, 사후 대조용 `blind_mapping.json`만
 생성되며 prompt·raw samples/events·키·운영 DB/API payload는 저장하지 않는다.
 
 ```powershell
 python -m tests.aiq06_runner
-python -m tests.aiq06_runner --allow-live --output-dir <evaluation-dir>
+python -m tests.aiq06_runner --allow-live --delay-sec 15 --output-dir <evaluation-dir>
 ```
 
 첫 명령은 항상 미승인 preflight로 종료한다. 두 번째 명령은 최대 12회·기본 비용 상한
-`$0.01`·현재 모델 가격표를 모두 통과할 때만 6회 호출한다.
+`$0.01`·현재 모델 가격표를 모두 통과할 때만 6회 호출한다. `--delay-sec`는 호출 사이의
+고정 대기이며, rate-limit reset 헤더가 확인되면 그 값에 맞춰 조정한다.
 
 ## Fake 우선 실행
 
