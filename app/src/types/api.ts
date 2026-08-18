@@ -202,8 +202,11 @@ export interface components {
             duration_sec: number;
             /** Distance M */
             distance_m?: number | null;
-            /** Condition */
-            condition: number;
+            /**
+             * Condition
+             * @enum {integer}
+             */
+            condition: 1 | 3 | 5;
             /** Memo */
             memo?: string | null;
             /**
@@ -349,7 +352,7 @@ export interface components {
             /** Distance M */
             distance_m?: number | null;
             /** Condition */
-            condition?: number | null;
+            condition?: (1 | 3 | 5) | null;
             /** Memo */
             memo?: string | null;
             /**
@@ -552,7 +555,7 @@ export interface components {
             /** Goal Value */
             goal_value: number | null;
             /** Condition */
-            condition: number | null;
+            condition: (1 | 3 | 5) | null;
             /** Target Cadence Min */
             target_cadence_min: number | null;
             /** Target Cadence Max */
@@ -681,7 +684,7 @@ export interface components {
             /** Running Purpose */
             running_purpose: ("COMPLETE" | "HABIT" | "WEIGHT" | "FITNESS" | "PERFORMANCE") | null;
             /** Experience Level */
-            experience_level: number | null;
+            experience_level: (0 | 1 | 2) | null;
             /** Max Continuous Min */
             max_continuous_min: number | null;
             /** Weekly Goal Count */
@@ -702,7 +705,7 @@ export interface components {
             /** Running Purpose */
             running_purpose?: ("COMPLETE" | "HABIT" | "WEIGHT" | "FITNESS" | "PERFORMANCE") | null;
             /** Experience Level */
-            experience_level?: number | null;
+            experience_level?: (0 | 1 | 2) | null;
             /** Max Continuous Min */
             max_continuous_min?: number | null;
             /** Weekly Goal Count */
@@ -712,7 +715,7 @@ export interface components {
             /** Height Cm */
             height_cm?: number | null;
             /** Weight Kg */
-            weight_kg?: number | string | null;
+            weight_kg?: number | null;
             /** Birth Year */
             birth_year?: number | null;
             /** Gender */
