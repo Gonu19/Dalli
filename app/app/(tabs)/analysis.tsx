@@ -1,6 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRef } from 'react';
 import { Alert, Animated, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunListItem } from '@/src/api/client';
@@ -9,15 +7,13 @@ import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
-import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors, compactPressFeedback, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 export default function Analysis() {
   const router = useRouter();
   const { token } = useAuth();
   const runs = useRuns(token);
   const remove = useDeleteRun(token);
-  const scrollY = useRef(new Animated.Value(0)).current;
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
 
   const confirm = (run: RunListItem) => Alert.alert(
@@ -39,14 +35,10 @@ export default function Analysis() {
 
   return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
     <View style={styles.frame}>
-      <FigmaLogo top={31} left={24} />
-      <Pressable onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
-        <Ionicons color={colors.white} name="settings-outline" size={26} />
-      </Pressable>
+      <View pointerEvents="none" style={styles.headerSurface} />
+      <Text style={styles.header}>분석</Text>
       <Animated.ScrollView
         contentContainerStyle={styles.content}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.section}>나의 총 러닝 분석</Text>
@@ -101,7 +93,6 @@ export default function Analysis() {
               </View>
             </Pressable>)}
       </Animated.ScrollView>
-      <ScrollHeaderScrim scrollY={scrollY} />
     </View>
   </Screen>;
 }
@@ -130,9 +121,9 @@ function formatTime(value: number) {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  settings: { position: 'absolute', right: 25, top: 31, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  iconPressed: compactPressFeedback,
-  content: { paddingTop: 102, paddingHorizontal: 27, paddingBottom: 40 },
+  header: { position: 'absolute', top: navigationHeader.titleTop, left: 27, zIndex: 10, color: colors.white, fontSize: 25, lineHeight: 32, fontWeight: '800' },
+  headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: 'rgba(28,26,26,.76)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
+  content: { paddingTop: 84, paddingHorizontal: 27, paddingBottom: 40 },
   section: { color: colors.white, fontSize: 17, fontWeight: '700', marginLeft: 10 },
   summary: { height: 86, borderRadius: 20, backgroundColor: colors.white, marginTop: 15, flexDirection: 'row' },
   summaryItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
