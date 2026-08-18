@@ -691,12 +691,18 @@ export interface components {
             weekly_goal_count: number | null;
             /** Baseline Cadence */
             baseline_cadence: number | null;
+            /** Name */
+            name: string | null;
             /** Height Cm */
             height_cm: number | null;
             /** Weight Kg */
             weight_kg: number | null;
             /** Birth Year */
             birth_year: number | null;
+            /** Birth Month */
+            birth_month: number | null;
+            /** Birth Day */
+            birth_day: number | null;
             /** Gender */
             gender: ("M" | "F" | "O") | null;
         };
@@ -712,12 +718,18 @@ export interface components {
             weekly_goal_count?: number | null;
             /** Baseline Cadence */
             baseline_cadence?: number | null;
+            /** Name */
+            name?: string | null;
             /** Height Cm */
             height_cm?: number | null;
             /** Weight Kg */
             weight_kg?: number | null;
             /** Birth Year */
             birth_year?: number | null;
+            /** Birth Month */
+            birth_month?: number | null;
+            /** Birth Day */
+            birth_day?: number | null;
             /** Gender */
             gender?: ("M" | "F" | "O") | null;
         };

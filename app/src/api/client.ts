@@ -43,6 +43,7 @@ export type RunningPurpose = 'COMPLETE' | 'HABIT' | 'WEIGHT' | 'FITNESS' | 'PERF
 export type UserProfile = {
   id: string;
   onboarded: boolean;
+  name: string | null;
   runningPurpose: RunningPurpose | null;
   experienceLevel: 0 | 1 | 2 | null;
   maxContinuousMin: number | null;
@@ -51,6 +52,8 @@ export type UserProfile = {
   heightCm: number | null;
   weightKg: number | null;
   birthYear: number | null;
+  birthMonth: number | null;
+  birthDay: number | null;
   gender: 'M' | 'F' | 'O' | null;
 };
 
@@ -60,9 +63,12 @@ export type UserProfilePatch = {
   maxContinuousMin?: number;
   weeklyGoalCount?: number;
   baselineCadence?: number;
+  name?: string | null;
   heightCm?: number | null;
   weightKg?: number | null;
   birthYear?: number | null;
+  birthMonth?: number | null;
+  birthDay?: number | null;
   gender?: 'M' | 'F' | 'O' | null;
 };
 
@@ -269,6 +275,7 @@ function mapUserProfile(response: UserMeResponse): UserProfile {
   return {
     id: response.id,
     onboarded: response.onboarded,
+    name: response.name,
     runningPurpose: mapRunningPurpose(response.running_purpose),
     experienceLevel: mapExperienceLevel(response.experience_level),
     maxContinuousMin: response.max_continuous_min,
@@ -277,6 +284,8 @@ function mapUserProfile(response: UserMeResponse): UserProfile {
     heightCm: response.height_cm,
     weightKg: response.weight_kg,
     birthYear: response.birth_year,
+    birthMonth: response.birth_month,
+    birthDay: response.birth_day,
     gender: response.gender,
   };
 }
@@ -303,9 +312,12 @@ export async function patchUserProfile(token: string, profile: UserProfilePatch)
     ...(profile.maxContinuousMin !== undefined ? { max_continuous_min: profile.maxContinuousMin } : {}),
     ...(profile.weeklyGoalCount !== undefined ? { weekly_goal_count: profile.weeklyGoalCount } : {}),
     ...(profile.baselineCadence !== undefined ? { baseline_cadence: profile.baselineCadence } : {}),
+    ...(profile.name !== undefined ? { name: profile.name } : {}),
     ...(profile.heightCm !== undefined ? { height_cm: profile.heightCm } : {}),
     ...(profile.weightKg !== undefined ? { weight_kg: profile.weightKg } : {}),
     ...(profile.birthYear !== undefined ? { birth_year: profile.birthYear } : {}),
+    ...(profile.birthMonth !== undefined ? { birth_month: profile.birthMonth } : {}),
+    ...(profile.birthDay !== undefined ? { birth_day: profile.birthDay } : {}),
     ...(profile.gender !== undefined ? { gender: profile.gender } : {}),
   };
   const response = await request<UserMeResponse>('/users/me', {

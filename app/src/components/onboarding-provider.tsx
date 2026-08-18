@@ -7,6 +7,7 @@ export type ExperienceLevel = 0 | 1 | 2;
 export type Gender = 'M' | 'F' | 'O';
 
 export type OnboardingDraft = {
+  name?: string;
   purpose?: RunningPurpose;
   experienceChoice?: number;
   experienceLevel?: ExperienceLevel;

@@ -30,7 +30,7 @@ export default function BodyInfoScreen() {
   const complete = Boolean(name.trim() && gender && birth && height && weight);
   const next = () => {
     if (!complete || !birth || !gender || !height || !weight) return;
-    updateDraft({ birthYear: birth.year, birthMonth: birth.month, birthDay: birth.day, heightCm: height, weightKg: weight, gender });
+    updateDraft({ name: name.trim(), birthYear: birth.year, birthMonth: birth.month, birthDay: birth.day, heightCm: height, weightKg: weight, gender });
     router.push('/onboarding/reason');
   };
 

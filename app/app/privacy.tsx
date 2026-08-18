@@ -40,9 +40,9 @@ function PrivacyForm({ profile, token, onClose }: {
   onClose: () => void;
 }) {
   const update = useUpdateProfile(token);
-  const [name, setName] = useState('홍길동');
+  const [name, setName] = useState(profile.name ?? '');
   const [gender, setGender] = useState<Gender | null>(profile.gender);
-  const [birth, setBirth] = useState<BirthDate | null>(profile.birthYear ? { year: profile.birthYear, month: 1, day: 1 } : null);
+  const [birth, setBirth] = useState<BirthDate | null>(profile.birthYear ? { year: profile.birthYear, month: profile.birthMonth ?? 1, day: profile.birthDay ?? 1 } : null);
   const [height, setHeight] = useState<number | null>(profile.heightCm);
   const [weight, setWeight] = useState<number | null>(profile.weightKg);
   const [purpose, setPurpose] = useState<RunningPurpose>(profile.runningPurpose ?? 'HABIT');
@@ -62,6 +62,7 @@ function PrivacyForm({ profile, token, onClose }: {
   }, []);
 
   const save = () => update.mutateAsync({
+    name: name.trim() || undefined,
     runningPurpose: purpose,
     experienceLevel: profile.experienceLevel!,
     maxContinuousMin: profile.maxContinuousMin!,
@@ -70,6 +71,8 @@ function PrivacyForm({ profile, token, onClose }: {
     heightCm: height ?? undefined,
     weightKg: weight ?? undefined,
     birthYear: birth?.year,
+    birthMonth: birth?.month,
+    birthDay: birth?.day,
     gender: gender ?? undefined,
   });
 
