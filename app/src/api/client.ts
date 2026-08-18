@@ -1,3 +1,10 @@
+import type { components } from '../types/api';
+
+type ApiSchemas = components['schemas'];
+type RunDetailResponse = ApiSchemas['RunDetailResponse'];
+type RunReportResponse = ApiSchemas['ReportResponse'];
+type StatsResponse = ApiSchemas['StatsResponse'];
+
 const apiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -100,19 +107,33 @@ export type RunListItem = {
 
 export type RunDetail = {
   id: string;
+  clientRunId: string;
   source: 'APP' | 'MANUAL';
+  planId: string | null;
   startedAt: string;
+  endedAt: string | null;
   goalType: 'TIME' | 'DISTANCE' | null;
   goalValue: number | null;
   condition: 1 | 3 | 5 | null;
+  targetCadenceMin: number | null;
+  targetCadenceMax: number | null;
+  finalTargetMin: number | null;
+  finalTargetMax: number | null;
   durationSec: number;
   distanceM: number | null;
   avgCadence: number | null;
   avgPaceSecPerKm: number | null;
   completed: boolean;
   interventionCount: number | null;
+  downshiftCount: number | null;
   rhythmScore: number | null;
+  lateDropRate: number | null;
+  fatigueIndex: number | null;
   memo: string | null;
+  isAnalyzable: boolean;
+  analysisLimitation: 'MANUAL_RUN' | 'TOO_SHORT' | 'INSUFFICIENT_SENSOR_DATA' | null;
+  samples: ApiSchemas['RunSample'][] | null;
+  events: ApiSchemas['RunEvent'][] | null;
   report: RunReport | null;
 };
 
@@ -159,6 +180,12 @@ export type Stats = {
   thisMonthDays: number;
   thisWeekCount: number;
   nextMilestone: number;
+  recentRun: {
+    id: string;
+    date: string;
+    durationSec: number;
+    completed: boolean;
+  } | null;
 };
 
 export type Plan = {
@@ -237,7 +264,7 @@ function mapUserProfile(response: UserProfileResponse): UserProfile {
     id: response.id,
     onboarded: response.onboarded,
     runningPurpose: response.running_purpose,
-    experienceLevel: response.experience_level,
+    experienceLevel: mapExperienceLevel(response.experience_level),
     maxContinuousMin: response.max_continuous_min,
     weeklyGoalCount: response.weekly_goal_count,
     baselineCadence: response.baseline_cadence,
@@ -246,6 +273,16 @@ function mapUserProfile(response: UserProfileResponse): UserProfile {
     birthYear: response.birth_year,
     gender: response.gender,
   };
+}
+
+function mapExperienceLevel(value: number | null): 0 | 1 | 2 | null {
+  if (value === null || value === 0 || value === 1 || value === 2) return value;
+  throw new ApiError('서버의 러닝 경험 값이 올바르지 않아요.');
+}
+
+function mapCondition(value: number | null): 1 | 3 | 5 | null {
+  if (value === null || value === 1 || value === 3 || value === 5) return value;
+  throw new ApiError('서버의 컨디션 값이 올바르지 않아요.');
 }
 
 export async function getUserProfile(token: string): Promise<UserProfile> {
@@ -345,63 +382,40 @@ export async function getRuns(token: string): Promise<RunListItem[]> {
 }
 
 export async function getRunDetail(token: string, runId: string): Promise<RunDetail> {
-  const response = await request<{
-    id: string;
-    source: 'APP' | 'MANUAL';
-    started_at: string;
-    goal_type: 'TIME' | 'DISTANCE' | null;
-    goal_value: number | null;
-    condition: 1 | 3 | 5 | null;
-    duration_sec: number;
-    distance_m: number | null;
-    avg_cadence: number | null;
-    avg_pace_sec_per_km: number | null;
-    completed: boolean;
-    intervention_count: number | null;
-    rhythm_score: number | null;
-    memo: string | null;
-    report: RunReportResponse | null;
-  }>(`/runs/${runId}`, {}, token);
+  const response = await request<RunDetailResponse>(`/runs/${runId}`, {}, token);
 
   return {
     id: response.id,
+    clientRunId: response.client_run_id,
     source: response.source,
+    planId: response.plan_id,
     startedAt: response.started_at,
+    endedAt: response.ended_at,
     goalType: response.goal_type,
     goalValue: response.goal_value,
-    condition: response.condition,
+    condition: mapCondition(response.condition),
+    targetCadenceMin: response.target_cadence_min,
+    targetCadenceMax: response.target_cadence_max,
+    finalTargetMin: response.final_target_min,
+    finalTargetMax: response.final_target_max,
     durationSec: response.duration_sec,
     distanceM: response.distance_m,
     avgCadence: response.avg_cadence,
     avgPaceSecPerKm: response.avg_pace_sec_per_km,
     completed: response.completed,
     interventionCount: response.intervention_count,
+    downshiftCount: response.downshift_count,
     rhythmScore: response.rhythm_score,
+    lateDropRate: response.late_drop_rate,
+    fatigueIndex: response.fatigue_index,
     memo: response.memo,
+    isAnalyzable: response.is_analyzable,
+    analysisLimitation: response.analysis_limitation,
+    samples: response.samples,
+    events: response.events,
     report: response.report ? mapRunReport(response.report) : null,
   };
 }
-
-type RunReportResponse = {
-  id: string;
-  run_id: string;
-  verdict: string;
-  evidence: string[];
-  hypothesis: string | null;
-  prescription: string | null;
-  next_goal_text: string;
-  next_target_min: number;
-  next_target_max: number;
-  recovery_note: string | null;
-  limitation: string | null;
-  metrics: {
-    rhythm_score: number | null;
-    late_drop_rate: number | null;
-    fatigue_index: number | null;
-    in_range_sec: number | null;
-  };
-  is_fallback: boolean;
-};
 
 function mapRunReport(response: RunReportResponse): RunReport {
   return {
@@ -462,19 +476,19 @@ export async function getCalendar(token: string, year: number, month: number): P
 }
 
 export async function getStats(token: string): Promise<Stats> {
-  const response = await request<{
-    total_run_days: number;
-    dalli_days: number;
-    this_month_days: number;
-    this_week_count: number;
-    next_milestone: number;
-  }>('/stats', {}, token);
+  const response = await request<StatsResponse>('/stats', {}, token);
   return {
     totalRunDays: response.total_run_days,
     dalliDays: response.dalli_days,
     thisMonthDays: response.this_month_days,
     thisWeekCount: response.this_week_count,
     nextMilestone: response.next_milestone,
+    recentRun: response.recent_run ? {
+      id: response.recent_run.id,
+      date: response.recent_run.date,
+      durationSec: response.recent_run.duration_sec,
+      completed: response.recent_run.completed,
+    } : null,
   };
 }
 
