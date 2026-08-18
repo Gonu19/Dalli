@@ -19,7 +19,7 @@ export type OnboardingDraft = {
   birthDay?: number;
   gender?: Gender;
   reasonChoice?: RunningPurpose;
-  baselineCadence: number;
+  baselineCadence?: number;
 };
 
 type ContextValue = {
@@ -30,7 +30,7 @@ type ContextValue = {
 const OnboardingContext = createContext<ContextValue | null>(null);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<OnboardingDraft>({ baselineCadence: 157 });
+  const [draft, setDraft] = useState<OnboardingDraft>({});
 
   const value = useMemo<ContextValue>(
     () => ({

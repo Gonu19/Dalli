@@ -1,8 +1,20 @@
 import type { components } from '../types/api';
 
 type ApiSchemas = components['schemas'];
+type UserMeResponse = ApiSchemas['UserMeResponse'];
+type UserMeUpdate = ApiSchemas['UserMeUpdate'];
+type DeviceAuthRequest = ApiSchemas['DeviceAuthRequest'];
+type AppRunCreate = ApiSchemas['AppRunCreate'];
+type ManualRunCreate = ApiSchemas['ManualRunCreate'];
+type RunCreateResponse = ApiSchemas['RunCreateResponse'];
+type RunListResponse = ApiSchemas['RunListResponse'];
 type RunDetailResponse = ApiSchemas['RunDetailResponse'];
 type RunReportResponse = ApiSchemas['ReportResponse'];
+type PlanListResponse = ApiSchemas['PlanListResponse'];
+type PlanCreate = ApiSchemas['PlanCreate'];
+type PlanResponse = ApiSchemas['PlanResponse'];
+type PlanUpdate = ApiSchemas['PlanUpdate'];
+type CalendarResponse = ApiSchemas['CalendarResponse'];
 type StatsResponse = ApiSchemas['StatsResponse'];
 
 const apiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
@@ -18,12 +30,7 @@ export class ApiError extends Error {
   }
 }
 
-type ApiErrorBody = {
-  detail?: {
-    code?: string;
-    message?: string;
-  };
-};
+type ApiErrorBody = Partial<ApiSchemas['ErrorResponse']>;
 
 export type AuthToken = {
   accessToken: string;
@@ -79,15 +86,15 @@ export type RunUpload = {
   completed: boolean;
   interventionCount: number;
   downshiftCount: number;
-  samples: { t: number; c: number; p?: number | null; d?: number | null }[];
-  events: { t: number; type: string; payload: object }[];
+  samples: ApiSchemas['RunSample'][];
+  events: ApiSchemas['RunEvent'][];
 };
 
 export type RunCreated = {
   id: string;
   clientRunId: string;
   isAnalyzable: boolean;
-  analysisLimitation: string | null;
+  analysisLimitation: ApiSchemas['RunCreateResponse']['analysis_limitation'];
   rhythmScore: number | null;
   lateDropRate: number | null;
   fatigueIndex: number | null;
@@ -198,36 +205,29 @@ export type Plan = {
   runId: string | null;
 };
 
-type UserProfileResponse = {
-  id: string;
-  onboarded: boolean;
-  running_purpose: RunningPurpose | null;
-  experience_level: 0 | 1 | 2 | null;
-  max_continuous_min: number | null;
-  weekly_goal_count: number | null;
-  baseline_cadence: number | null;
-  height_cm: number | null;
-  weight_kg: number | null;
-  birth_year: number | null;
-  gender: 'M' | 'F' | 'O' | null;
-};
-
 function requireApiUrl() {
   if (!apiUrl) {
-    throw new ApiError('Mock API 주소가 설정되지 않았어요. app/.env를 확인해 주세요.');
+    throw new ApiError('API 주소가 설정되지 않았어요. app/.env를 확인해 주세요.', undefined, 'CONFIGURATION_ERROR');
   }
   return apiUrl;
 }
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const response = await fetch(`${requireApiUrl()}${path}`, {
-    ...init,
-    headers: {
+  let response: Response;
+  try {
+    const headers = new Headers({
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
-    },
-  });
+    });
+    headers.delete('X-Mock-Scenario');
+    response = await fetch(`${requireApiUrl()}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new ApiError('네트워크에 연결할 수 없어요. 연결을 확인한 뒤 다시 시도해 주세요.', undefined, 'NETWORK_ERROR');
+  }
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
@@ -242,14 +242,15 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   return response.json() as Promise<T>;
 }
 
+export function isOfflineError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'NETWORK_ERROR';
+}
+
 export async function authenticateDevice(deviceUuid: string): Promise<AuthToken> {
-  const response = await request<{
-    access_token: string;
-    token_type: string;
-    is_new_user: boolean;
-  }>('/auth/device', {
+  const body: DeviceAuthRequest = { device_uuid: deviceUuid };
+  const response = await request<ApiSchemas['DeviceAuthResponse']>('/auth/device', {
     method: 'POST',
-    body: JSON.stringify({ device_uuid: deviceUuid }),
+    body: JSON.stringify(body),
   });
 
   return {
@@ -259,11 +260,16 @@ export async function authenticateDevice(deviceUuid: string): Promise<AuthToken>
   };
 }
 
-function mapUserProfile(response: UserProfileResponse): UserProfile {
+function mapRunningPurpose(value: UserMeResponse['running_purpose']): RunningPurpose | null {
+  if (value === null || value === 'COMPLETE' || value === 'HABIT' || value === 'WEIGHT' || value === 'FITNESS' || value === 'PERFORMANCE') return value;
+  throw new ApiError('서버의 러닝 목적 값이 올바르지 않아요.', undefined, 'CONTRACT_ERROR');
+}
+
+function mapUserProfile(response: UserMeResponse): UserProfile {
   return {
     id: response.id,
     onboarded: response.onboarded,
-    runningPurpose: response.running_purpose,
+    runningPurpose: mapRunningPurpose(response.running_purpose),
     experienceLevel: mapExperienceLevel(response.experience_level),
     maxContinuousMin: response.max_continuous_min,
     weeklyGoalCount: response.weekly_goal_count,
@@ -286,63 +292,56 @@ function mapCondition(value: number | null): 1 | 3 | 5 | null {
 }
 
 export async function getUserProfile(token: string): Promise<UserProfile> {
-  const response = await request<UserProfileResponse>('/users/me', {}, token);
+  const response = await request<UserMeResponse>('/users/me', {}, token);
   return mapUserProfile(response);
 }
 
 export async function patchUserProfile(token: string, profile: UserProfilePatch): Promise<UserProfile> {
-  const response = await request<UserProfileResponse>('/users/me', {
+  const body: UserMeUpdate = {
+    ...(profile.runningPurpose !== undefined ? { running_purpose: profile.runningPurpose } : {}),
+    ...(profile.experienceLevel !== undefined ? { experience_level: profile.experienceLevel } : {}),
+    ...(profile.maxContinuousMin !== undefined ? { max_continuous_min: profile.maxContinuousMin } : {}),
+    ...(profile.weeklyGoalCount !== undefined ? { weekly_goal_count: profile.weeklyGoalCount } : {}),
+    ...(profile.baselineCadence !== undefined ? { baseline_cadence: profile.baselineCadence } : {}),
+    ...(profile.heightCm !== undefined ? { height_cm: profile.heightCm } : {}),
+    ...(profile.weightKg !== undefined ? { weight_kg: profile.weightKg } : {}),
+    ...(profile.birthYear !== undefined ? { birth_year: profile.birthYear } : {}),
+    ...(profile.gender !== undefined ? { gender: profile.gender } : {}),
+  };
+  const response = await request<UserMeResponse>('/users/me', {
     method: 'PATCH',
-    body: JSON.stringify({
-      ...(profile.runningPurpose !== undefined ? { running_purpose: profile.runningPurpose } : {}),
-      ...(profile.experienceLevel !== undefined ? { experience_level: profile.experienceLevel } : {}),
-      ...(profile.maxContinuousMin !== undefined ? { max_continuous_min: profile.maxContinuousMin } : {}),
-      ...(profile.weeklyGoalCount !== undefined ? { weekly_goal_count: profile.weeklyGoalCount } : {}),
-      ...(profile.baselineCadence !== undefined ? { baseline_cadence: profile.baselineCadence } : {}),
-      ...(profile.heightCm !== undefined ? { height_cm: profile.heightCm } : {}),
-      ...(profile.weightKg !== undefined ? { weight_kg: profile.weightKg } : {}),
-      ...(profile.birthYear !== undefined ? { birth_year: profile.birthYear } : {}),
-      ...(profile.gender !== undefined ? { gender: profile.gender } : {}),
-    }),
+    body: JSON.stringify(body),
   }, token);
   return mapUserProfile(response);
 }
 
 export async function createRun(token: string, run: RunUpload): Promise<RunCreated> {
-  const response = await request<{
-    id: string;
-    client_run_id: string;
-    is_analyzable: boolean;
-    analysis_limitation: string | null;
-    rhythm_score: number | null;
-    late_drop_rate: number | null;
-    fatigue_index: number | null;
-  }>('/runs', {
+  const body: AppRunCreate = {
+    client_run_id: run.clientRunId,
+    source: run.source,
+    started_at: run.startedAt,
+    duration_sec: run.durationSec,
+    condition: run.condition,
+    goal_type: run.goalType,
+    goal_value: run.goalValue,
+    target_cadence_min: run.targetCadenceMin,
+    target_cadence_max: run.targetCadenceMax,
+    final_target_min: run.finalTargetMin,
+    final_target_max: run.finalTargetMax,
+    avg_cadence: run.avgCadence,
+    completed: run.completed,
+    intervention_count: run.interventionCount,
+    downshift_count: run.downshiftCount,
+    samples: run.samples,
+    events: run.events,
+    ...(run.planId !== null ? { plan_id: run.planId } : {}),
+    ...(run.endedAt ? { ended_at: run.endedAt } : {}),
+    ...(run.distanceM !== null ? { distance_m: run.distanceM } : {}),
+    ...(run.avgPaceSecPerKm !== null ? { avg_pace_sec_per_km: run.avgPaceSecPerKm } : {}),
+  };
+  const response = await request<RunCreateResponse>('/runs', {
     method: 'POST',
-    body: JSON.stringify({
-      client_run_id: run.clientRunId,
-      source: run.source,
-      plan_id: run.planId,
-      started_at: run.startedAt,
-      ended_at: run.endedAt,
-      goal_type: run.goalType,
-      goal_value: run.goalValue,
-      condition: run.condition,
-      target_cadence_min: run.targetCadenceMin,
-      target_cadence_max: run.targetCadenceMax,
-      final_target_min: run.finalTargetMin,
-      final_target_max: run.finalTargetMax,
-      duration_sec: run.durationSec,
-      distance_m: run.distanceM,
-      avg_cadence: run.avgCadence,
-      avg_pace_sec_per_km: run.avgPaceSecPerKm,
-      completed: run.completed,
-      intervention_count: run.interventionCount,
-      downshift_count: run.downshiftCount,
-      memo: null,
-      samples: run.samples,
-      events: run.events,
-    }),
+    body: JSON.stringify(body),
   }, token);
 
   return {
@@ -357,17 +356,7 @@ export async function createRun(token: string, run: RunUpload): Promise<RunCreat
 }
 
 export async function getRuns(token: string): Promise<RunListItem[]> {
-  const response = await request<{ items: {
-    id: string;
-    started_at: string;
-    duration_sec: number;
-    distance_m: number | null;
-    avg_cadence: number | null;
-    completed: boolean;
-    source: 'APP' | 'MANUAL';
-    rhythm_score: number | null;
-    has_report: boolean;
-  }[] }>('/runs?limit=20', {}, token);
+  const response = await request<RunListResponse>('/runs?limit=20', {}, token);
   return response.items.map((item) => ({
     id: item.id,
     startedAt: item.started_at,
@@ -453,11 +442,7 @@ export async function deleteRun(token: string, runId: string): Promise<void> {
 }
 
 export async function getCalendar(token: string, year: number, month: number): Promise<CalendarDay[]> {
-  const response = await request<{ days: {
-    date: string;
-    plan: null | { id: string; status: 'PLANNED' | 'DONE' | 'SKIPPED'; goal_type: 'TIME' | 'DISTANCE'; goal_value: number };
-    runs: { id: string; source: 'APP' | 'MANUAL'; duration_sec: number; completed: boolean }[];
-  }[] }>(`/calendar?year=${year}&month=${month}`, {}, token);
+  const response = await request<CalendarResponse>(`/calendar?year=${year}&month=${month}`, {}, token);
   return response.days.map((day) => ({
     date: day.date,
     plan: day.plan ? {
@@ -496,23 +481,33 @@ export async function createPlan(
   token: string,
   input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string },
 ): Promise<Plan> {
-  const response = await request<{
-    id: string;
-    planned_date: string;
-    goal_type: 'TIME' | 'DISTANCE';
-    goal_value: number;
-    memo: string | null;
-    status: 'PLANNED' | 'DONE' | 'SKIPPED';
-    run_id: string | null;
-  }>('/plans', {
+  const body: PlanCreate = {
+    planned_date: input.plannedDate,
+    goal_type: input.goalType,
+    goal_value: input.goalValue,
+    memo: input.memo?.trim() || null,
+  };
+  const response = await request<PlanResponse>('/plans', {
     method: 'POST',
-    body: JSON.stringify({
-      planned_date: input.plannedDate,
-      goal_type: input.goalType,
-      goal_value: input.goalValue,
-      memo: input.memo?.trim() || null,
-    }),
+    body: JSON.stringify(body),
   }, token);
+  return {
+    id: response.id,
+    plannedDate: response.planned_date,
+    goalType: response.goal_type,
+    goalValue: response.goal_value,
+    memo: response.memo,
+    status: response.status,
+    runId: response.run_id,
+  };
+}
+
+export async function getPlans(token: string, from: string, to: string): Promise<Plan[]> {
+  const response = await request<PlanListResponse>(`/plans?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {}, token);
+  return response.items.map(mapPlan);
+}
+
+function mapPlan(response: PlanResponse): Plan {
   return {
     id: response.id,
     plannedDate: response.planned_date,
@@ -527,34 +522,18 @@ export async function createPlan(
 export async function updatePlan(
   token: string,
   planId: string,
-  input: { goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; memo?: string; status?: 'PLANNED' | 'DONE' | 'SKIPPED' },
+  input: { goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; status?: 'PLANNED' | 'DONE' | 'SKIPPED' },
 ): Promise<Plan> {
-  const response = await request<{
-    id: string;
-    planned_date: string;
-    goal_type: 'TIME' | 'DISTANCE';
-    goal_value: number;
-    memo: string | null;
-    status: 'PLANNED' | 'DONE' | 'SKIPPED';
-    run_id: string | null;
-  }>(`/plans/${planId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      ...(input.goalType ? { goal_type: input.goalType } : {}),
-      ...(input.goalValue !== undefined ? { goal_value: input.goalValue } : {}),
-      ...(input.memo !== undefined ? { memo: input.memo.trim() || null } : {}),
-      ...(input.status ? { status: input.status } : {}),
-    }),
-  }, token);
-  return {
-    id: response.id,
-    plannedDate: response.planned_date,
-    goalType: response.goal_type,
-    goalValue: response.goal_value,
-    memo: response.memo,
-    status: response.status,
-    runId: response.run_id,
+  const body: PlanUpdate = {
+    ...(input.goalType ? { goal_type: input.goalType } : {}),
+    ...(input.goalValue !== undefined ? { goal_value: input.goalValue } : {}),
+    ...(input.status ? { status: input.status } : {}),
   };
+  const response = await request<PlanResponse>(`/plans/${planId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  }, token);
+  return mapPlan(response);
 }
 
 export async function deletePlan(token: string, planId: string): Promise<void> {
@@ -565,27 +544,18 @@ export async function createManualRun(
   token: string,
   input: { clientRunId: string; startedAt: string; durationSec: number; distanceM?: number; memo?: string },
 ): Promise<RunCreated> {
-  const response = await request<{
-    id: string;
-    client_run_id: string;
-    is_analyzable: boolean;
-    analysis_limitation: string | null;
-    rhythm_score: number | null;
-    late_drop_rate: number | null;
-    fatigue_index: number | null;
-  }>('/runs', {
+  const body: ManualRunCreate = {
+    client_run_id: input.clientRunId,
+    source: 'MANUAL',
+    started_at: input.startedAt,
+    duration_sec: input.durationSec,
+    completed: true,
+    ...(input.distanceM !== undefined ? { distance_m: input.distanceM } : {}),
+    ...(input.memo !== undefined ? { memo: input.memo.trim() || null } : {}),
+  };
+  const response = await request<RunCreateResponse>('/runs', {
     method: 'POST',
-    body: JSON.stringify({
-      client_run_id: input.clientRunId,
-      source: 'MANUAL',
-      plan_id: null,
-      started_at: input.startedAt,
-      duration_sec: input.durationSec,
-      distance_m: input.distanceM ?? null,
-      condition: 3,
-      completed: true,
-      memo: input.memo?.trim() || null,
-    }),
+    body: JSON.stringify(body),
   }, token);
   return {
     id: response.id,

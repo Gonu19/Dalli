@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useRef } from 'react';
 import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { RunListItem } from '@/src/api/client';
+import { isOfflineError, type RunListItem } from '@/src/api/client';
 import { useDeleteRun, useRuns } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
@@ -18,14 +18,6 @@ export default function Analysis() {
   const remove = useDeleteRun(token);
   const scrollY = useRef(new Animated.Value(0)).current;
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
-  const measuredCadences = appRuns.flatMap((run) => run.avgCadence === null ? [] : [run.avgCadence]);
-  const avg = measuredCadences.length
-    ? Math.round(measuredCadences.reduce((sum, cadence) => sum + cadence, 0) / measuredCadences.length)
-    : null;
-  const measuredRhythmScores = appRuns.flatMap((run) => run.rhythmScore === null ? [] : [run.rhythmScore]);
-  const avgRhythmScore = measuredRhythmScores.length
-    ? Math.round(measuredRhythmScores.reduce((sum, score) => sum + score, 0) / measuredRhythmScores.length * 100)
-    : null;
 
   const confirm = (run: RunListItem) => Alert.alert(
     '이 러닝을 삭제할까요?',
@@ -60,13 +52,13 @@ export default function Analysis() {
         {runs.isLoading
           ? <View style={styles.emptySummary}><Text style={styles.emptyText}>러닝 기록을 불러오는 중이에요</Text></View>
           : runs.error
-            ? <Pressable onPress={() => void runs.refetch()} style={({ pressed }) => [styles.emptySummary, pressed && styles.buttonPressed]}><Text style={styles.emptyText}>기록을 불러오지 못했어요 · 다시 시도</Text></Pressable>
+            ? <Pressable onPress={() => void runs.refetch()} style={({ pressed }) => [styles.emptySummary, pressed && styles.buttonPressed]}><Text style={styles.emptyText}>{isOfflineError(runs.error) ? '오프라인 상태예요 · 다시 시도' : '기록을 불러오지 못했어요 · 다시 시도'}</Text></Pressable>
           : runs.data?.length === 0
           ? <View style={styles.emptySummary}><Text style={styles.emptyText}>아직 러닝 기록이 없어요</Text></View>
           : <View style={styles.summary}>
-              <Summary value={String(appRuns.filter((run) => run.completed).length)} label="완주 횟수" accent />
-              <Summary value={avg === null ? '—' : String(avg)} label="평균 spm" />
-              <Summary value={avgRhythmScore === null ? '—' : `${avgRhythmScore}%`} label="평균 안정 구간" />
+              <Summary value={String(appRuns.filter((run) => run.completed).length)} label="앱 완주 횟수" accent />
+              <Summary value={String(appRuns.length)} label="앱 측정 러닝" />
+              <Summary value={String(runs.data?.filter((run) => run.source === 'MANUAL').length ?? 0)} label="수기 기록" />
             </View>}
         <Text style={[styles.section, { marginTop: 28 }]}>러닝 분석</Text>
         {runs.data?.length === 0
@@ -103,7 +95,7 @@ export default function Analysis() {
               <View style={styles.line} />
               <View style={styles.metrics}>
                 <Metric value={run.distanceM === null ? '—' : (run.distanceM / 1000).toFixed(2)} label="KM" />
-                <Metric value={formatPace(run.durationSec, run.distanceM)} label="평균 페이스" />
+                <Metric value={run.rhythmScore === null ? '—' : `${Math.round(run.rhythmScore * 100)}%`} label="안정 구간" />
                 <Metric value={formatTime(run.durationSec)} label="시간" />
               </View>
             </Pressable>)}
@@ -133,12 +125,6 @@ function formatDay(value: string) {
 
 function formatTime(value: number) {
   return `${String(Math.floor(value / 3600)).padStart(2, '0')}:${String(Math.floor(value % 3600 / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
-}
-
-function formatPace(seconds: number, distance: number | null) {
-  if (!distance) return '—';
-  const pace = seconds / (distance / 1000);
-  return `${Math.floor(pace / 60)}’${String(Math.round(pace % 60)).padStart(2, '0')}”`;
 }
 
 const styles = StyleSheet.create({

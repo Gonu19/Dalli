@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { isOfflineError } from '@/src/api/client';
 import { useRunReport } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
@@ -16,6 +17,9 @@ export default function AIReport() {
   const { result } = useRunResult();
   const fetched = useRunReport(token, params.runId || null);
   const report = result?.report ?? fetched.data;
+  const evidence = Array.isArray(report?.evidence)
+    ? report.evidence.filter((item): item is string => typeof item === 'string')
+    : [];
   const scrollY = useRef(new Animated.Value(0)).current;
 
   return <FigmaScreen>
@@ -26,17 +30,19 @@ export default function AIReport() {
       showsVerticalScrollIndicator={false}
     >
       {fetched.isLoading && !report ? <View style={styles.state}><Text style={styles.stateTitle}>리포트를 불러오는 중이에요</Text><Text style={styles.stateCopy}>분석 결과가 준비되면 바로 보여드릴게요.</Text></View> : null}
-      {fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>리포트를 불러오지 못했어요</Text><Text style={styles.stateCopy}>러닝 기록은 보존되어 있어요.</Text><Pressable onPress={() => void fetched.refetch()} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>다시 시도</Text></Pressable></View> : null}
+      {fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>{isOfflineError(fetched.error) ? '오프라인 상태예요' : '리포트를 불러오지 못했어요'}</Text><Text style={styles.stateCopy}>러닝 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요.</Text><Pressable onPress={() => void fetched.refetch()} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>다시 시도</Text></Pressable></View> : null}
+      {!fetched.isLoading && !fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>아직 표시할 리포트가 없어요</Text><Text style={styles.stateCopy}>분석 가능한 앱 러닝을 저장하면 서버가 리포트를 만들어요.</Text></View> : null}
       {report ? <>
         <View style={styles.verdict}><Text style={styles.orange}>{report.isFallback ? '기본 분석' : 'AI 한줄평'}</Text><Text style={styles.verdictText}>“{report.verdict}”</Text></View>
+        {report.isFallback ? <Text style={styles.fallbackCopy}>외부 분석 대신 계약된 기본 분석 결과를 표시하고 있어요.</Text> : null}
         {report.limitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{report.limitation}</Text></View> : null}
         <View style={styles.fiTitle}><Text style={styles.fiLabel}>오늘의 부담</Text><Text style={styles.fiValue}>{fatigueLabel(report.metrics.fatigueIndex)}</Text></View>
         {report.metrics.fatigueIndex === null ? <Text style={styles.fiCopy}>분석할 데이터가 충분하지 않아 부담 정도를 표시하지 않아요.</Text> : null}
-        <View style={styles.card}><Text style={styles.cardTitle}>분석 근거</Text>{report.evidence.slice(0,3).map((item)=><Text key={item} style={styles.evidence}>• {item}</Text>)}</View>
+        <View style={styles.card}><Text style={styles.cardTitle}>분석 근거</Text>{evidence.length ? evidence.map((item, index)=><Text key={`${item}-${index}`} style={styles.evidence}>• {item}</Text>) : <Text style={styles.cardBody}>표시할 근거가 없어요.</Text>}</View>
         {report.hypothesis ? <Card title="가능한 원인" body={report.hypothesis} /> : null}
         {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
-        <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text><Text style={styles.nextMeta}>오늘의 리듬 {Math.round((report.nextTargetMin + report.nextTargetMax) / 2)} spm</Text></View>
+        <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text></View>
       </> : null}
       <Pressable onPress={() => router.dismissTo('/')} style={({ pressed }) => [styles.home, pressed && styles.buttonPressed]}><Text style={styles.homeText}>홈으로 돌아가기</Text></Pressable>
     </Animated.ScrollView>
@@ -66,6 +72,7 @@ const styles = StyleSheet.create({
   state: { minHeight: 180, borderRadius: 28, backgroundColor: colors.white, padding: 24, justifyContent: 'center' },
   stateTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' },
   stateCopy: { color: colors.inkMuted, fontSize: 13, marginTop: 9 },
+  fallbackCopy: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 12, paddingHorizontal: 7 },
   retry: { height: 42, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
   retryText: { color: colors.white, fontSize: 14, fontWeight: '700' },
   limitation: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 17, marginTop: 20 },

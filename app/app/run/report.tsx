@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { isOfflineError, type RunDetail } from '@/src/api/client';
 import { useCreateReport, useProfile, useRunDetail, useRuns, useUpdateProfile } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
@@ -25,28 +26,35 @@ export default function Report() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!runId || local?.report || detail.data?.report || requested.current || (params.runId && !detail.data)) return;
+    const analysisUnavailable = params.runId
+      ? detail.data !== undefined && (!detail.data.isAnalyzable || detail.data.source !== 'APP')
+      : local?.uploaded !== null && local?.uploaded !== undefined && !local.uploaded.isAnalyzable;
+    if (!runId || local?.report || detail.data?.report || requested.current || (params.runId && !detail.data) || analysisUnavailable) return;
     requested.current = true;
     create.mutateAsync(runId)
       .then((report) => {
         if (!params.runId) setReport(report);
       })
       .catch(() => undefined);
-  }, [create, detail.data, local?.report, params.runId, runId, setReport]);
+  }, [create, detail.data, local?.report, local?.uploaded, params.runId, runId, setReport]);
 
   const record = local?.record;
-  const seconds = record?.durationSec ?? detail.data?.durationSec ?? null;
-  const cadence = record?.avgCadence ?? detail.data?.avgCadence ?? null;
-  const pace = record?.avgPaceSecPerKm ?? detail.data?.avgPaceSecPerKm ?? null;
-  const rhythmScore = local?.uploaded?.rhythmScore ?? detail.data?.rhythmScore ?? null;
   const report = local?.report ?? detail.data?.report ?? create.data;
-  const measuredBaseline = !local?.simulated && record?.measuredBaseline !== null
+  const measuredBaseline = !local?.simulated && record?.measuredBaseline !== null && record?.measuredBaseline !== undefined
     && runs.data?.filter((run) => run.source === 'APP').length === 1
     ? record?.measuredBaseline
     : null;
   const shouldConfirmBaseline = measuredBaseline !== null
     && profile.data?.baselineCadence !== measuredBaseline;
   const header = params.runId ? '상세보기' : '러닝 리포트';
+  const hasRunData = Boolean(record || detail.data);
+  const samples = params.runId ? detail.data?.samples ?? null : record?.samples ?? null;
+  const rhythmScore = params.runId
+    ? detail.data?.rhythmScore ?? report?.metrics.rhythmScore ?? null
+    : local?.uploaded?.rhythmScore ?? null;
+  const seconds = params.runId ? detail.data?.durationSec ?? null : record?.durationSec ?? null;
+  const cadence = params.runId ? detail.data?.avgCadence ?? null : record?.avgCadence ?? null;
+  const pace = params.runId ? detail.data?.avgPaceSecPerKm ?? null : record?.avgPaceSecPerKm ?? null;
 
   return <FigmaScreen>
     <FigmaBack onPress={() => router.back()} />
@@ -58,6 +66,10 @@ export default function Report() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={styles.title}>오늘의 기본 러닝 결과</Text>
+      {params.runId && detail.isLoading ? <StatusCard title="러닝 기록을 불러오는 중이에요" body="서버에 저장된 측정값을 확인하고 있어요." /> : null}
+      {params.runId && detail.error ? <StatusCard actionLabel="다시 시도" onAction={() => void detail.refetch()} title={isOfflineError(detail.error) ? '오프라인 상태예요' : '러닝 기록을 불러오지 못했어요'} body="기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." /> : null}
+      {detail.data?.analysisLimitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{formatAnalysisLimitation(detail.data.analysisLimitation)}</Text></View> : null}
+      {!params.runId && !report && local?.uploaded?.analysisLimitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{formatAnalysisLimitation(local.uploaded.analysisLimitation)}</Text></View> : null}
       {shouldConfirmBaseline ? <View style={styles.baselineCard}>
         <Text style={styles.baselineTitle}>나의 기준 리듬을 찾았어요</Text>
         <Text style={styles.baselineValue}>{measuredBaseline} <Text style={styles.baselineUnit}>spm</Text></Text>
@@ -71,15 +83,15 @@ export default function Report() {
         </Pressable>
         {updateProfile.error ? <Text style={styles.inlineError}>저장하지 못했어요. 다시 눌러 주세요.</Text> : null}
       </View> : null}
-      <View style={styles.grid}>
+      {hasRunData ? <View style={styles.grid}>
         <Metric label="실제 러닝 시간" value={seconds === null ? '—' : `${Math.round(seconds / 60)}`} unit={seconds === null ? undefined : '분'} />
         <Metric label="안정 구간" value={formatPercent(rhythmScore)} unit={rhythmScore === null ? undefined : '%'} />
         <Metric label="평균 리듬" value={cadence === null ? '—' : `${Math.round(cadence)}`} unit={cadence === null ? undefined : 'spm'} accent />
         <Metric label="평균 페이스" value={formatPace(pace)} />
-      </View>
-      <View style={styles.dataNotice}><Text style={styles.dataNoticeTitle}>변화 그래프</Text><Text style={styles.dataNoticeText}>실제 샘플 그래프는 준비 중이에요. 측정되지 않은 값은 표시하지 않아요.</Text></View>
+      </View> : null}
+      {hasRunData ? <SampleGraphs samples={samples} /> : null}
       {create.isPending ? <Text style={styles.reportState}>AI 리포트를 만들고 있어요...</Text> : null}
-      {create.error ? <Pressable onPress={() => runId && create.mutate(runId)} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>AI 리포트 다시 만들기</Text></Pressable> : null}
+      {create.error ? <Pressable onPress={() => runId && create.mutate(runId)} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>{isOfflineError(create.error) ? '연결 후 AI 리포트 다시 만들기' : 'AI 리포트 다시 만들기'}</Text></Pressable> : null}
     </Animated.ScrollView>
     <ScrollHeaderScrim scrollY={scrollY} />
     <View style={styles.floatingActions}>
@@ -111,12 +123,56 @@ function Metric({ label, value, unit, accent = false }: { label: string; value: 
 }
 
 function formatPace(value: number | null) {
-  if (!value) return '—';
+  if (value === null) return '—';
   return `${Math.floor(value / 60)}’${String(Math.round(value % 60)).padStart(2, '0')}”`;
 }
 
 function formatPercent(value: number | null) {
   return value === null ? '—' : String(Math.round(value * 100));
+}
+
+function formatAnalysisLimitation(value: NonNullable<RunDetail['analysisLimitation']>) {
+  if (value === 'MANUAL_RUN') return '직접 기록한 러닝은 분석하지 않아요.';
+  if (value === 'TOO_SHORT') return '러닝 시간이 짧아 분석할 수 없어요.';
+  return '센서 데이터가 충분하지 않아 일부 지표를 표시하지 않아요.';
+}
+
+function StatusCard({ title, body, actionLabel, onAction }: { title: string; body: string; actionLabel?: string; onAction?: () => void }) {
+  return <View style={styles.stateCard}><Text style={styles.stateTitle}>{title}</Text><Text style={styles.stateText}>{body}</Text>{actionLabel && onAction ? <Pressable onPress={onAction} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>{actionLabel}</Text></Pressable> : null}</View>;
+}
+
+type ChartPoint = { key: string; value: number };
+
+function SampleGraphs({ samples }: { samples: readonly { t: number; c: number; p?: number | null }[] | null | undefined }) {
+  const cadence = toChartPoints(samples, (sample) => sample.c);
+  const pace = toChartPoints(samples, (sample) => sample.p);
+  if (!samples || samples.length === 0 || (cadence.length === 0 && pace.length === 0)) {
+    return <View style={styles.dataNotice}><Text style={styles.dataNoticeTitle}>변화 그래프</Text><Text style={styles.dataNoticeText}>실제 샘플이 없어 그래프를 표시하지 않아요.</Text></View>;
+  }
+  return <View style={styles.graphCard}>
+    <Text style={styles.dataNoticeTitle}>변화 그래프</Text>
+    {cadence.length ? <SampleChart points={cadence} title="리듬" unit="spm" /> : <Text style={styles.dataNoticeText}>리듬 샘플이 없어 표시하지 않아요.</Text>}
+    {pace.length ? <SampleChart points={pace} title="페이스" unit="초/km" /> : <Text style={styles.dataNoticeText}>페이스 샘플이 없어 표시하지 않아요.</Text>}
+  </View>;
+}
+
+function toChartPoints<T extends { t: number }>(samples: readonly T[] | null | undefined, readValue: (sample: T) => number | null | undefined): ChartPoint[] {
+  if (!samples) return [];
+  return samples.flatMap((sample, index) => {
+    const time = Number(sample.t);
+    const value = readValue(sample);
+    return Number.isFinite(time) && typeof value === 'number' && Number.isFinite(value)
+      ? [{ key: `${time}-${index}`, value }]
+      : [];
+  });
+}
+
+function SampleChart({ points, title, unit }: { points: ChartPoint[]; title: string; unit: string }) {
+  const values = points.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min;
+  return <View style={styles.chartBlock}><View style={styles.chartHeader}><Text style={styles.chartTitle}>{title}</Text><Text style={styles.chartUnit}>{unit}</Text></View><View style={styles.chart}><View style={styles.chartZero} />{points.map((point) => <View key={point.key} style={[styles.chartBar, { height: `${range === 0 ? 50 : 12 + ((point.value - min) / range) * 88}%` }]} />)}</View></View>;
 }
 
 const styles = StyleSheet.create({
@@ -140,6 +196,20 @@ const styles = StyleSheet.create({
   dataNotice: { minHeight: 112, borderRadius: 24, backgroundColor: colors.white, padding: 21, marginTop: 28 },
   dataNoticeTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
   dataNoticeText: { color: colors.inkMuted, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  graphCard: { borderRadius: 24, backgroundColor: colors.white, padding: 21, marginTop: 28 },
+  chartBlock: { marginTop: 18 },
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  chartTitle: { color: colors.ink, fontSize: 14, fontWeight: '700' },
+  chartUnit: { color: colors.inkMuted, fontSize: 12 },
+  chart: { height: 96, marginTop: 8, flexDirection: 'row', alignItems: 'flex-end', gap: 2, overflow: 'hidden', position: 'relative' },
+  chartZero: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: colors.border },
+  chartBar: { flex: 1, minWidth: 1, maxWidth: 5, borderRadius: 2, backgroundColor: colors.primary },
+  stateCard: { minHeight: 112, borderRadius: 24, backgroundColor: colors.white, padding: 21, marginTop: 20 },
+  stateTitle: { color: colors.ink, fontSize: 17, fontWeight: '700' },
+  stateText: { color: colors.inkMuted, fontSize: 13, lineHeight: 19, marginTop: 10 },
+  limitation: { borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 17, marginTop: 20 },
+  limitationTitle: { color: colors.white, fontSize: 14, fontWeight: '700' },
+  limitationText: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 7 },
   reportState: { color: colors.textMuted, fontSize: 13, marginTop: 18, textAlign: 'center' },
   retry: { height: 42, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
   retryText: { color: colors.primary, fontSize: 14, fontWeight: '700' },

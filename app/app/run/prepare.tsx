@@ -22,15 +22,17 @@ const cadenceControls = [
 export default function RunPrepare() {
   const router = useRouter();
   const params = useLocalSearchParams<{ condition?: string; cadence?: string }>();
-  const referenceCadence = Number(params.cadence) || 160;
+  const parsedCadence = Number(params.cadence);
+  const referenceCadence = Number.isFinite(parsedCadence) && parsedCadence > 0 ? parsedCadence : null;
   const condition = (params.condition as ConditionLevel) || 'NORMAL';
-  const [cadence, setCadence] = useState(referenceCadence);
-  const [minutes, setMinutes] = useState(60);
+  const [cadence, setCadence] = useState<number | null>(referenceCadence);
+  const [minutes, setMinutes] = useState<number | null>(null);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [vibration, setVibration] = useState(false);
   const { voiceEnabled, metronomeEnabled, setVoiceEnabled, setMetronomeEnabled } = usePreferences();
 
   const begin = async () => {
+    if (cadence === null || minutes === null) return;
     await startTrackedRun({
       referenceCadence: cadence,
       condition: CONDITION_VALUE[condition],
@@ -57,17 +59,18 @@ export default function RunPrepare() {
     </Pressable>
     <View style={styles.goalCard}>
       <Text style={styles.cardTitle}>목표 케이던스 조절</Text>
-      <View style={styles.valueRow}><Text style={styles.value}>{cadence}</Text><Text style={styles.unit}>SPM</Text></View>
+      <View style={styles.valueRow}><Text style={styles.value}>{cadence ?? '—'}</Text>{cadence !== null ? <Text style={styles.unit}>spm</Text> : null}</View>
       <View style={styles.controls}>{cadenceControls.map(({ delta, label }) => <Pressable
         accessibilityLabel={`케이던스 ${label}`}
         key={delta}
-        onPress={() => setCadence((current) => Math.max(120, Math.min(200, current + delta)))}
-        style={({ pressed }) => [styles.control, pressed && styles.controlPressed]}
+        disabled={cadence === null}
+        onPress={() => setCadence((current) => current === null ? current : Math.max(130, Math.min(185, current + delta)))}
+        style={({ pressed }) => [styles.control, cadence === null && styles.disabled, pressed && styles.controlPressed]}
       ><Text style={styles.controlText}>{label}</Text></Pressable>)}</View>
       <View style={styles.line} />
       <Text style={styles.timeTitle}>목표 시간</Text>
       <Pressable accessibilityRole="button" onPress={() => setTimePickerOpen(true)} style={({ pressed }) => [styles.timeBox, pressed && styles.controlPressed]}>
-        <Text style={styles.time}>{minutes}</Text><Text style={styles.timeUnit}>분</Text>
+        <Text style={[styles.time, minutes === null && styles.timePlaceholder]}>{minutes ?? '선택'}</Text>{minutes !== null ? <Text style={styles.timeUnit}>분</Text> : null}
         <Ionicons color={colors.inkMuted} name="chevron-down" size={14} style={styles.timeChevron} />
       </Pressable>
     </View>
@@ -77,13 +80,13 @@ export default function RunPrepare() {
       <Toggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled} />
       <Toggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={vibration} onChange={setVibration} />
     </View>
-    <Pressable onPress={() => void begin()} style={({ pressed }) => [styles.start, pressed && styles.buttonPressed]}>
+    <Pressable disabled={cadence === null || minutes === null} onPress={() => void begin()} style={({ pressed }) => [styles.start, (cadence === null || minutes === null) && styles.disabledStart, pressed && styles.buttonPressed]}>
       <Ionicons color={colors.white} name="play" size={20} /><Text style={styles.startText}>러닝 시작하기</Text>
     </Pressable>
     {timePickerOpen ? <WheelPickerModal
       columns={[{
         values: timeOptions,
-        initialIndex: Math.max(0, timeOptions.indexOf(String(minutes))),
+         initialIndex: Math.max(0, minutes === null ? 0 : timeOptions.indexOf(String(minutes))),
         suffix: '분',
       }]}
       onCancel={() => setTimePickerOpen(false)}
@@ -115,10 +118,12 @@ const styles = StyleSheet.create({
   controlPressed: pressFeedback,
   buttonPressed: pressFeedback,
   controlText: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  disabled: { opacity: 0.45 },
   line: { position: 'absolute', left: 18, right: 18, top: 168, height: 1, backgroundColor: colors.border },
   timeTitle: { position: 'absolute', left: 18, top: 198, fontSize: 17, fontWeight: '700', color: colors.ink },
   timeBox: { position: 'absolute', left: 105, top: 190, width: 104, height: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   time: { marginLeft: 17, fontSize: 14, fontWeight: '700', color: colors.ink },
+  timePlaceholder: { color: colors.inkMuted },
   timeUnit: { position: 'absolute', right: 28, fontSize: 13, fontWeight: '700', color: colors.inkMuted },
   timeChevron: { position: 'absolute', right: 8 },
   guide: { position: 'absolute', left: 29, right: 27, top: 425 - navigationHeader.contentLift, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
@@ -126,5 +131,6 @@ const styles = StyleSheet.create({
   toggleLabel: { fontSize: 15, fontWeight: '700', color: colors.ink },
   toggleCopy: { fontSize: 12, color: 'rgba(28,26,26,.58)', marginTop: 2 },
   start: { position: 'absolute', left: 28, right: 27, top: 646 - navigationHeader.contentLift, height: 52, borderRadius: 18, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 11 },
+  disabledStart: { opacity: 0.45 },
   startText: { color: colors.white, fontSize: 17, fontWeight: '700' },
 });

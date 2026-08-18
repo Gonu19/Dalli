@@ -3,11 +3,12 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import type { CalendarDay } from '@/src/api/client';
+import { isOfflineError, type CalendarDay } from '@/src/api/client';
 import { useCalendar, useCreateManualRun, useCreatePlan, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaScreen } from '@/src/components/figma-ui';
 import { getProfilePhotoUri } from '@/src/components/profile-photo';
+import { StatePanel } from '@/src/components/state-panel';
 import { colors, pressFeedback } from '@/src/theme/tokens';
 
 const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
@@ -25,7 +26,7 @@ export default function RecordScreen() {
   const createManual = useCreateManualRun(token);
   const [selectedDate, setSelectedDate] = useState(toDateKey(today));
   const [form, setForm] = useState<'plan' | 'manual' | null>(null);
-  const [minutes, setMinutes] = useState('60');
+  const [minutes, setMinutes] = useState('');
   const [distance, setDistance] = useState('');
   const [memo, setMemo] = useState('');
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export default function RecordScreen() {
   const selected = daysByDate.get(selectedDate);
   const selectedRun = selected?.runs[0] ?? null;
   const runDetail = useRunDetail(token, selectedRun?.id ?? null);
+  const isSaving = createPlan.isPending || createManual.isPending;
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -64,10 +66,18 @@ export default function RecordScreen() {
   }, [isModalOpen, modalProgress]);
 
   const save = async () => {
-    if (form === 'plan') await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
-    else await createManual.mutateAsync({ clientRunId: makeClientRunId(), startedAt: `${selectedDate}T09:00:00Z`, durationSec: Number(minutes) * 60, distanceM: distance ? Number(distance) * 1000 : undefined, memo });
-    setForm(null); setMinutes('60'); setDistance(''); setMemo('');
+    if (Number(minutes) <= 0 || isSaving) return;
+    try {
+      if (form === 'plan') await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
+      else await createManual.mutateAsync({ clientRunId: makeClientRunId(), startedAt: `${selectedDate}T09:00:00Z`, durationSec: Number(minutes) * 60, distanceM: distance ? Number(distance) * 1000 : undefined, memo });
+      setForm(null); setMinutes(''); setDistance(''); setMemo('');
+    } catch {
+      // The mutation error is rendered in the modal; preserve the entered values.
+    }
   };
+
+  if (calendar.isPending || stats.isPending) return <FigmaScreen includeBottomSafeArea={false}><StatePanel loading title="기록을 불러오는 중이에요" body="캘린더와 누적 활동일을 확인하고 있어요." /></FigmaScreen>;
+  if (calendar.error || stats.error) return <FigmaScreen includeBottomSafeArea={false}><StatePanel title={isOfflineError(calendar.error ?? stats.error) ? '오프라인 상태예요' : '기록을 불러오지 못했어요'} body="저장된 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="다시 시도" onAction={() => { void calendar.refetch(); void stats.refetch(); }} /></FigmaScreen>;
 
   return <FigmaScreen includeBottomSafeArea={false}>
     <ScrollView
@@ -77,12 +87,12 @@ export default function RecordScreen() {
       showsVerticalScrollIndicator={false}
     >
     <View style={styles.screenContent}>
-      <Text style={styles.heading}>누적 <Text style={styles.orange}>달리 데이</Text> {stats.data?.totalRunDays ?? 3}일</Text>
+      <Text style={styles.heading}>누적 <Text style={styles.orange}>달리 데이</Text> {stats.data?.dalliDays ?? '—'}일</Text>
       <View style={styles.profileCard}>
       <View style={styles.avatar}>{profilePhotoUri
         ? <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage}/>
         : <Ionicons color="#1C1A1A" name="person" size={27}/>}</View>
-      <View><Text style={styles.runner}>홍길동 러너님</Text><Text style={styles.profileCopy}>달리와 꾸준한 러닝을 이어가고 있어요</Text></View>
+      <View><Text style={styles.runner}>내 러닝 프로필</Text><Text style={styles.profileCopy}>저장된 러닝과 계획을 확인할 수 있어요</Text></View>
       <View style={styles.profileActions}>
         <Pressable
           accessibilityRole="button"
@@ -155,11 +165,11 @@ export default function RecordScreen() {
           <Pressable onPress={() => setForm('manual')} style={({ pressed }) => [styles.modalTab, form === 'manual' && styles.activeTab, pressed && styles.buttonPressed]}><Text style={[styles.tabText, form === 'manual' && styles.activeTabText]}>기록 추가</Text></Pressable>
         </View>
         <Text style={styles.modalTitle}>{month}월 {Number(selectedDate.slice(-2))}일 {form === 'plan' ? '러닝 계획' : '러닝 기록'}</Text>
-        <Text style={styles.inputLabel}>달린 시간</Text><View style={styles.inputRow}><TextInput keyboardType="number-pad" value={minutes} onChangeText={setMinutes} style={styles.input}/><Text style={styles.unit}>분</Text></View>
+        <Text style={styles.inputLabel}>달린 시간</Text><View style={styles.inputRow}><TextInput keyboardType="number-pad" placeholder="시간을 입력해 주세요" value={minutes} onChangeText={setMinutes} style={styles.input}/><Text style={styles.unit}>분</Text></View>
         {form === 'manual' && <><Text style={styles.inputLabel}>달린 거리</Text><View style={styles.inputRow}><TextInput keyboardType="decimal-pad" value={distance} onChangeText={setDistance} placeholder="0" style={styles.input}/><Text style={styles.unit}>km</Text></View></>}
         <Text style={styles.inputLabel}>메모</Text><TextInput value={memo} onChangeText={setMemo} placeholder="오늘의 러닝을 기록해 보세요" style={styles.memo}/>
-        {(createPlan.error || createManual.error) && <Text style={styles.error}>서버에 저장하지 못했어요. 다시 시도해 주세요.</Text>}
-        <Pressable disabled={Number(minutes) <= 0} onPress={() => void save()} style={({ pressed }) => [styles.save, pressed && styles.buttonPressed]}><Text style={styles.saveText}>저장</Text></Pressable>
+        {(createPlan.error || createManual.error) && <Text style={styles.error}>{isOfflineError(createPlan.error ?? createManual.error) ? '오프라인 상태예요. 연결 후 다시 시도해 주세요.' : '서버에 저장하지 못했어요. 다시 시도해 주세요.'}</Text>}
+        <Pressable disabled={Number(minutes) <= 0 || isSaving} onPress={() => void save()} style={({ pressed }) => [styles.save, (pressed || isSaving) && styles.buttonPressed, (Number(minutes) <= 0 || isSaving) && styles.buttonDisabled]}><Text style={styles.saveText}>{isSaving ? '저장 중...' : '저장'}</Text></Pressable>
       </Animated.View></View>
     </Modal>
   </FigmaScreen>;

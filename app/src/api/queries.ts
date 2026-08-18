@@ -11,6 +11,7 @@ import {
   getRunDetail,
   getRunReport,
   getRuns,
+  getPlans,
   getStats,
   getUserProfile,
   patchUserProfile,
@@ -65,6 +66,14 @@ export function useRuns(token: string | null) {
   return useQuery({
     queryKey: ['runs'],
     queryFn: () => getRuns(requireToken(token)),
+    enabled: Boolean(token),
+  });
+}
+
+export function usePlans(token: string | null, from: string, to: string) {
+  return useQuery({
+    queryKey: ['plans', from, to],
+    queryFn: () => getPlans(requireToken(token), from, to),
     enabled: Boolean(token),
   });
 }
@@ -136,7 +145,10 @@ export function useCreatePlan(token: string | null) {
   return useMutation({
     mutationFn: (input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string }) => createPlan(requireToken(token), input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+        queryClient.invalidateQueries({ queryKey: ['plans'] }),
+      ]);
     },
   });
 }
@@ -144,7 +156,7 @@ export function useCreatePlan(token: string | null) {
 export function useUpdatePlan(token: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { planId: string; goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; memo?: string; status?: 'PLANNED' | 'DONE' | 'SKIPPED' }) => {
+    mutationFn: (input: { planId: string; goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; status?: 'PLANNED' | 'DONE' | 'SKIPPED' }) => {
       const { planId, ...patch } = input;
       return updatePlan(requireToken(token), planId, patch);
     },
@@ -162,6 +174,7 @@ export function useUpdatePlan(token: string | null) {
             }
           : day
       )));
+      void queryClient.invalidateQueries({ queryKey: ['plans'] });
     },
   });
 }
@@ -171,7 +184,10 @@ export function useDeletePlan(token: string | null) {
   return useMutation({
     mutationFn: (planId: string) => deletePlan(requireToken(token), planId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+        queryClient.invalidateQueries({ queryKey: ['plans'] }),
+      ]);
     },
   });
 }
