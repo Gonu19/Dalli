@@ -9,6 +9,7 @@
 import { getCalendar } from '../api/client';
 import { startBackgroundAudio, stopBackgroundAudio } from '../native/audio-session';
 import { LocationTracker } from '../native/location';
+import type { RoutePoint } from '../native/location';
 import { PedometerSource } from '../native/pedometer';
 import { ensureLocationPermission, ensureMotionPermission } from '../native/permissions';
 import { selectPlanForRun } from './plan-link';
@@ -32,6 +33,8 @@ export type TrackedRunOptions = StartOptions & {
 
 let source: PedometerSource | null = null;
 let tracker: LocationTracker | null = null;
+/** 종료 후에도 결과 화면·결과 이미지가 쓸 수 있게 마지막 경로를 남긴다. 다음 러닝 시작 시 비운다. */
+let finishedRoute: readonly RoutePoint[] = [];
 
 /**
  * 러닝 시작 — 오디오 세션을 먼저 열고 센서를 붙인다.
@@ -43,6 +46,7 @@ export async function startTrackedRun(options: TrackedRunOptions): Promise<void>
   const { onSensorUnavailable, onLocationUnavailable, token, ...startOptions } = options;
 
   stopSource();
+  finishedRoute = [];
   await startBackgroundAudio();
   useRunStore.getState().start({
     ...startOptions,
@@ -52,8 +56,11 @@ export async function startTrackedRun(options: TrackedRunOptions): Promise<void>
   // 권한은 시점별로 따로 묻는다 (`F1-09`). 모션이 없으면 케이던스를,
   // 위치가 없으면 거리를 잃을 뿐 러닝 자체는 멈추지 않는다.
   const motion = await ensureMotionPermission();
-  const available = motion.granted && (await PedometerSource.isAvailable().catch(() => false));
-  if (!available) onSensorUnavailable?.();
+  // 권한 응답이 실제 동작과 어긋나는 기기가 있다. `getPermissionsAsync`가 거부로
+  // 읽혀도 걸음은 정상으로 올라오는 경우가 있어서, **권한 판독으로 센서를 막지 않는다.**
+  // 붙여보고 값이 안 오면 판정이 `UNAVAILABLE`로 남아 화면이 그대로 알려준다.
+  const available = await PedometerSource.isAvailable().catch(() => false);
+  if (!available || !motion.granted) onSensorUnavailable?.();
 
   const location = await ensureLocationPermission();
   if (location.granted) {
@@ -108,12 +115,21 @@ export function resumeTrackedRun(): void {
  * 러닝은 이미 남아 있고, 큐가 나중에 올린다 (`F1-10`).
  */
 export async function stopTrackedRun(completed: boolean): Promise<RunRecord | null> {
+  finishedRoute = tracker?.path ?? [];
   stopSource();
   const record = useRunStore.getState().finish(completed);
   clearSnapshot();
   if (record !== null) enqueueRun(record);
   await stopBackgroundAudio();
   return record;
+}
+
+/**
+ * 러닝 중 지도가 읽는 경로. 종료 후에는 마지막 러닝의 경로를 돌려준다 (`ENGINE.md` §10).
+ * 서버로 나가지 않고 다음 러닝을 시작하면 비워진다.
+ */
+export function getRoutePath(): readonly RoutePoint[] {
+  return tracker?.path ?? finishedRoute;
 }
 
 /** 화면이 예기치 않게 사라졌을 때의 정리용. 기록은 남기지 않는다. */

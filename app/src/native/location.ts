@@ -5,8 +5,8 @@
  * `distance_m`·`avg_pace_sec_per_km`만 `null`이 된다. 지하도·빌딩 사이에서
  * 러닝이 중단되면 안 되기 때문이다.
  *
- * 위치를 이 파일 밖으로 내보내지 않는다 — 서버에 올리는 것은 누적 거리와 페이스뿐이고,
- * 경로 좌표는 저장하지도 전송하지도 않는다 (`PRODUCT.md` 결과 이미지에서 경로 제외).
+ * 경로 좌표는 **메모리에만 남는다.** 러닝 중 지도와 종료 직후 결과 이미지가 쓰고,
+ * `samples`·업로드·DB에는 들어가지 않는다 (`ENGINE.md` §10).
  */
 
 import * as Location from 'expo-location';
@@ -16,10 +16,17 @@ const ACCURACY_LIMIT_M = 25;
 /** 이 시간 넘게 fix가 없으면 미수신으로 본다 (초). */
 const STALE_FIX_SEC = 30;
 
+/** 지도에 그릴 좌표 한 점. 서버로 나가지 않는다. */
+export type RoutePoint = { latitude: number; longitude: number };
+
+/** 경로 배열 상한. 1초 간격 20분이면 1200점이라 여유가 있다. */
+const MAX_ROUTE_POINTS = 5_000;
+
 export class LocationTracker {
   private subscription: Location.LocationSubscription | null = null;
   private previous: { lat: number; lon: number } | null = null;
   private lastFixAtMs: number | null = null;
+  private route: RoutePoint[] = [];
 
   private distanceM = 0;
   private startedAtMs = 0;
@@ -31,6 +38,7 @@ export class LocationTracker {
     this.distanceM = 0;
     this.previous = null;
     this.lastFixAtMs = null;
+    this.route = [];
 
     try {
       this.subscription = await Location.watchPositionAsync(
@@ -51,6 +59,19 @@ export class LocationTracker {
   stop(): void {
     this.subscription?.remove();
     this.subscription = null;
+  }
+
+  /**
+   * 지나온 경로. 지도와 결과 이미지가 읽는다.
+   * 정확도 필터를 통과한 점만 들어가므로 튀는 좌표로 선이 꺾이지 않는다.
+   */
+  get path(): readonly RoutePoint[] {
+    return this.route;
+  }
+
+  /** 지도 초기 위치용 최근 좌표. */
+  get lastPoint(): RoutePoint | null {
+    return this.route.length === 0 ? null : this.route[this.route.length - 1];
   }
 
   /** 누적 거리. fix를 한 번도 못 받았으면 `null`. */
@@ -87,6 +108,10 @@ export class LocationTracker {
       if (step < 100) this.distanceM += step;
     }
     this.previous = current;
+
+    if (this.route.length < MAX_ROUTE_POINTS) {
+      this.route.push({ latitude, longitude });
+    }
   }
 }
 
