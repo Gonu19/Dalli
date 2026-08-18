@@ -21,6 +21,7 @@ from app.models import Plan, Run, User
 from app.services.fallback import build_fallback_report
 from app.services.llm import (
     LLMReportContent,
+    LLM_REPORT_INSTRUCTIONS_V2,
     _call_with_deadline,
     _days_since_last_app_run,
     _safe_summary,
@@ -134,6 +135,11 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert factory_args == {"api_key": SECRET, "timeout": 1, "max_retries": 0}
     assert fake.kwargs["text_format"] is LLMReportContent
     assert fake.kwargs["store"] is False
+    assert fake.kwargs["instructions"] == LLM_REPORT_INSTRUCTIONS_V2
+    assert "문장은 모두 자연스러운 한국어" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "evidence는 핵심 관찰 수치 1~3개" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "prescription은 다음 러닝에서 할 행동 한 가지만" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "required_limitation 값을 그대로 복사" in LLM_REPORT_INSTRUCTIONS_V2
     assert "samples" not in fake.kwargs["input"]
     assert "events" not in fake.kwargs["input"]
     assert SECRET not in fake.kwargs["input"]
