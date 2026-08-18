@@ -31,7 +31,7 @@ export default function Privacy() {
   const profile = useProfile(token);
 
   if (!profile.data) return <FigmaScreen />;
-  return <PrivacyForm profile={profile.data} token={token} onClose={() => router.replace('/')} />;
+  return <PrivacyForm profile={profile.data} token={token} onClose={() => router.dismissTo('/')} />;
 }
 
 function PrivacyForm({ profile, token, onClose }: {
