@@ -91,6 +91,7 @@ def test_runner_fake_writes_safe_attempts_and_blind_artifacts(tmp_path: Path) ->
     assert len(records) == 6
     assert all(record.hard_gate_passed for record in records)
     assert all(not record.fallback_used for record in records)
+    assert all(record.human_evaluation_target for record in records)
     attempts = (tmp_path / "evaluation" / "attempts.jsonl").read_text(encoding="utf-8")
     assert SECRET not in attempts
     assert "samples" not in attempts
@@ -162,6 +163,7 @@ def test_runner_records_provider_timeout_as_timeout_not_validator_failure(tmp_pa
 
     assert all(record.attempt_status == AttemptStatus.TIMEOUT for record in records)
     assert all(record.hard_gate_passed is None for record in records)
+    assert all(not record.human_evaluation_target for record in records)
 
 
 def test_rate_limit_diagnostics_keep_only_safe_headers_and_code() -> None:
