@@ -1,11 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunDetail } from '@/src/api/client';
 import { useCreateReport, useProfile, useRunDetail } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';

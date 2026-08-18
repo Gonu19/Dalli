@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useUploadRun } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
@@ -9,6 +10,7 @@ import { PrimaryButton } from '@/src/components/primary-button';
 import { usePreferences } from '@/src/components/preferences-provider';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { RunMap } from '@/src/components/run-map';
 import { Screen } from '@/src/components/screen';
 import type { JudgeVerdict } from '@/src/engine/types';
@@ -27,7 +29,14 @@ import { colors, compactPressFeedback, navigationHeader, pressFeedback, radius, 
 export default function ActiveRunScreen() {
   const router = useRouter();
   const { token } = useAuth();
-  const { voiceEnabled, metronomeEnabled, setVoiceEnabled, setMetronomeEnabled } = usePreferences();
+  const {
+    voiceEnabled,
+    metronomeEnabled,
+    hapticsEnabled,
+    setVoiceEnabled,
+    setMetronomeEnabled,
+    setHapticsEnabled,
+  } = usePreferences();
   const { setResult } = useRunResult();
   const upload = useUploadRun(token);
   const run = useRunStore();
@@ -36,9 +45,9 @@ export default function ActiveRunScreen() {
   const [showEnd, setShowEnd] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
-  const [vibration, setVibration] = useState(false);
   const [targetNotice, setTargetNotice] = useState<string | null>(null);
   const previousTarget = useRef(run.target.center);
+  const handledEventCount = useRef(run.events.length);
 
   useEffect(() => attachCues(), []);
 
@@ -51,6 +60,22 @@ export default function ActiveRunScreen() {
     }
     previousTarget.current = run.target.center;
   }, [run.target.center]);
+
+  useEffect(() => {
+    const freshEvents = run.events.slice(handledEventCount.current);
+    handledEventCount.current = run.events.length;
+    if (!hapticsEnabled || freshEvents.length === 0) return;
+
+    for (const event of freshEvents) {
+      if (event.type === 'TOO_FAST' || event.type === 'TOO_SLOW') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      } else if (event.type === 'TARGET_ADJUSTED') {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      } else if (event.type === 'RECOVERY_MODE_ON') {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      }
+    }
+  }, [hapticsEnabled, run.events]);
 
   const save = async () => {
     const snapshot = run.snapshot();
@@ -131,7 +156,7 @@ export default function ActiveRunScreen() {
       </View>
 
       {!showGuide ? <RunMap live style={styles.map} /> : null}
-      {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={vibration} onChange={setVibration}/></View> : null}
+      {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled}/></View> : null}
       <View style={styles.mapShade} />
       <View style={styles.controls}>
         <Pressable onPress={togglePause} style={({ pressed }) => [styles.runButton, styles.pauseButton, pressed && styles.buttonPressed]}><Text style={styles.runButtonText}>{run.runState === 'PAUSED' ? '다시 달리기' : '일시정지'}</Text></Pressable>

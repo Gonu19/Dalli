@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useCompleteOnboarding } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaButton, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useOnboarding } from '@/src/components/onboarding-provider';
 import { colors, compactPressFeedback } from '@/src/theme/tokens';
 const cadenceControls = [

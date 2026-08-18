@@ -4,6 +4,7 @@ import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { triggerButtonHaptic, triggerSelectionHaptic } from './haptics';
 
 const logo = require('@/assets/images/dalli-logo.png');
 let previousOnboardingStep = 0;
@@ -17,7 +18,7 @@ export function FigmaLogo({ top = navigationHeader.logoTop, left = 31, centered 
 }
 
 export function FigmaBack({ onPress, top = navigationHeader.backTop, left = 27 }: { onPress: () => void; top?: number; left?: number }) {
-  return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={onPress} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.compactPressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
+  return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={() => { triggerButtonHaptic(); onPress(); }} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.compactPressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
 }
 
 export function OnboardingTop({ step, onBack }: { step: number; onBack: () => void }) {
@@ -42,11 +43,11 @@ export function OnboardingTop({ step, onBack }: { step: number; onBack: () => vo
 }
 
 export function FigmaButton({ children, onPress, secondary = false, disabled = false, style }: { children: ReactNode; onPress: () => void; secondary?: boolean; disabled?: boolean; style?: object }) {
-  return <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, secondary && styles.secondary, disabled && styles.disabled, style, pressed && !disabled && styles.pressed]}><Text style={[styles.buttonText, disabled && styles.disabledText]}>{children}</Text></Pressable>;
+  return <Pressable disabled={disabled} onPress={() => { triggerButtonHaptic(); onPress(); }} style={({ pressed }) => [styles.button, secondary && styles.secondary, disabled && styles.disabled, style, pressed && !disabled && styles.pressed]}><Text style={[styles.buttonText, disabled && styles.disabledText]}>{children}</Text></Pressable>;
 }
 
 export function FigmaRadio({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="radio" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.radioRow, pressed && styles.pressed]}><View style={[styles.marker, selected && styles.markerSelected]}>{selected ? <View style={styles.markerDot} /> : null}</View><Text style={[styles.radioText, selected && styles.radioTextSelected]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => { triggerSelectionHaptic(); onPress(); }} style={({ pressed }) => [styles.radioRow, pressed && styles.pressed]}><View style={[styles.marker, selected && styles.markerSelected]}>{selected ? <View style={styles.markerDot} /> : null}</View><Text style={[styles.radioText, selected && styles.radioTextSelected]}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({

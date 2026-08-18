@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
+import { HapticPressable as Pressable } from './haptics';
 
 export function DalliLogo({ compact = false }: { compact?: boolean }) {
   return (

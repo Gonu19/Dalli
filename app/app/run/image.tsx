@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, Animated, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, ImageBackground, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
+import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { RunMap } from '@/src/components/run-map';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
@@ -27,7 +28,7 @@ export default function ResultImage() {
    * 권한을 거부해도 화면은 그대로 남는다 — 결과 이미지는 러닝 기록과 무관한
    * 부가 기능이라, 실패가 러닝 흐름을 막지 않아야 한다 (`ROADMAP.md` FR-031).
    */
-  const saveImage = async () => {
+  const savePhoto = async () => {
     if (saving || cardRef.current === null) return;
     setSaving(true);
     try {
@@ -36,9 +37,9 @@ export default function ResultImage() {
         Alert.alert('사진 보관함에 접근할 수 없어요', '설정에서 사진 접근을 허용하면 저장할 수 있어요.');
         return;
       }
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(cardRef, { format: 'jpg', quality: 0.95 });
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert('저장했어요', '사진 보관함에서 확인할 수 있어요.');
+      Alert.alert('사진을 저장했어요', '사진 보관함에서 확인할 수 있어요.');
     } catch {
       Alert.alert('저장하지 못했어요', '잠시 후 다시 시도해 주세요.');
     } finally {
@@ -82,8 +83,8 @@ export default function ResultImage() {
           <Text style={styles.chipText}>{label}</Text>
         </View>)}
       </View>
-      <Pressable disabled={saving} onPress={() => void saveImage()} style={({ pressed }) => [styles.save, (pressed || saving) && styles.buttonPressed]}>
-        <Text style={styles.buttonText}>{saving ? '저장 중...' : '이미지 저장'}</Text>
+      <Pressable accessibilityRole="button" disabled={saving} onPress={() => void savePhoto()} style={({ pressed }) => [styles.save, (pressed || saving) && styles.buttonPressed]}>
+        <Text style={styles.buttonText}>{saving ? '사진 저장 중...' : '사진 저장'}</Text>
       </Pressable>
       <Pressable
         onPress={() => router.push('/run/report')}

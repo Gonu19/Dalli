@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 import { colors, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
+import { triggerButtonHaptic } from './haptics';
 
 type Props = {
   children: ReactNode;
@@ -26,7 +27,10 @@ export function PrimaryButton({
     <Pressable
       accessibilityRole="button"
       disabled={isDisabled}
-      onPress={onPress}
+      onPress={() => {
+        triggerButtonHaptic();
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.base,
         styles[variant],
