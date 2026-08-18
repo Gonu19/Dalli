@@ -129,8 +129,11 @@ export async function stopTrackedRun(completed: boolean): Promise<RunRecord | nu
  * 서버로 나가지 않고 다음 러닝을 시작하면 비워진다.
  */
 export function getRoutePath(): readonly RoutePoint[] {
-  return tracker?.path ?? finishedRoute;
+  // 복사본을 준다 — 화면이 배열을 만져도 측정 쪽이 흔들리지 않는다.
+  return [...(tracker?.path ?? finishedRoute)];
 }
+
+export type { RoutePoint } from '../native/location';
 
 /** 화면이 예기치 않게 사라졌을 때의 정리용. 기록은 남기지 않는다. */
 export function detachSensor(): void {

@@ -7,12 +7,29 @@
  * **시간을 만드는 곳은 소스 한 곳뿐이다.** 여기서만 wall-clock을 읽는다.
  * 백그라운드에서 타이머가 지연·병합되어도 경과 초와 SPM이 정확하도록,
  * 매 tick의 **실제 경과 시간**으로 나눈다 — 1초라고 가정하지 않는다.
+ *
+ * ## 1초 차분이 아니라 누적 걸음의 롤링 비율을 쓴다 ⚠️
+ *
+ * iOS는 걸음을 **묶어서** 올려보낸다. 3초쯤 조용하다가 한 번에 5걸음이 들어오는 식이라,
+ * 1초 차분으로 SPM을 만들면 `0, 0, 300, 0, 0, 240 …`처럼 튄다. 그 값을 20초 중앙값에
+ * 넣으면 절반 이상이 0이라 **중앙값이 0으로 내려앉는다** — 걷고 있는데 화면이 0을 가리킨다.
+ *
+ * 그래서 최근 `ROLLING_WINDOW_SEC` 구간의 **누적 걸음 증가분**을 그 구간 길이로 나눈다.
+ * 배치로 들어와도 구간 합은 같으므로 값이 안정적이다.
  */
 
 import { Pedometer } from 'expo-sensors';
 
 import { SENSOR_TICK_SEC } from '../engine/constants';
+import { rollingCadenceSpm, updateStepHistory } from '../engine/step-rate';
+import type { StepPoint } from '../engine/step-rate';
 import type { CadenceSample, CadenceSource } from '../engine/types';
+
+/**
+ * 롤링 구간 길이(초). 짧으면 배치 때문에 다시 튀고, 길면 리듬 변화가 늦게 보인다.
+ * 엔진의 20초 윈도우가 뒤에서 한 번 더 다듬으므로 여기서는 짧게 잡는다.
+ */
+const ROLLING_WINDOW_SEC = 8;
 
 export type PedometerSourceOptions = {
   /** 샘플 주기. 기본 1초 (`SENSOR_TICK_SEC`). */
@@ -29,7 +46,8 @@ export class PedometerSource implements CadenceSource {
   private lastTickMs = 0;
   /** `watchStepCount`가 주는 누적 걸음. 콜백 호출 빈도가 불규칙해 여기서는 값만 갱신한다. */
   private cumulativeSteps = 0;
-  private lastSteps = 0;
+  /** 최근 구간의 누적 걸음 이력. 롤링 비율 계산에만 쓴다. */
+  private history: StepPoint[] = [];
 
   constructor(private readonly options: PedometerSourceOptions = {}) {}
 
@@ -49,7 +67,7 @@ export class PedometerSource implements CadenceSource {
     this.startedAtMs = Date.now();
     this.lastTickMs = this.startedAtMs;
     this.cumulativeSteps = 0;
-    this.lastSteps = 0;
+    this.history = [{ atMs: this.startedAtMs, steps: 0 }];
 
     try {
       this.subscription = Pedometer.watchStepCount((result) => {
@@ -65,19 +83,15 @@ export class PedometerSource implements CadenceSource {
   }
 
   /**
-   * 1초 tick — 누적 걸음 차분으로 순간 SPM을 만든다.
+   * 1초 tick — 최근 구간의 누적 걸음 증가분으로 SPM을 만든다.
    *
-   * `watchStepCount`가 조용한 기기가 있다. iOS는 걸음을 배치로 올려보내는데,
-   * 구독이 늦게 붙거나 이벤트가 유실되면 누적값이 0에 머문다. 그러면 화면이
-   * 계속 0을 가리키고 사용자는 "측정이 안 된다"고 느낀다.
-   *
-   * 그래서 **시작 시각부터의 누적 걸음을 직접 조회한 값과 큰 쪽을 쓴다.**
-   * 조회가 실패하면 구독값으로 그대로 간다 — 어느 한쪽이 죽어도 측정이 멈추지 않는다.
+   * 누적값의 출처가 둘이다. `watchStepCount` 구독과 `getStepCountAsync` 조회인데,
+   * 구독이 조용한 기기가 있어 **둘 중 큰 값**을 쓴다. 어느 한쪽이 죽어도 측정이 멈추지 않는다.
    */
   private async tick(cb: (sample: CadenceSample) => void): Promise<void> {
     const now = Date.now();
-    const deltaSec = (now - this.lastTickMs) / 1000;
-    if (deltaSec <= 0) return;
+    if (now <= this.lastTickMs) return;
+    this.lastTickMs = now;
 
     let cumulative = this.cumulativeSteps;
     try {
@@ -86,15 +100,15 @@ export class PedometerSource implements CadenceSource {
     } catch {
       // 과거 구간 조회를 지원하지 않는 기기도 있다. 구독값만으로 계속한다.
     }
-
-    const deltaSteps = Math.max(0, cumulative - this.lastSteps);
-    this.lastTickMs = now;
-    this.lastSteps = cumulative;
+    // 누적값은 줄어들지 않는다. 조회가 잠깐 낮게 오더라도 뒤로 가지 않게 막는다.
+    cumulative = Math.max(cumulative, this.cumulativeSteps);
     this.cumulativeSteps = cumulative;
+
+    this.history = updateStepHistory(this.history, { atMs: now, steps: cumulative }, ROLLING_WINDOW_SEC);
 
     cb({
       elapsedSec: (now - this.startedAtMs) / 1000,
-      cadence: (deltaSteps / deltaSec) * 60,
+      cadence: rollingCadenceSpm(this.history),
     });
   }
 
