@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
-import { useRef } from 'react';
-import { Animated, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, Animated, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 import { FigmaBack, FigmaLogo, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
@@ -16,6 +18,33 @@ export default function ResultImage() {
   const { result, photoUri } = useRunResult();
   const record = result?.record;
   const scrollY = useRef(new Animated.Value(0)).current;
+  const cardRef = useRef<View>(null);
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * 카드 그대로를 사진 보관함에 저장한다.
+   *
+   * 권한을 거부해도 화면은 그대로 남는다 — 결과 이미지는 러닝 기록과 무관한
+   * 부가 기능이라, 실패가 러닝 흐름을 막지 않아야 한다 (`ROADMAP.md` FR-031).
+   */
+  const saveImage = async () => {
+    if (saving || cardRef.current === null) return;
+    setSaving(true);
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync(true);
+      if (!permission.granted) {
+        Alert.alert('사진 보관함에 접근할 수 없어요', '설정에서 사진 접근을 허용하면 저장할 수 있어요.');
+        return;
+      }
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Alert.alert('저장했어요', '사진 보관함에서 확인할 수 있어요.');
+    } catch {
+      Alert.alert('저장하지 못했어요', '잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return <FigmaScreen>
     <FigmaBack onPress={() => router.back()} />
@@ -26,6 +55,7 @@ export default function ResultImage() {
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
     >
+      <View collapsable={false} ref={cardRef} style={styles.card}>
       <ImageBackground
         source={photoUri ? { uri: photoUri } : photo}
         resizeMode="cover"
@@ -44,6 +74,7 @@ export default function ResultImage() {
           <Text style={styles.photoValue}>{record?.avgCadence == null ? '—' : `${Math.round(record.avgCadence)} spm`}</Text>
         </View>
       </ImageBackground>
+      </View>
       <Text style={styles.title}>이미지에 포함할 지표</Text>
       <View style={styles.chips}>
         {['활동 시간', '거리', '평균 케이던스', '경로'].map((label) => <View key={label} style={styles.chip}>
@@ -51,8 +82,8 @@ export default function ResultImage() {
           <Text style={styles.chipText}>{label}</Text>
         </View>)}
       </View>
-      <Pressable style={({ pressed }) => [styles.save, pressed && styles.buttonPressed]}>
-        <Text style={styles.buttonText}>이미지 저장</Text>
+      <Pressable disabled={saving} onPress={() => void saveImage()} style={({ pressed }) => [styles.save, (pressed || saving) && styles.buttonPressed]}>
+        <Text style={styles.buttonText}>{saving ? '저장 중...' : '이미지 저장'}</Text>
       </Pressable>
       <Pressable
         onPress={() => router.push('/run/report')}
@@ -72,6 +103,7 @@ function format(value: number) {
 const styles = StyleSheet.create({
   header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700', zIndex: 10 },
   content: { paddingTop: 95 - navigationHeader.contentLift, paddingHorizontal: 28, paddingBottom: 36 },
+  card: { alignSelf: 'center' },
   photo: { width: 267, height: 360, alignSelf: 'center', overflow: 'hidden' },
   photoShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,.22)' },
   overlay: { position: 'absolute', left: 24, bottom: 18, gap: 2 },
