@@ -31,7 +31,7 @@ export default function Privacy() {
   const profile = useProfile(token);
 
   if (!profile.data) return <FigmaScreen />;
-  return <PrivacyForm profile={profile.data} token={token} onClose={() => router.back()} />;
+  return <PrivacyForm profile={profile.data} token={token} onClose={() => router.replace('/')} />;
 }
 
 function PrivacyForm({ profile, token, onClose }: {
@@ -61,20 +61,23 @@ function PrivacyForm({ profile, token, onClose }: {
     return () => { mounted = false; };
   }, []);
 
-  const save = () => update.mutateAsync({
-    name: name.trim() || undefined,
-    runningPurpose: purpose,
-    experienceLevel: profile.experienceLevel!,
-    maxContinuousMin: profile.maxContinuousMin!,
-    weeklyGoalCount: profile.weeklyGoalCount!,
-    baselineCadence: profile.baselineCadence!,
-    heightCm: height ?? undefined,
-    weightKg: weight ?? undefined,
-    birthYear: birth?.year,
-    birthMonth: birth?.month,
-    birthDay: birth?.day,
-    gender: gender ?? undefined,
-  });
+  const save = async () => {
+    await update.mutateAsync({
+      name: name.trim() || undefined,
+      runningPurpose: purpose,
+      experienceLevel: profile.experienceLevel!,
+      maxContinuousMin: profile.maxContinuousMin!,
+      weeklyGoalCount: profile.weeklyGoalCount!,
+      baselineCadence: profile.baselineCadence!,
+      heightCm: height ?? undefined,
+      weightKg: weight ?? undefined,
+      birthYear: birth?.year,
+      birthMonth: birth?.month,
+      birthDay: birth?.day,
+      gender: gender ?? undefined,
+    });
+    onClose();
+  };
 
   const pickProfilePhoto = async () => {
     if (photoPicking) return;
