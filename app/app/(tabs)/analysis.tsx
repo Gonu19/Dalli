@@ -9,7 +9,7 @@ import { useAuth } from '@/src/components/auth-provider';
 import { FigmaLogo } from '@/src/components/figma-ui';
 import { Screen } from '@/src/components/screen';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
-import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 export default function Analysis() {
   const router = useRouter();
@@ -130,7 +130,7 @@ function formatTime(value: number) {
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
   settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  iconPressed: pressFeedback,
+  iconPressed: compactPressFeedback,
   content: { paddingTop: 102 - navigationHeader.contentLift, paddingHorizontal: 27, paddingBottom: 40 },
   section: { color: colors.white, fontSize: 17, fontWeight: '700', marginLeft: 10 },
   summary: { height: 86, borderRadius: 20, backgroundColor: colors.white, marginTop: 15, flexDirection: 'row' },
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   manualBadge: { backgroundColor: '#E9E9E9' },
   sourceBadgeText: { fontSize: 11, fontWeight: '700', color: colors.inkMuted },
   detail: { position: 'absolute', right: 26, top: 16, width: 93, height: 36, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  detailPressed: pressFeedback,
+  detailPressed: compactPressFeedback,
   detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   line: { position: 'absolute', left: 26, right: 26, top: 65, height: 1, backgroundColor: colors.border },
   metrics: { position: 'absolute', left: 26, right: 20, top: 77, flexDirection: 'row' },

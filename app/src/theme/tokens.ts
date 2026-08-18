@@ -66,6 +66,12 @@ export const pressFeedback = {
   transform: [{ scale: 0.98 }],
 };
 
+/** 작은 아이콘·칩·탭은 터치 여부가 더 분명하도록 CTA보다 강하게 반응한다. */
+export const compactPressFeedback = {
+  opacity: 0.6,
+  transform: [{ scale: 0.94 }],
+};
+
 /** iOS safe area 바로 아래의 표준 44pt 내비게이션 영역. */
 export const navigationHeader = {
   height: 44,

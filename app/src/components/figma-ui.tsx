@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const logo = require('@/assets/images/dalli-logo.png');
 let previousOnboardingStep = 0;
@@ -17,7 +17,7 @@ export function FigmaLogo({ top = navigationHeader.logoTop, left = 31, centered 
 }
 
 export function FigmaBack({ onPress, top = navigationHeader.backTop, left = 27 }: { onPress: () => void; top?: number; left?: number }) {
-  return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={onPress} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.pressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
+  return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={onPress} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.compactPressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
 }
 
 export function OnboardingTop({ step, onBack }: { step: number; onBack: () => void }) {
@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
   logoCentered: { left: '50%', transform: [{ translateX: -30 }] },
   back: { position: 'absolute', zIndex: 10, width: 30, height: 32, alignItems: 'flex-start', justifyContent: 'center' },
   pressed: pressFeedback,
+  compactPressed: compactPressFeedback,
   progressTrack: { position: 'absolute', left: 27, right: 58, top: 76 - navigationHeader.contentLift, height: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 38, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 38 },
   progressText: { position: 'absolute', right: 27, top: 70 - navigationHeader.contentLift, color: 'rgba(255,255,255,0.75)', fontSize: 12 },

@@ -10,7 +10,7 @@ import { FigmaLogo } from '@/src/components/figma-ui';
 import { Screen } from '@/src/components/screen';
 import { StatePanel } from '@/src/components/state-panel';
 import type { ConditionLevel } from '@/src/engine/types';
-import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const conditions: { level: ConditionLevel; label: string }[] = [
   { level: 'TIRED', label: '나쁨' },
@@ -76,7 +76,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
   settings: { position: 'absolute', right: 26, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  iconPressed: pressFeedback,
+  iconPressed: compactPressFeedback,
   conditionTitle: { position: 'absolute', left: 27, top: 112 - navigationHeader.contentLift, color: colors.white, fontSize: 17, fontWeight: '700' },
   conditionCopy: { position: 'absolute', left: 27, top: 139 - navigationHeader.contentLift, color: colors.white, fontSize: 13 },
   conditions: { position: 'absolute', left: 27, right: 28, top: 170 - navigationHeader.contentLift, flexDirection: 'row', gap: 14 },

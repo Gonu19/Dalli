@@ -1,7 +1,9 @@
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { Animated, StyleSheet, View } from 'react-native';
 
-export function ScrollHeaderScrim({ scrollY, height = 74 }: { scrollY: Animated.Value; height?: number }) {
+import { navigationHeader } from '@/src/theme/tokens';
+
+export function ScrollHeaderScrim({ scrollY, height = 74 - navigationHeader.contentLift }: { scrollY: Animated.Value; height?: number }) {
   const opacity = scrollY.interpolate({
     inputRange: [0, 8, 32],
     outputRange: [0, 0.8, 1],

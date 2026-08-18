@@ -21,7 +21,7 @@ import {
 import { useRunStore } from '@/src/store/runStore';
 import { useSimulationStore } from '@/src/store/simulation';
 import { dequeueRun } from '@/src/store/upload-queue';
-import { colors, navigationHeader, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
+import { colors, compactPressFeedback, navigationHeader, pressFeedback, radius, spacing, typography } from '@/src/theme/tokens';
 
 export default function ActiveRunScreen() {
   const router = useRouter();
@@ -201,11 +201,11 @@ const styles = StyleSheet.create({
   contentTop: { zIndex: 2, paddingHorizontal: 20, paddingTop: 100 - navigationHeader.contentLift },
   help: { position: 'absolute', right: 63, top: navigationHeader.compactActionTop, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   settings: { position: 'absolute', right: 14, top: navigationHeader.compactActionTop, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  iconPressed: pressFeedback,
+  iconPressed: compactPressFeedback,
   time: { fontSize: 64, lineHeight: 76, fontWeight: '800', color: colors.text, marginTop: 20 },
   badge: { position: 'absolute', left: 95, top: 38, ...typography.caption, color: colors.primary },
   notice: { ...typography.bodyStrong, color: colors.primary, textAlign: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  statusPill: { alignSelf: 'center', width: 206, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: .5, borderColor: 'rgba(221,224,225,.2)', borderRadius: 30, backgroundColor: colors.surfaceMuted },
+  statusPill: { alignSelf: 'center', width: 270, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: .5, borderColor: 'rgba(221,224,225,.2)', borderRadius: 30, backgroundColor: colors.surfaceMuted },
   statusDot: { width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.success },
   statusText: { ...typography.bodyStrong, color: colors.text },
   metrics: { flexDirection: 'row', gap: 13 },
