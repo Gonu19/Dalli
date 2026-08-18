@@ -6,6 +6,7 @@ from app.config import Settings
 from app.services.llm import LLMReportContent
 from app.services.usage_harness import AttemptStatus
 from tests.aiq06_runner import (
+    _safe_failure_diagnostics,
     build_aiq06_preflight,
     run_aiq06_evaluation,
 )
@@ -161,3 +162,31 @@ def test_runner_records_provider_timeout_as_timeout_not_validator_failure(tmp_pa
 
     assert all(record.attempt_status == AttemptStatus.TIMEOUT for record in records)
     assert all(record.hard_gate_passed is None for record in records)
+
+
+def test_rate_limit_diagnostics_keep_only_safe_headers_and_code() -> None:
+    class RateLimitError(Exception):
+        code = "rate_limit_exceeded"
+        status_code = 429
+        response = type(
+            "Response",
+            (),
+            {
+                "headers": {
+                    "x-ratelimit-remaining-requests": "0",
+                    "x-ratelimit-reset-requests": "1s",
+                    "authorization": "must-not-be-recorded",
+                }
+            },
+        )()
+
+    diagnostics = _safe_failure_diagnostics(RateLimitError())
+
+    assert diagnostics["exception_type"] == "RateLimitError"
+    assert diagnostics["code"] == "rate_limit_exceeded"
+    assert diagnostics["status_code"] == 429
+    assert diagnostics["rate_limit_headers"] == {
+        "x-ratelimit-remaining-requests": "0",
+        "x-ratelimit-reset-requests": "1s",
+    }
+    assert "authorization" not in json.dumps(diagnostics)

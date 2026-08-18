@@ -140,6 +140,7 @@ def generate_llm_report(
     *,
     client_factory: Callable[..., object] = OpenAI,
     response_observer: Callable[[object], None] | None = None,
+    failure_observer: Callable[[Exception], None] | None = None,
 ) -> LLMReportContent | None:
     api_key = settings.openai_api_key.get_secret_value()
     if not settings.llm_enabled:
@@ -225,6 +226,12 @@ def generate_llm_report(
             raise HardGateViolation(gate.reasons)
         content = gate.content
     except Exception as exc:
+        if failure_observer is not None:
+            try:
+                failure_observer(exc)
+            except Exception:
+                # Evaluation diagnostics must never affect the report path.
+                pass
         reasons = (
             list(exc.reasons)
             if isinstance(exc, HardGateViolation)

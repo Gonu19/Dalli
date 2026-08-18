@@ -16,6 +16,7 @@ import json
 import logging
 from pathlib import Path
 import sys
+import time
 from typing import Callable
 
 from openai import OpenAI
@@ -45,6 +46,14 @@ DEFAULT_PROMPT_VERSION = "AIQ-07-baseline-v1"
 DEFAULT_COST_CAP = Decimal("0.01")
 DEFAULT_ESTIMATED_INPUT_TOKENS = 3000
 DEFAULT_MAX_OUTPUT_TOKENS = 600
+RATE_LIMIT_HEADERS = (
+    "x-ratelimit-limit-requests",
+    "x-ratelimit-limit-tokens",
+    "x-ratelimit-remaining-requests",
+    "x-ratelimit-remaining-tokens",
+    "x-ratelimit-reset-requests",
+    "x-ratelimit-reset-tokens",
+)
 
 
 class _ReasonCapture(logging.Handler):
@@ -78,6 +87,26 @@ def _failure_exception(reason_codes: list[str]) -> Exception:
         if type_name is not None:
             return type(type_name, (Exception,), {})()
     return type("ProviderError", (Exception,), {})()
+
+
+def _safe_failure_diagnostics(exc: Exception) -> dict[str, object]:
+    """Keep only non-secret provider metadata useful for rate-limit diagnosis."""
+    result: dict[str, object] = {"exception_type": type(exc).__name__}
+    for name in ("code", "status_code", "request_id", "_request_id"):
+        value = getattr(exc, name, None)
+        if isinstance(value, (str, int)) and value:
+            result[name] = value
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is not None:
+        selected = {
+            name: headers.get(name)
+            for name in RATE_LIMIT_HEADERS
+            if isinstance(headers.get(name), str) and headers.get(name)
+        }
+        if selected:
+            result["rate_limit_headers"] = selected
+    return result
 
 
 def _report_dict(report: object) -> dict[str, object]:
@@ -139,6 +168,7 @@ def run_aiq06_evaluation(
     preflight: PreflightSummary,
     output_dir: str | Path,
     prompt_version: str = DEFAULT_PROMPT_VERSION,
+    inter_attempt_delay_sec: float = 0.0,
     client_factory: Callable[..., object] = OpenAI,
     report_generator: Callable[..., object] = generate_llm_report,
 ) -> tuple[AttemptRecord, ...]:
@@ -148,11 +178,14 @@ def run_aiq06_evaluation(
         raise ValueError("AIQ-06 requires the fixed six baseline scenarios exactly once")
     if not settings.llm_enabled or not settings.openai_api_key.get_secret_value():
         raise ValueError("live evaluation requires LLM_ENABLED=true and a local OPENAI_API_KEY")
+    if inter_attempt_delay_sec < 0:
+        raise ValueError("inter_attempt_delay_sec must be non-negative")
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     _write_json(output_path / "preflight.json", preflight.to_dict())
     attempt_writer = AttemptJsonlWriter(output_path / "attempts.jsonl")
+    diagnostics_path = output_path / "provider_diagnostics.jsonl"
     records: list[AttemptRecord] = []
     reports: dict[str, dict[str, object]] = {}
     confirmed_cost = Decimal("0")
@@ -165,6 +198,8 @@ def run_aiq06_evaluation(
 
     llm_logger = logging.getLogger("app.services.llm")
     for attempt_index, scenario_key in enumerate(preflight.scenario_ids, start=1):
+        if attempt_index > 1 and inter_attempt_delay_sec:
+            time.sleep(inter_attempt_delay_sec)
         evaluated = evaluate_synthetic_scenario(scenario_key)
         fallback = build_fallback_report(
             evaluated.run,
@@ -172,6 +207,7 @@ def run_aiq06_evaluation(
             evaluated.metrics,
         )
         responses: list[object] = []
+        failure_diagnostics: list[dict[str, object]] = []
         reason_capture = _ReasonCapture()
         llm_logger.addHandler(reason_capture)
         started_at = datetime.now(timezone.utc)
@@ -186,6 +222,9 @@ def run_aiq06_evaluation(
                 settings,
                 client_factory=client_factory,
                 response_observer=responses.append,
+                failure_observer=lambda exc: failure_diagnostics.append(
+                    _safe_failure_diagnostics(exc)
+                ),
             )
         except Exception as exc:  # pragma: no cover - defensive runner boundary
             exception = exc
@@ -223,6 +262,22 @@ def run_aiq06_evaluation(
         )
         records.append(record)
         attempt_writer.append(record)
+        for diagnostic in failure_diagnostics:
+            diagnostic_record = {
+                "evaluation_run_id": preflight.evaluation_run_id,
+                "scenario_id": scenario_key,
+                "attempt_index": attempt_index,
+                **diagnostic,
+            }
+            with diagnostics_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        diagnostic_record,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                )
+                handle.write("\n")
         if record.cumulative_confirmed_cost is not None:
             confirmed_cost = Decimal(record.cumulative_confirmed_cost)
         if record.cumulative_upper_bound is not None:
@@ -247,6 +302,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--cost-cap", type=Decimal, default=DEFAULT_COST_CAP)
     parser.add_argument("--prompt-version", default=DEFAULT_PROMPT_VERSION)
+    parser.add_argument("--delay-sec", type=float, default=0.0)
     return parser
 
 
@@ -271,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         preflight=preflight,
         output_dir=args.output_dir,
         prompt_version=args.prompt_version,
+        inter_attempt_delay_sec=args.delay_sec,
     )
     summary = build_evaluation_summary(preflight, records)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
