@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunDetail } from '@/src/api/client';
-import { useCreateReport, useProfile, useRunDetail, useRuns, useUpdateProfile } from '@/src/api/queries';
+import { useCreateReport, useProfile, useRunDetail } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
 import { useRunResult } from '@/src/components/run-result-provider';
@@ -19,8 +19,6 @@ export default function Report() {
   const runId = params.runId ?? local?.uploaded?.id ?? null;
   const detail = useRunDetail(token, params.runId ?? null);
   const profile = useProfile(token);
-  const runs = useRuns(token);
-  const updateProfile = useUpdateProfile(token);
   const create = useCreateReport(token);
   const requested = useRef(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -41,11 +39,8 @@ export default function Report() {
   const record = local?.record;
   const report = local?.report ?? detail.data?.report ?? create.data;
   const measuredBaseline = !local?.simulated && record?.measuredBaseline !== null && record?.measuredBaseline !== undefined
-    && runs.data?.filter((run) => run.source === 'APP').length === 1
     ? record?.measuredBaseline
     : null;
-  const shouldConfirmBaseline = measuredBaseline !== null
-    && profile.data?.baselineCadence !== measuredBaseline;
   const header = params.runId ? '상세보기' : '러닝 리포트';
   const hasRunData = Boolean(record || detail.data);
   const samples = params.runId ? detail.data?.samples ?? null : record?.samples ?? null;
@@ -70,18 +65,10 @@ export default function Report() {
       {params.runId && detail.error ? <StatusCard actionLabel="다시 시도" onAction={() => void detail.refetch()} title={isOfflineError(detail.error) ? '오프라인 상태예요' : '러닝 기록을 불러오지 못했어요'} body="기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요." /> : null}
       {detail.data?.analysisLimitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{formatAnalysisLimitation(detail.data.analysisLimitation)}</Text></View> : null}
       {!params.runId && !report && local?.uploaded?.analysisLimitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{formatAnalysisLimitation(local.uploaded.analysisLimitation)}</Text></View> : null}
-      {shouldConfirmBaseline ? <View style={styles.baselineCard}>
+      {measuredBaseline !== null ? <View style={styles.baselineCard}>
         <Text style={styles.baselineTitle}>나의 기준 리듬을 찾았어요</Text>
         <Text style={styles.baselineValue}>{measuredBaseline} <Text style={styles.baselineUnit}>spm</Text></Text>
-        <Text style={styles.baselineCopy}>현재 설정 {profile.data?.baselineCadence ?? '—'} spm · 확인한 뒤 다음 러닝부터 적용해요.</Text>
-        <Pressable
-          disabled={updateProfile.isPending}
-          onPress={() => updateProfile.mutate({ baselineCadence: measuredBaseline })}
-          style={({ pressed }) => [styles.confirmBaseline, (pressed || updateProfile.isPending) && styles.buttonPressed]}
-        >
-          <Text style={styles.confirmBaselineText}>{updateProfile.isPending ? '저장 중...' : '이 리듬으로 확정하기'}</Text>
-        </Pressable>
-        {updateProfile.error ? <Text style={styles.inlineError}>저장하지 못했어요. 다시 눌러 주세요.</Text> : null}
+        <Text style={styles.baselineCopy}>현재 설정 {profile.data?.baselineCadence ?? '—'} spm · 다음 러닝부터 자동 적용돼요.</Text>
       </View> : null}
       {hasRunData ? <View style={styles.grid}>
         <Metric label="실제 러닝 시간" value={seconds === null ? '—' : `${Math.round(seconds / 60)}`} unit={seconds === null ? undefined : '분'} />
@@ -184,9 +171,6 @@ const styles = StyleSheet.create({
   baselineValue: { color: colors.primary, fontSize: 32, fontWeight: '800', marginTop: 8 },
   baselineUnit: { color: colors.inkMuted, fontSize: 14 },
   baselineCopy: { color: colors.inkMuted, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  confirmBaseline: { height: 42, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
-  confirmBaselineText: { color: colors.white, fontSize: 14, fontWeight: '700' },
-  inlineError: { color: colors.danger, fontSize: 12, marginTop: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginTop: 22 },
   metric: { width: '47.5%', height: 94, borderRadius: 20, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 17 },
   metricLabel: { color: 'rgba(255,255,255,.68)', fontSize: 12 },
