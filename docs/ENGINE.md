@@ -447,12 +447,34 @@ newMin/Max = newCenter ∓ 4
 | 거리 목표 + GPS 미수신 | 시간 목표 전환 폴백 안내 |
 | 백그라운드 | 무음 루프로 세션 유지, 판정 계속 |
 
+### 좌표는 화면에만 쓰고 저장하지 않는다 ⚠️
+
+러닝 중 화면에는 지도와 지나온 경로를 그린다. 그 좌표는 **`LocationTracker`가 들고 있는
+메모리 값이고, 러닝이 끝나면 사라진다.**
+
+| | 좌표 |
+| --- | --- |
+| 러닝 중 화면 (지도·경로) | **○** |
+| `samples`·`events` | ✕ |
+| `POST /runs` 업로드 | ✕ |
+| DB (`ERD.md`) | ✕ |
+| 결과 이미지·공유 (`F2-10`) | ✕ (`PRODUCT.md` §30.13) |
+
+서버로 나가는 것은 **누적 거리와 평균 페이스 두 숫자뿐**이다. 그래서 지도를 넣어도
+`CONTRACT.md`·`ERD.md`는 바뀌지 않는다.
+
+좌표를 저장하지 않는 이유는 필요가 없기 때문이다. 판정은 케이던스로만 하고(§4),
+사후 지표(RS·LDR·FI)도 좌표를 쓰지 않는다(§12). 저장하는 순간 위치 이력이라는
+민감한 데이터를 떠안게 되는데 그 대가로 얻는 기능이 없다.
+
 ## 11. 구현
 - 센서: `Pedometer.watchStepCount()` 최우선.
 - 오디오 세션: `MixWithOthers` + `staysActiveInBackground`. 외부 플레이리스트 중단 금지 (`DuckOthers`는 개입 순간만).
 - 백그라운드 생존: 무음 루프 상시 재생 → `UIBackgroundModes: ["audio"]`.
 - `CadenceSource` 인터페이스로 `PedometerSource` / `ReplaySource` 분리. **데모는 ReplaySource — 1일차에 구현.**
 - `samples` push 5초 간격.
+- 지도: `react-native-maps` (iOS는 Apple Maps라 **API 키 불필요**). 경로 좌표는
+  `LocationTracker`가 메모리로만 들고 화면에 넘긴다 (§10).
 
 `engine/types.ts`에 들어갈 것 (UI FE 유일 접점): `RunState`, `JudgeVerdict`, `CadenceSample`, `RunEvent`, `TargetRange`, `CadenceSource`. 상수는 `engine/constants.ts`.
 
