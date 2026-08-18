@@ -1,5 +1,4 @@
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Animated, StyleSheet, View } from 'react-native';
 
 import { navigationHeader } from '@/src/theme/tokens';
@@ -16,12 +15,12 @@ export function ScrollHeaderScrim({ scrollY, height = 74 - navigationHeader.cont
       ? <GlassView glassEffectStyle="regular" style={StyleSheet.absoluteFill} />
       : <View style={[StyleSheet.absoluteFill, styles.fallback]} />}
     <View style={styles.tint} />
-    <LinearGradient
-      colors={['rgba(255,255,255,.12)', 'rgba(255,255,255,.07)', 'rgba(255,255,255,.03)', 'rgba(255,255,255,0)']}
-      locations={[0, 0.3, 0.65, 1]}
-      pointerEvents="none"
-      style={styles.edgeGradient}
-    />
+    <View style={styles.edgeGradient}>
+      <View style={[styles.edgeBand, styles.edgeBandStrong]} />
+      <View style={[styles.edgeBand, styles.edgeBandMedium]} />
+      <View style={[styles.edgeBand, styles.edgeBandSoft]} />
+      <View style={[styles.edgeBand, styles.edgeBandFade]} />
+    </View>
   </Animated.View>;
 }
 
@@ -30,4 +29,9 @@ const styles = StyleSheet.create({
   fallback: { backgroundColor: 'rgba(28,26,26,.97)' },
   tint: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(28,26,26,.76)' },
   edgeGradient: { position: 'absolute', left: 0, right: 0, bottom: -8, height: 16 },
+  edgeBand: { flex: 1 },
+  edgeBandStrong: { backgroundColor: 'rgba(255,255,255,.12)' },
+  edgeBandMedium: { backgroundColor: 'rgba(255,255,255,.07)' },
+  edgeBandSoft: { backgroundColor: 'rgba(255,255,255,.03)' },
+  edgeBandFade: { backgroundColor: 'rgba(255,255,255,0)' },
 });
