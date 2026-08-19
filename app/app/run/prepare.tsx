@@ -75,7 +75,7 @@ export default function RunPrepare() {
       </Pressable>
     </View>
     <View style={styles.guide}>
-      <Text style={styles.cardTitle}>러닝 가이드 방식</Text>
+      <Text style={[styles.cardTitle, styles.guideTitle]}>러닝 가이드 방식</Text>
       <Toggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled} />
       <Toggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled} />
       <Toggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled} />
@@ -127,6 +127,7 @@ const styles = StyleSheet.create({
   timeUnit: { position: 'absolute', right: 28, fontSize: 13, fontWeight: '700', color: colors.inkMuted },
   timeChevron: { position: 'absolute', right: 8 },
   guide: { position: 'absolute', left: 29, right: 27, top: 425 - navigationHeader.contentLift, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
+  guideTitle: { marginBottom: 10 },
   toggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: colors.ink },
   toggleCopy: { fontSize: 12, color: 'rgba(28,26,26,.58)', marginTop: 2 },
