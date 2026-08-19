@@ -55,6 +55,13 @@ export type JudgeState = {
   verdict: JudgeVerdict;
   target: TargetRange;
 
+  /**
+   * 마지막 tick의 cadence 구간 (§4). 판정에는 쓰지 않고 **화면 문구용으로만** 노출한다.
+   * `IN_RANGE`는 "목표 범위 안"이 아니라 "개입할 상황이 아님"이라서,
+   * 걷기·정지 구간도 `IN_RANGE`로 나온다. 화면이 그 둘을 구분하려면 이 값이 필요하다.
+   */
+  zone: CadenceZone | null;
+
   /** 진행 중인 이탈. 회복(±3)하거나 개입하면 비워진다. */
   deviation: {
     direction: DeviationDirection;
@@ -94,6 +101,7 @@ export function createJudgeState(target: TargetRange): JudgeState {
     phase: 'WARMUP',
     verdict: 'IN_RANGE',
     target,
+    zone: null,
     deviation: null,
     cooldownStartedSec: null,
     walkStartedSec: null,
@@ -122,7 +130,7 @@ export function judge(previous: JudgeState, tick: JudgeTick): JudgeResult {
 
   // 센서가 죽으면 판정을 멈춘다. 카운터는 그대로 두고 숫자만 UNAVAILABLE로 노출한다.
   if (cadence === null) {
-    return { state: { ...state, verdict: 'UNAVAILABLE' }, events };
+    return { state: { ...state, verdict: 'UNAVAILABLE', zone: null }, events };
   }
 
   state.recent = [...previous.recent, { t: elapsedSec, c: cadence }].filter(
@@ -130,6 +138,7 @@ export function judge(previous: JudgeState, tick: JudgeTick): JudgeResult {
   );
 
   const zone = cadenceZone(cadence);
+  state.zone = zone;
 
   // 워밍업 90초: tick은 돌지만 판정 결과를 쓰지 않는다. 구간 자체를 노출하지 않으므로 색도 IN_RANGE.
   if (elapsedSec < WARMUP_SEC) {

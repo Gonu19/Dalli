@@ -20,7 +20,9 @@ import type { JudgeState } from '../engine/judge';
 import { computeMeasuredBaseline, computeTargetRange } from '../engine/target';
 import type {
   CadenceSample,
+  CadenceZone,
   ConditionValue,
+  JudgePhase,
   JudgeVerdict,
   RunEvent,
   RunSample,
@@ -97,6 +99,13 @@ export type RunSnapshot = {
 type RunStore = {
   runState: RunState;
   verdict: JudgeVerdict;
+  /**
+   * 판정 단계와 cadence 구간 (`ENGINE.md` §4·§6).
+   * 색은 `verdict` 하나로 정하지만, **문구는 이 둘이 있어야 정확해진다** —
+   * 워밍업·걷기·정지도 `verdict`는 `IN_RANGE`라서 그것만으로는 "안정적인 리듬"과 구분되지 않는다.
+   */
+  phase: JudgePhase;
+  zone: CadenceZone | null;
   /** 화면에 노출하는 현재 리듬. 품질 미달이면 `null`. */
   cadence: number | null;
   /** 화면·음성에는 `center` 하나만 쓴다. 범위 숫자는 노출 금지 (`ENGINE.md` §3). */
@@ -154,6 +163,8 @@ function newClientRunId(): string {
 const idleState = {
   runState: 'IDLE' as RunState,
   verdict: 'IN_RANGE' as JudgeVerdict,
+  phase: 'WARMUP' as JudgePhase,
+  zone: null as CadenceZone | null,
   cadence: null,
   target: { center: 0, min: 0, max: 0 },
   totalSec: 0,
@@ -253,6 +264,8 @@ export const useRunStore = create<RunStore>((set, get) => ({
       activeSec,
       cadence,
       verdict: result.state.verdict,
+      phase: result.state.phase,
+      zone: result.state.zone,
       target: result.state.target,
       interventionCount: result.state.interventionCount,
       downshiftCount: result.state.downshiftCount,
