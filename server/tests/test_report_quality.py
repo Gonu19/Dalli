@@ -93,6 +93,42 @@ def test_unsupported_numeric_claim_is_rejected_but_documented_rounding_passes() 
     assert unsupported.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
 
 
+def test_non_minute_duration_allows_exact_components_and_grounded_approximation() -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    non_minute_summary = {
+        **summary,
+        "duration_sec": 223,
+        "active_duration_sec": 223,
+        "in_range_sec": 180,
+    }
+
+    exact = evaluate_report_output(
+        {**payload, "evidence": ["러닝 시간은 3분 43초였어요."]},
+        fallback,
+        non_minute_summary,
+    )
+    approximate = evaluate_report_output(
+        {**payload, "evidence": ["러닝 시간은 약 4분이었어요."]},
+        fallback,
+        non_minute_summary,
+    )
+    unmarked_approximation = evaluate_report_output(
+        {**payload, "evidence": ["러닝 시간은 4분이었어요."]},
+        fallback,
+        non_minute_summary,
+    )
+    invented = evaluate_report_output(
+        {**payload, "evidence": ["러닝 시간은 9분이었어요."]},
+        fallback,
+        non_minute_summary,
+    )
+
+    assert exact.passed is True
+    assert approximate.passed is True
+    assert unmarked_approximation.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
+    assert invented.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
+
+
 def test_routine_numbers_are_allowed_in_habit_evidence_only() -> None:
     _, _, _, fallback, summary, payload = gate_context()
     routine_summary = {

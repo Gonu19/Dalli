@@ -87,6 +87,8 @@ NUMBER_PATTERN = re.compile(
     r"\s*(?P<unit>spm|km|m|%|초|분|일|회)?",
     re.IGNORECASE,
 )
+APPROXIMATE_NUMBER_PATTERN = re.compile(r"약|대략|거의|정도|가량|쯤|내외")
+DURATION_SUMMARY_KEYS = ("duration_sec", "active_duration_sec", "in_range_sec")
 RHYTHM_TARGET_PATTERN = re.compile(r"리듬\s*([-+]?\d+(?:\.\d+)?)")
 RHYTHM_RANGE_PATTERN = re.compile(
     r"리듬\s*([-+]?\d+(?:\.\d+)?)\s*(?:~|-|–)\s*([-+]?\d+(?:\.\d+)?)"
@@ -255,12 +257,73 @@ def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]
     return allowed
 
 
+def _duration_components(summary: Mapping[str, object]) -> tuple[tuple[int, int], ...]:
+    components: set[tuple[int, int]] = set()
+    for key in DURATION_SUMMARY_KEYS:
+        value = summary.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            continue
+        total_seconds = round(float(value))
+        if total_seconds < 0:
+            continue
+        components.add(divmod(total_seconds, 60))
+    return tuple(components)
+
+
+def _approximate_duration_minutes(summary: Mapping[str, object]) -> set[str]:
+    """Return grounded floor/nearest-minute values for approximate duration text."""
+    allowed: set[str] = set()
+    for key in DURATION_SUMMARY_KEYS:
+        value = summary.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            continue
+        total_seconds = round(float(value))
+        if total_seconds < 60:
+            continue
+        minutes = total_seconds // 60
+        allowed.add(_canonical_number(minutes))
+        allowed.add(_canonical_number(round(total_seconds / 60)))
+    return allowed
+
+
+def _has_exact_duration_component(
+    text: str,
+    number: str,
+    unit: str,
+    components: tuple[tuple[int, int], ...],
+) -> bool:
+    """Allow grounded `N분 M초` output when the source duration is not minute-aligned."""
+    if unit == "분":
+        return any(
+            number == str(minutes)
+            and seconds > 0
+            and re.search(rf"(?<!\d){seconds}\s*초", text) is not None
+            for minutes, seconds in components
+        )
+    if unit == "초":
+        return any(
+            number == str(seconds)
+            and seconds > 0
+            and re.search(rf"(?<!\d){minutes}\s*분", text) is not None
+            for minutes, seconds in components
+        )
+    return False
+
+
+def _has_nearby_approximation_marker(text: str, match: re.Match[str]) -> bool:
+    window_start = max(0, match.start() - 6)
+    window_end = min(len(text), match.end() + 8)
+    return APPROXIMATE_NUMBER_PATTERN.search(text[window_start:window_end]) is not None
+
+
 def _has_unsupported_numeric_claim(
     content: LLMReportContent,
     summary: Mapping[str, object],
 ) -> bool:
     allowed = _numeric_allowlist(summary)
     allowed_by_unit = _numeric_unit_allowlist(summary)
+    duration_components = _duration_components(summary)
+    approximate_duration_minutes = _approximate_duration_minutes(summary)
     for field_name, texts in (
         ("verdict", (content.verdict,)),
         ("evidence", tuple(content.evidence)),
@@ -284,7 +347,23 @@ def _has_unsupported_numeric_claim(
                     and "시작" in text
                 ):
                     continue
-                if unit is not None and number not in allowed_by_unit[unit.lower()]:
+                if unit is not None:
+                    normalized_unit = unit.lower()
+                    if number in allowed_by_unit[normalized_unit]:
+                        continue
+                    if (
+                        normalized_unit == "분"
+                        and number in approximate_duration_minutes
+                        and _has_nearby_approximation_marker(text, match)
+                    ):
+                        continue
+                    if _has_exact_duration_component(
+                        text,
+                        number,
+                        normalized_unit,
+                        duration_components,
+                    ):
+                        continue
                     return True
                 if unit is None and number not in allowed:
                     return True
