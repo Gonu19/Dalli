@@ -105,7 +105,7 @@ def test_fallback_prescription_follows_running_purpose(purpose, expected):
     assert "감량" not in content.prescription
 
 
-def test_same_run_data_keeps_next_target_and_other_fallback_text_unchanged():
+def test_same_run_data_keeps_next_target_but_branches_all_purpose_output():
     contents = []
     for purpose in ("COMPLETE", "HABIT", "WEIGHT", "FITNESS", "PERFORMANCE"):
         run = app_run()
@@ -115,10 +115,66 @@ def test_same_run_data_keeps_next_target_and_other_fallback_text_unchanged():
     assert {(content.next_target_min, content.next_target_max) for content in contents} == {
         (155, 163)
     }
-    assert {content.verdict for content in contents} == {contents[0].verdict}
-    assert {content.evidence for content in contents} == {contents[0].evidence}
-    assert {content.next_goal_text for content in contents} == {contents[0].next_goal_text}
+    assert len({content.verdict for content in contents}) == 5
+    assert len({content.evidence for content in contents}) == 5
+    assert len({content.next_goal_text for content in contents}) == 5
     assert len({content.prescription for content in contents}) == 5
+
+
+def test_habit_evidence_uses_previous_app_interval_and_omits_it_when_unavailable():
+    owner = User(running_purpose="HABIT")
+    current = app_run()
+    current.id = uuid4()
+    current.user = owner
+    previous_app = app_run()
+    previous_app.id = uuid4()
+    previous_app.started_at = NOW.replace(day=12)
+    previous_app.user = owner
+    owner.runs = [previous_app, current]
+
+    with_previous = build(current)
+    visible = " ".join((with_previous.verdict, *with_previous.evidence, with_previous.next_goal_text))
+    assert "이번 주" in visible
+    assert "3일 간격" in visible
+
+    owner.runs = [current]
+    without_previous = build(current)
+    visible = " ".join(
+        (
+            without_previous.verdict,
+            *without_previous.evidence,
+            without_previous.prescription,
+            without_previous.next_goal_text,
+        )
+    )
+    assert "이번 주" in visible
+    assert "간격" not in visible
+    assert "이틀" not in visible
+
+
+def test_non_habit_evidence_does_not_use_previous_app_interval():
+    owner = User(running_purpose="PERFORMANCE")
+    current = app_run()
+    current.user = owner
+    previous_app = app_run()
+    previous_app.started_at = NOW.replace(day=12)
+    previous_app.user = owner
+    owner.runs = [previous_app, current]
+
+    content = build(current)
+
+    assert all("일 간격" not in evidence for evidence in content.evidence)
+
+
+def test_weight_output_keeps_target_numeric_and_avoids_weight_metrics():
+    run = app_run()
+    run.user = User(running_purpose="WEIGHT")
+
+    content = build(run)
+    visible = " ".join((content.verdict, *content.evidence, content.prescription, content.next_goal_text))
+
+    assert (content.next_target_min, content.next_target_max) == (155, 163)
+    assert all(term not in visible for term in ("체중", "칼로리", "감량"))
 
 
 def test_fallback_recovery_prescription_overrides_running_purpose():
@@ -153,23 +209,17 @@ def test_fallback_prioritizes_recovery_after_short_gap_and_high_fatigue():
     assert "회복" not in wide_gap.prescription
 
 
-@pytest.mark.parametrize(
-    ("fatigue", "expected_phrase"),
-    [
-        (Decimal("0.349"), "여유"),
-        (Decimal("0.350"), "무리 없이"),
-        (Decimal("0.600"), "부담"),
-    ],
-)
-def test_fallback_verdict_uses_fatigue_label_without_exposing_decimal(fatigue, expected_phrase):
-    content = build(app_run(fatigue_index=fatigue))
-    assert expected_phrase in content.verdict
-    assert str(fatigue) not in content.verdict
+def test_fallback_verdict_keeps_complete_and_stable_focus_without_raw_fields():
+    content = build(app_run(fatigue_index=Decimal("0.600")))
+    assert "안정적인 리듬" in content.verdict
+    assert "완주" in content.verdict
+    assert "0.600" not in content.verdict
 
 
 def test_fallback_with_null_fatigue_does_not_guess_burden():
     content = build(app_run(late_drop_rate=None, fatigue_index=None))
-    assert "안정 구간" in content.verdict
+    assert "안정적인 리듬" in content.verdict
+    assert "안정 구간" in " ".join(content.evidence)
     assert "오늘의 부담" not in " ".join(content.evidence)
 
 

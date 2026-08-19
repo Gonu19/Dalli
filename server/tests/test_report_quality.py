@@ -115,6 +115,48 @@ def test_routine_numbers_are_allowed_in_habit_evidence_only() -> None:
     assert habit.passed is True
 
 
+def test_habit_previous_app_interval_is_allowed_only_when_available() -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    habit_summary = {
+        **summary,
+        "running_purpose": "HABIT",
+        "days_since_last_run": 3,
+        "this_week_run_count": 2,
+    }
+    habit = evaluate_report_output(
+        {
+            **payload,
+            "evidence": ["직전 러닝과 3일 간격", "이번 주 2회 러닝"],
+            "next_goal_text": "다음 러닝은 이틀 안에 한 번 더 나가 보세요. 리듬 159",
+        },
+        fallback,
+        habit_summary,
+    )
+
+    assert habit.passed is True
+
+
+def test_habit_interval_is_rejected_when_previous_app_run_is_missing() -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    habit_summary = {
+        **summary,
+        "running_purpose": "HABIT",
+        "days_since_last_run": None,
+        "this_week_run_count": 2,
+    }
+    result = evaluate_report_output(
+        {
+            **payload,
+            "evidence": ["이번 주 2회 러닝"],
+            "next_goal_text": "다음 러닝은 이틀 안에 한 번 더 나가 보세요. 리듬 159",
+        },
+        fallback,
+        habit_summary,
+    )
+
+    assert result.reasons == (HardGateReason.ROUTINE_INTERVAL_UNAVAILABLE,)
+
+
 @pytest.mark.parametrize(
     ("field", "text", "reason"),
     [
