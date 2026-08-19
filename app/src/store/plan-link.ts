@@ -11,9 +11,12 @@
 /** 연결 허용 폭 — 계획일 자정 기준 전후 6시간. */
 export const PLAN_LINK_WINDOW_HOURS = 6;
 
-export type PlanCandidate = {
+/** 계획 후보가 갖춰야 하는 최소 모양. 캘린더 응답의 계획은 여기에 목표까지 얹어 온다. */
+export type PlanLike = { id: string; status: 'PLANNED' | 'DONE' | 'SKIPPED' };
+
+export type PlanCandidate<T extends PlanLike = PlanLike> = {
   date: string;
-  plan: { id: string; status: 'PLANNED' | 'DONE' | 'SKIPPED' } | null;
+  plan: T | null;
 };
 
 /** `YYYY-MM-DD` (기기 로컬 기준). 서버의 `planned_date`와 같은 축을 쓴다. */
@@ -41,11 +44,14 @@ function shiftDays(value: Date, days: number): Date {
  * 오늘 계획이 있으면 언제나 그쪽이 우선한다. 날짜당 계획이 하나뿐이므로
  * (`CONTRACT.md`) 후보가 둘 이상 겹치는 경우는 경계 시간대뿐이다.
  */
-export function selectPlanForRun(days: readonly PlanCandidate[], startedAt: Date): string | null {
+export function findPlanForRun<T extends PlanLike>(
+  days: readonly PlanCandidate<T>[],
+  startedAt: Date,
+): T | null {
   const byDate = new Map(days.map((day) => [day.date, day.plan]));
   const openPlan = (key: string) => {
     const plan = byDate.get(key);
-    return plan != null && plan.status === 'PLANNED' ? plan.id : null;
+    return plan != null && plan.status === 'PLANNED' ? plan : null;
   };
 
   const today = openPlan(localDateKey(startedAt));
@@ -59,4 +65,9 @@ export function selectPlanForRun(days: readonly PlanCandidate[], startedAt: Date
     return openPlan(localDateKey(shiftDays(startedAt, 1)));
   }
   return null;
+}
+
+/** 연결할 계획의 id만 필요한 곳(`runController`)을 위한 얇은 래퍼. */
+export function selectPlanForRun(days: readonly PlanCandidate[], startedAt: Date): string | null {
+  return findPlanForRun(days, startedAt)?.id ?? null;
 }

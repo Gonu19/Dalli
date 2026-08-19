@@ -1,15 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { useCalendar } from '@/src/api/queries';
+import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { usePreferences } from '@/src/components/preferences-provider';
 import { WheelPickerModal } from '@/src/components/wheel-picker-modal';
 import { CONDITION_VALUE } from '@/src/engine/constants';
 import type { ConditionLevel } from '@/src/engine/types';
+import { findPlanForRun } from '@/src/store/plan-link';
 import { startTrackedRun } from '@/src/store/runController';
+import type { RunGoal } from '@/src/store/runStore';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const timeOptions = Array.from({ length: 24 }, (_, index) => String((index + 1) * 5));
@@ -27,16 +31,30 @@ export default function RunPrepare() {
   const referenceCadence = Number.isFinite(parsedCadence) && parsedCadence > 0 ? parsedCadence : null;
   const condition = (params.condition as ConditionLevel) || 'NORMAL';
   const [cadence, setCadence] = useState<number | null>(referenceCadence);
-  const [minutes, setMinutes] = useState<number | null>(null);
+  const [goal, setGoal] = useState<RunGoal | null>(null);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+
+  // 오늘 계획이 있으면 그 목표로 시작한다. 계획을 세운 사람에게 목표를 다시 묻지 않는다.
+  const { token } = useAuth();
+  const now = new Date();
+  const calendar = useCalendar(token, now.getFullYear(), now.getMonth() + 1);
+  const plan = useMemo(
+    () => findPlanForRun(calendar.data ?? [], new Date()),
+    [calendar.data],
+  );
+
+  useEffect(() => {
+    if (goal !== null || plan === null) return;
+    setGoal({ type: plan.goalType, value: plan.goalValue });
+  }, [goal, plan]);
   const { voiceEnabled, metronomeEnabled, hapticsEnabled, setVoiceEnabled, setMetronomeEnabled, setHapticsEnabled } = usePreferences();
 
   const begin = async () => {
-    if (cadence === null || minutes === null) return;
+    if (cadence === null || goal === null) return;
     await startTrackedRun({
       referenceCadence: cadence,
       condition: CONDITION_VALUE[condition],
-      goal: { type: 'TIME', value: minutes * 60 },
+      goal,
       onSensorUnavailable: () => Alert.alert(
         '케이던스를 측정하지 못했어요',
         '러닝은 계속 기록할 수 있어요.',
@@ -68,11 +86,12 @@ export default function RunPrepare() {
         style={({ pressed }) => [styles.control, cadence === null && styles.disabled, pressed && styles.controlPressed]}
       ><Text style={styles.controlText}>{label}</Text></Pressable>)}</View>
       <View style={styles.line} />
-      <Text style={styles.timeTitle}>목표 시간</Text>
+      <Text style={styles.timeTitle}>{goal?.type === 'DISTANCE' ? '목표 거리' : '목표 시간'}</Text>
       <Pressable accessibilityRole="button" onPress={() => setTimePickerOpen(true)} style={({ pressed }) => [styles.timeBox, pressed && styles.controlPressed]}>
-        <Text style={[styles.time, minutes === null && styles.timePlaceholder]}>{minutes ?? '선택'}</Text>{minutes !== null ? <Text style={styles.timeUnit}>분</Text> : null}
+        <Text style={[styles.time, goal === null && styles.timePlaceholder]}>{formatGoalValue(goal)}</Text>{goal !== null ? <Text style={styles.timeUnit}>{goal.type === 'DISTANCE' ? 'km' : '분'}</Text> : null}
         <Ionicons color={colors.inkMuted} name="chevron-down" size={14} style={styles.timeChevron} />
       </Pressable>
+      {plan !== null && goal?.type === 'DISTANCE' ? <Text numberOfLines={1} style={styles.planNote}>오늘 계획 목표예요. 누르면 시간으로 바꿔요.</Text> : null}
     </View>
     <View style={styles.guide}>
       <Text style={[styles.cardTitle, styles.guideTitle]}>러닝 가이드 방식</Text>
@@ -80,24 +99,30 @@ export default function RunPrepare() {
       <Toggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled} />
       <Toggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled} />
     </View>
-    <Pressable disabled={cadence === null || minutes === null} onPress={() => void begin()} style={({ pressed }) => [styles.start, (cadence === null || minutes === null) && styles.disabledStart, pressed && styles.buttonPressed]}>
+    <Pressable disabled={cadence === null || goal === null} onPress={() => void begin()} style={({ pressed }) => [styles.start, (cadence === null || goal === null) && styles.disabledStart, pressed && styles.buttonPressed]}>
       <Ionicons color={colors.white} name="play" size={20} /><Text style={styles.startText}>러닝 시작하기</Text>
     </Pressable>
     {timePickerOpen ? <WheelPickerModal
       columns={[{
         values: timeOptions,
-         initialIndex: Math.max(0, minutes === null ? 0 : timeOptions.indexOf(String(minutes))),
+        initialIndex: Math.max(0, goal?.type === 'TIME' ? timeOptions.indexOf(String(goal.value / 60)) : 0),
         suffix: '분',
       }]}
       onCancel={() => setTimePickerOpen(false)}
       onConfirm={(indexes) => {
-        setMinutes(Number(timeOptions[indexes[0]]));
+        setGoal({ type: 'TIME', value: Number(timeOptions[indexes[0]]) * 60 });
         setTimePickerOpen(false);
       }}
       title="목표 시간"
       visible
     /> : null}
   </FigmaScreen>;
+}
+
+/** 목표 값 표시 — 거리는 km, 시간은 분. 단위는 옆 칸이 따로 그린다. */
+function formatGoalValue(goal: RunGoal | null): string {
+  if (goal === null) return '선택';
+  return goal.type === 'DISTANCE' ? String(Number((goal.value / 1000).toFixed(2))) : String(goal.value / 60);
 }
 
 function Toggle({ label, copy, value, onChange }: { label: string; copy: string; value: boolean; onChange: (value: boolean) => void }) {
@@ -128,6 +153,7 @@ const styles = StyleSheet.create({
   timeChevron: { position: 'absolute', right: 8 },
   guide: { position: 'absolute', left: 29, right: 27, top: 425 - navigationHeader.contentLift, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
   guideTitle: { marginBottom: 10 },
+  planNote: { position: 'absolute', left: 18, right: 18, top: 228, fontSize: 11, color: colors.inkMuted },
   toggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: colors.ink },
   toggleCopy: { fontSize: 12, color: 'rgba(28,26,26,.58)', marginTop: 2 },
