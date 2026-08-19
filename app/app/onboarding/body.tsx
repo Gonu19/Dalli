@@ -41,7 +41,7 @@ export default function BodyInfoScreen() {
     <Text style={styles.title}>신체 정보를 입력해주세요</Text><Text style={styles.subtitle}>케이던스를 제안하는 기준으로 사용돼요</Text>
     <Text style={styles.labelGender}>성별</Text>
     <View style={styles.gender}>{([['M','남성'],['F','여성'],['O','선택하지 않음']] as const).map(([value, label]) => <Pressable key={value} onPress={() => setGender(value)} style={({ pressed }) => [styles.genderItem, pressed && styles.pressed]}><View style={[styles.radio, gender === value && styles.radioOn]}>{gender === value ? <View style={styles.dot}/> : null}</View><Text style={[styles.genderText, gender === value && styles.selected]}>{label}</Text></Pressable>)}</View>
-    <View style={[styles.field, { left: 38, top: 274, width: 124 }]}><Text style={styles.fieldLabel}>성함</Text><View style={styles.inputWrap}><TextInput onChangeText={setName} placeholder="입력해 주세요" placeholderTextColor="rgba(255,255,255,.35)" style={styles.input} value={name}/></View></View>
+    <View style={[styles.field, { left: 38, top: 274, width: 124 }]}><Text style={styles.fieldLabel}>닉네임</Text><View style={styles.inputWrap}><TextInput onChangeText={setName} placeholder="입력해 주세요" placeholderTextColor="rgba(255,255,255,.35)" style={styles.input} value={name}/></View></View>
     <PickerField label="생년월일" value={birth ? `${birth.year}. ${pad(birth.month)}. ${pad(birth.day)}` : undefined} left={237} top={274} width={124} onPress={() => setPicker('birth')}/>
     <PickerField label="신장" value={height?.toString()} left={38} top={372} width={124} unit="cm" onPress={() => setPicker('height')}/>
     <PickerField label="체중" value={weight?.toString()} left={237} top={372} width={124} unit="kg" onPress={() => setPicker('weight')}/>
