@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, PanResponder, Pressable as NativePressable, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunListItem } from '@/src/api/client';
 import { useDeleteRun, useRuns } from '@/src/api/queries';
@@ -18,6 +18,7 @@ export default function Analysis({ active = true, onCardTouchChange }: { active?
   const runs = useRuns(token);
   const remove = useDeleteRun(token);
   const [cardTouchActive, setCardTouchActive] = useState(false);
+  const [dismissSignal, setDismissSignal] = useState(0);
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
 
   const confirm = (run: RunListItem, onCancel?: () => void) => Alert.alert(
@@ -75,7 +76,8 @@ export default function Analysis({ active = true, onCardTouchChange }: { active?
                 <Text style={styles.prepareText}>러닝 준비하기</Text>
               </Pressable>
             </View>
-          : runs.data?.map((run) => <SwipeableRunCard key={run.id} active={active} onConfirmDelete={() => confirm(run)} onDelete={(onCancel) => confirm(run, onCancel)} onOpen={() => openDetail(run)} onCardTouchChange={handleCardTouchChange} run={run} />)}
+          : runs.data?.map((run) => <SwipeableRunCard key={run.id} active={active} dismissSignal={dismissSignal} onConfirmDelete={() => confirm(run)} onDelete={(onCancel) => confirm(run, onCancel)} onOpen={() => openDetail(run)} onCardTouchChange={handleCardTouchChange} run={run} />)}
+        <NativePressable accessibilityLabel="열린 기록 카드 닫기" onPress={() => { setDismissSignal((value) => value + 1); handleCardTouchChange(false); }} style={styles.dismissArea} />
       </Animated.ScrollView>
     </View>
   </Screen>;
@@ -95,14 +97,17 @@ function Metric({ value, label }: { value: string; label: string }) {
   </View>;
 }
 
-function SwipeableRunCard({ active, run, onConfirmDelete, onDelete, onOpen, onCardTouchChange }: { active: boolean; run: RunListItem; onConfirmDelete: () => void; onDelete: (onCancel?: () => void) => void; onOpen: () => void; onCardTouchChange?: (active: boolean) => void }) {
+function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelete, onOpen, onCardTouchChange }: { active: boolean; dismissSignal: number; run: RunListItem; onConfirmDelete: () => void; onDelete: (onCancel?: () => void) => void; onOpen: () => void; onCardTouchChange?: (active: boolean) => void }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const deleteRef = useRef(onDelete);
   const [, setRevealed] = useState(false);
   const revealedRef = useRef(false);
   const gestureStartOffset = useRef(0);
+  const longSwipeTriggered = useRef(false);
+  const cardTouchChangeRef = useRef(onCardTouchChange);
   deleteRef.current = onDelete;
+  cardTouchChangeRef.current = onCardTouchChange;
   useEffect(() => {
     if (!active) {
       revealedRef.current = false;
@@ -111,6 +116,14 @@ function SwipeableRunCard({ active, run, onConfirmDelete, onDelete, onOpen, onCa
       Animated.spring(translateX, { damping: 22, mass: 0.7, stiffness: 180, toValue: 0, useNativeDriver: true }).start();
     }
   }, [active, opacity, translateX]);
+  useEffect(() => {
+    if (dismissSignal > 0) {
+      updateRevealed(false);
+      cardTouchChangeRef.current?.(false);
+      opacity.setValue(1);
+      Animated.spring(translateX, { damping: 20, mass: 0.55, stiffness: 300, toValue: 0, useNativeDriver: true }).start();
+    }
+  }, [dismissSignal, opacity, translateX]);
   const updateRevealed = (value: boolean) => {
     revealedRef.current = value;
     setRevealed(value);
@@ -124,13 +137,7 @@ function SwipeableRunCard({ active, run, onConfirmDelete, onDelete, onOpen, onCa
   }).start();
   const restoreCard = () => {
     opacity.setValue(1);
-    Animated.spring(translateX, {
-      damping: 20,
-      mass: 0.55,
-      stiffness: 300,
-      toValue: 0,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(translateX, { damping: 20, mass: 0.55, stiffness: 300, toValue: 0, useNativeDriver: true }).start();
   };
   const animateDelete = () => {
     onCardTouchChange?.(false);
@@ -150,14 +157,23 @@ function SwipeableRunCard({ active, run, onConfirmDelete, onDelete, onOpen, onCa
       return isDeleteSwipe || isCloseSwipe;
     },
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { gestureStartOffset.current = revealedRef.current ? -100 : 0; },
-    onPanResponderMove: (_, gesture) => translateX.setValue(Math.max(-220, Math.min(0, gestureStartOffset.current + gesture.dx))),
+    onPanResponderGrant: () => {
+      gestureStartOffset.current = revealedRef.current ? -100 : 0;
+      longSwipeTriggered.current = false;
+    },
+    onPanResponderMove: (_, gesture) => {
+      const totalX = gestureStartOffset.current + gesture.dx;
+      if (totalX < -150 && !longSwipeTriggered.current) {
+        longSwipeTriggered.current = true;
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      }
+      translateX.setValue(Math.max(-300, Math.min(0, totalX)));
+    },
     onPanResponderRelease: (_, gesture) => {
       const totalX = gestureStartOffset.current + gesture.dx;
-      const shouldConfirmDelete = totalX < -180;
+      const shouldConfirmDelete = totalX < -150;
       const shouldRevealDelete = totalX < -80;
       if (shouldConfirmDelete) {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         animateDelete();
       } else if (shouldRevealDelete) {
         updateRevealed(true);
@@ -222,6 +238,7 @@ const styles = StyleSheet.create({
   settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   iconPressed: compactPressFeedback,
   content: { paddingTop: 84, paddingHorizontal: 27, paddingBottom: 40 },
+  dismissArea: { height: 140 },
   section: { color: colors.white, fontSize: 17, fontWeight: '700', marginLeft: 10 },
   summary: { height: 86, borderRadius: 20, backgroundColor: colors.white, marginTop: 15, flexDirection: 'row' },
   summaryItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
