@@ -157,7 +157,6 @@ export default function ActiveRunScreen() {
 
       {!showGuide ? <RunMap live style={styles.map} /> : null}
       {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled}/></View> : null}
-      <View style={styles.mapShade} />
       <View style={styles.controls}>
         <Pressable onPress={togglePause} style={({ pressed }) => [styles.runButton, styles.pauseButton, pressed && styles.buttonPressed]}><Text style={styles.runButtonText}>{run.runState === 'PAUSED' ? '다시 달리기' : '일시정지'}</Text></Pressable>
         <Pressable onPress={() => setShowEnd(true)} style={({ pressed }) => [styles.runButton, styles.finishButton, pressed && styles.buttonPressed]}><Text style={styles.runButtonText}>러닝 완료</Text></Pressable>
@@ -240,7 +239,6 @@ const styles = StyleSheet.create({
   metricValue: { ...typography.subhead, fontWeight: '700', color: colors.text },
   metricHighlighted: { color: colors.primary },
   map: { position: 'absolute', left: 0, right: 0, top: 321 - navigationHeader.contentLift, width: '100%', bottom: 0 },
-  mapShade: { position: 'absolute', left: 0, right: 0, top: 321 - navigationHeader.contentLift, height: 50, backgroundColor: 'rgba(28,26,26,0.2)' },
   guide: { position: 'absolute', left: 29, right: 27, top: 341 - navigationHeader.contentLift, height: 203, padding: 21, borderRadius: 20, backgroundColor: colors.white, zIndex: 2 },
   guideTitle: { color: colors.ink, fontSize: 17, fontWeight: '700', marginBottom: 7 },
   guideToggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
@@ -251,7 +249,7 @@ const styles = StyleSheet.create({
   pauseButton: { backgroundColor: colors.background },
   finishButton: { backgroundColor: colors.primary },
   runButtonText: { ...typography.button, color: colors.white },
-  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(23,33,28,0.72)' },
+  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.38)' },
   pauseText: { ...typography.title, color: colors.white },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: { position: 'absolute', left: 24, right: 24, top: '35%', gap: spacing.md, padding: 30, borderRadius: 40, backgroundColor: colors.white },
