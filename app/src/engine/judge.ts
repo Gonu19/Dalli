@@ -19,6 +19,7 @@ import {
   IDLE_CADENCE_THRESHOLD,
   MAX_DOWNSHIFT,
   MAX_DOWNSHIFT_STEP,
+  MAX_EARLY_SLOW_INTERVENTION,
   MAX_FAST_INTERVENTION,
   RECOVERY_HALF_WIDTH,
   RESTABILIZE_SEC,
@@ -79,9 +80,19 @@ export type JudgeState = {
   lastFailSevere: boolean;
 
   fastInterventionCount: number;
+  /** 5분 이전 저속 안내 횟수. 상한 2회 (§5). 이후 구간은 세지 않는다. */
+  earlySlowInterventionCount: number;
   interventionCount: number;
   downshiftCount: number;
   lastDownshiftSec: number | null;
+
+  /**
+   * 이번 세션에 RUN 구간을 한 번이라도 지났는지.
+   *
+   * **하향의 전제 조건이다.** 출발선에서 걸어 이동하거나 몸을 푸는 사람은 시작부터
+   * WALK 구간인데, 그 걷기 60초로 목표를 깎으면 한 발도 뛰기 전에 목표가 내려간다 (§8).
+   */
+  hasRunZone: boolean;
 
   /** 진입하면 세션 종료까지 유지된다. 해제 없음 (§9). */
   recovery: boolean;
@@ -108,9 +119,11 @@ export function createJudgeState(target: TargetRange): JudgeState {
     slowFailCount: 0,
     lastFailSevere: false,
     fastInterventionCount: 0,
+    earlySlowInterventionCount: 0,
     interventionCount: 0,
     downshiftCount: 0,
     lastDownshiftSec: null,
+    hasRunZone: false,
     recovery: false,
     recent: [],
   };
@@ -139,6 +152,7 @@ export function judge(previous: JudgeState, tick: JudgeTick): JudgeResult {
 
   const zone = cadenceZone(cadence);
   state.zone = zone;
+  if (zone === 'RUN') state.hasRunZone = true;
 
   // 워밍업 90초: tick은 돌지만 판정 결과를 쓰지 않는다. 구간 자체를 노출하지 않으므로 색도 IN_RANGE.
   if (elapsedSec < WARMUP_SEC) {
@@ -232,6 +246,7 @@ export function judge(previous: JudgeState, tick: JudgeTick): JudgeResult {
     state.cooldownStartedSec = elapsedSec;
     state.interventionCount += 1;
     if (deviation.direction === 'FAST') state.fastInterventionCount += 1;
+    else if (elapsedSec < SLOW_JUDGE_START_SEC) state.earlySlowInterventionCount += 1;
     events.push({
       t: elapsedSec,
       type: deviation.direction === 'FAST' ? 'TOO_FAST' : 'TOO_SLOW',
@@ -245,14 +260,20 @@ export function judge(previous: JudgeState, tick: JudgeTick): JudgeResult {
 
 /**
  * 개입 가능 여부 (§5 판정 타임라인).
- * `TOO_SLOW`를 5분 이전에 켜지 않는 이유는 몸 푸는 사용자를 재촉하지 않기 위해서다.
+ *
+ * 5분 이전 `TOO_SLOW`는 **2회까지만** 허용한다. 목표가 있는데 리듬이 처지는 걸
+ * 5분간 방치할 수는 없고, 그렇다고 무제한으로 말하면 몸 푸는 사용자를 재촉하게 된다.
+ * 문구도 그 구간에서는 재촉이 아니라 리듬을 들려주는 쪽으로 갈린다 (`cues.ts`).
  */
 function canIntervene(
   state: JudgeState,
   direction: DeviationDirection,
   tick: JudgeTick,
 ): boolean {
-  if (direction === 'SLOW') return tick.elapsedSec >= SLOW_JUDGE_START_SEC;
+  if (direction === 'SLOW') {
+    if (tick.elapsedSec >= SLOW_JUDGE_START_SEC) return true;
+    return state.earlySlowInterventionCount < MAX_EARLY_SLOW_INTERVENTION;
+  }
   if (state.fastInterventionCount >= MAX_FAST_INTERVENTION) return false;
   return (tick.goalProgress ?? 0) < FAST_MUTE_PROGRESS;
 }
@@ -301,11 +322,15 @@ function resolveCooldown(
 }
 
 /**
- * 하향 가능 시점인지 — 5분 이전에는 하향이 없고(§5), 하향 간격은 5분이다(§8).
+ * 하향 가능 시점인지 — 하향 간격은 5분이다 (§8).
  * 횟수 소진은 리커버리로 가는 경로이므로 여기서 막지 않는다.
+ *
+ * 시각 게이트는 없다. 5분도 못 버티고 무너지는 사용자에게 필요한 것은 재촉이 아니라
+ * **낮아진 목표**인데, 그것까지 5분간 잠가두면 러닝의 앞 구간을 통째로 방치하게 된다.
+ * 대신 `hasRunZone`으로 "실제로 뛰다가 무너진 경우"만 통과시킨다.
  */
 function canDownshift(state: JudgeState, elapsedSec: number): boolean {
-  if (elapsedSec < SLOW_JUDGE_START_SEC) return false;
+  if (!state.hasRunZone) return false;
   if (state.lastDownshiftSec === null) return true;
   return elapsedSec - state.lastDownshiftSec >= DOWNSHIFT_INTERVAL_SEC;
 }

@@ -36,7 +36,19 @@ export const SENSOR_COVERAGE_MIN = 0.7;
 
 // 판정 타임라인 (§5)
 export const WARMUP_SEC = 90;
+/**
+ * 저속 안내의 성격이 바뀌는 경계.
+ *
+ * 이 시각 **이전**에는 "목표 리듬을 들려드릴게요" + 메트로놈으로 리듬만 주고,
+ * 이후에는 회복을 요구하는 기존 문구를 쓴다 (§7). 판정·하향은 양쪽 다 정상으로 돈다.
+ */
 export const SLOW_JUDGE_START_SEC = 300;
+/**
+ * 5분 이전 저속 안내 상한 (§5).
+ *
+ * 2회를 채우면 실패 2회가 되어 그대로 하향으로 이어진다 (§8). 그 이상은 재촉이 된다.
+ */
+export const MAX_EARLY_SLOW_INTERVENTION = 2;
 
 // cadence 구간 (§4)
 export const IDLE_CADENCE_THRESHOLD = 50;

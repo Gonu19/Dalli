@@ -36,7 +36,12 @@ export function attachCues(): () => void {
     const fastCount = state.events.filter((event) => event.type === 'TOO_FAST').length;
 
     for (const event of fresh) {
-      const cue = cueForEvent(event, { fastInterventionCount: fastCount, target: state.target });
+      const cue = cueForEvent(event, {
+        fastInterventionCount: fastCount,
+        target: state.target,
+        // 판정과 같은 시간축(pause 제외)을 쓴다. 이벤트의 `t`는 전체 시간축이라 쓰지 않는다.
+        elapsedSec: state.activeSec,
+      });
       if (cue !== null) void playCue(cue, state.target.center);
     }
   });
