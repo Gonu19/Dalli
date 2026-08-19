@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import logging
+import time
 from uuid import UUID
 
 from sqlalchemy import select
@@ -12,7 +14,7 @@ from app.exceptions import ApplicationError
 from app.models import Report, Run, User
 from app.schemas.reports import ReportMetricsResponse, ReportResponse
 from app.services.fallback import build_fallback_report
-from app.services.llm import generate_llm_report, llm_values
+from app.services.llm import generate_llm_report, llm_values, log_llm_event
 from app.services.metrics import compute_run_metrics
 from app.services.report_quality import validate_fallback_content
 from app.services.run_quality import assess_run_quality
@@ -94,6 +96,7 @@ def create_report(
         values = llm_values(content, settings.openai_model)
     report = Report(run_id=run.id, **values)
     db.add(report)
+    persistence_started_at = time.monotonic()
     try:
         db.commit()
         db.refresh(report)
@@ -104,9 +107,29 @@ def create_report(
             existing = db.scalar(select(Report).where(Report.run_id == run.id))
             if existing is not None:
                 return ReportSaveResult(existing, run, False, quality.is_analyzable)
+        log_llm_event(
+            logging.ERROR,
+            "llm_report_persistence_failure",
+            run,
+            stage="persistence",
+            reason_codes=("persistence_failure",),
+            fallback=content is None,
+            model=settings.openai_model if content is not None else None,
+            started_at=persistence_started_at,
+        )
         raise
     except SQLAlchemyError:
         db.rollback()
+        log_llm_event(
+            logging.ERROR,
+            "llm_report_persistence_failure",
+            run,
+            stage="persistence",
+            reason_codes=("persistence_failure",),
+            fallback=content is None,
+            model=settings.openai_model if content is not None else None,
+            started_at=persistence_started_at,
+        )
         raise
 
 

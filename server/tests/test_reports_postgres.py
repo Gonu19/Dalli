@@ -20,6 +20,7 @@ from app.database import clear_database_caches
 from app.main import create_app
 from app.models import Report, Run
 from app.services.auth import decode_access_token
+from app.services.report_quality import LLMReportContent
 
 TEST_JWT_SECRET = "postgres-reports-test-secret-with-32-bytes"
 
@@ -148,3 +149,50 @@ def test_report_post_get_persistence_and_run_delete_cascade(
         session.delete(stored_run)
         session.commit()
         assert session.get(Report, report_id) is None
+
+
+@pytest.mark.postgres
+def test_fake_structured_llm_report_persists_as_non_fallback(
+    postgres_reports_environment,
+    monkeypatch,
+) -> None:
+    token, user_id = authenticate(f"reports-fake-llm-{uuid4()}")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def fake_report(run, quality, metrics, fallback, settings):
+        del run, quality, metrics, settings
+        return LLMReportContent(
+            verdict="오늘은 안정적인 리듬을 이어간 러닝이에요.",
+            evidence=["안정 구간 100%"],
+            hypothesis="일정한 리듬의 영향일 수 있어요.",
+            prescription="다음 러닝도 같은 리듬으로 시작해 보세요.",
+            next_goal_text="다음 목표: 리듬 159",
+            next_target_min=fallback.next_target_min,
+            next_target_max=fallback.next_target_max,
+            recovery_note=None,
+            limitation=fallback.limitation,
+        )
+
+    monkeypatch.setattr("app.services.reports.generate_llm_report", fake_report)
+    with TestClient(create_app()) as client:
+        run_response = client.post(
+            "/runs",
+            json=app_payload(f"report-fake-llm-run-{uuid4()}"),
+            headers=headers,
+        )
+        assert run_response.status_code == 201
+        run_id = run_response.json()["id"]
+        report_response = client.post(f"/runs/{run_id}/report", headers=headers)
+
+    assert report_response.status_code == 200
+    assert report_response.json()["is_fallback"] is False
+    assert report_response.json()["model"] == "gpt-4o-mini"
+    with Session(postgres_reports_environment) as session:
+        stored = session.scalar(
+            select(Report)
+            .join(Run, Report.run_id == Run.id)
+            .where(Run.id == UUID(run_id), Run.user_id == user_id)
+        )
+        assert stored is not None
+        assert stored.is_fallback is False
+        assert stored.model == "gpt-4o-mini"

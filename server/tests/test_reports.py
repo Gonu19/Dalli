@@ -1,8 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings, get_settings
 from app.deps import get_current_user, get_db
@@ -68,8 +71,9 @@ def report(run: Run) -> Report:
 
 
 class FakeSession:
-    def __init__(self, scalars=()):
+    def __init__(self, scalars=(), commit_error: Exception | None = None):
         self.scalars = list(scalars)
+        self.commit_error = commit_error
         self.added = []
         self.commits = 0
         self.rollbacks = 0
@@ -83,6 +87,8 @@ class FakeSession:
 
     def commit(self):
         self.commits += 1
+        if self.commit_error is not None:
+            raise self.commit_error
         for value in self.added:
             if isinstance(value, Report):
                 value.id = value.id or uuid4()
@@ -211,6 +217,49 @@ def test_valid_llm_report_is_saved_with_server_metrics_and_200(monkeypatch):
     assert db.added[0].is_fallback is False
     assert db.added[0].model == "gpt-4o-mini"
     assert run.rhythm_score == Decimal("1.000")
+
+
+def test_llm_persistence_failure_is_logged_without_faking_fallback(monkeypatch, caplog):
+    owner = user()
+    run = app_run(owner)
+    db = FakeSession(
+        [run, None],
+        commit_error=SQLAlchemyError("database secret detail"),
+    )
+    llm_content = LLMReportContent(
+        verdict="오늘은 안정적인 리듬을 이어간 러닝이에요.",
+        evidence=["안정 구간 100%"],
+        hypothesis="일정한 리듬의 영향일 수 있어요.",
+        prescription="다음 러닝도 같은 리듬으로 시작해 보세요.",
+        next_goal_text="다음 목표: 3분 완주, 리듬 159",
+        next_target_min=153,
+        next_target_max=161,
+        recovery_note=None,
+        limitation="위치 정보가 없어 거리와 페이스는 분석하지 않았어요.",
+    )
+    monkeypatch.setattr(
+        "app.services.reports.generate_llm_report",
+        lambda *_: llm_content,
+    )
+    llm_settings = Settings(
+        database_url="postgresql+psycopg://test:test@localhost:5432/dalli_test",
+        jwt_secret="test-only-jwt-secret-with-sufficient-length",
+        openai_api_key="test-key",
+        llm_enabled=True,
+        openai_model="gpt-4o-mini",
+    )
+    caplog.set_level("INFO", logger="app.services.llm")
+
+    with pytest.raises(SQLAlchemyError):
+        client_for(owner, db, llm_settings).post(f"/runs/{run.id}/report")
+
+    diagnostic = json.loads(caplog.records[-1].message)
+    assert diagnostic["event"] == "llm_report_persistence_failure"
+    assert diagnostic["stage"] == "persistence"
+    assert diagnostic["reason_codes"] == ["persistence_failure"]
+    assert diagnostic["fallback"] is False
+    assert diagnostic["model"] == "gpt-4o-mini"
+    assert "database secret detail" not in caplog.text
 
 
 def test_first_unanalyzable_app_post_creates_report_but_returns_200():

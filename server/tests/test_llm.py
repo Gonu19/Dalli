@@ -28,6 +28,7 @@ from app.services.llm import (
     generate_llm_report,
 )
 from app.services.metrics import compute_run_metrics
+from app.services.report_quality import HardGateReason, HardGateResult
 from app.services.run_quality import assess_run_quality
 
 
@@ -378,6 +379,14 @@ def test_provider_failures_fall_back_without_secret_in_logs(error, caplog) -> No
     )
     assert SECRET not in caplog.text
     assert str(error) not in caplog.text
+    diagnostic = json.loads(caplog.records[-1].message)
+    assert diagnostic["event"] == "llm_report_fallback"
+    assert diagnostic["run_id"] == str(current_run.id)
+    assert diagnostic["stage"] in {"sdk_timeout", "provider", "deadline", "evaluator"}
+    assert diagnostic["fallback"] is True
+    assert diagnostic["model"] == "gpt-4o-mini"
+    assert isinstance(diagnostic["elapsed_ms"], (int, float))
+    assert "provider secret detail" not in json.dumps(diagnostic)
 
 
 def test_disabled_or_missing_key_does_not_construct_client() -> None:
@@ -398,6 +407,113 @@ def test_disabled_or_missing_key_does_not_construct_client() -> None:
             )
             is None
         )
+
+
+def test_configuration_fallback_logs_formatter_safe_reason_and_stage(caplog) -> None:
+    current_run, quality, metrics, fallback = context()
+    caplog.set_level("INFO", logger="app.services.llm")
+
+    generate_llm_report(
+        current_run,
+        quality,
+        metrics,
+        fallback,
+        settings(enabled=False),
+    )
+    disabled = json.loads(caplog.records[-1].message)
+    assert disabled == {
+        "elapsed_ms": disabled["elapsed_ms"],
+        "event": "llm_report_fallback",
+        "fallback": True,
+        "model": "gpt-4o-mini",
+        "reason_codes": ["disabled"],
+        "run_id": str(current_run.id),
+        "stage": "configuration",
+    }
+
+    caplog.clear()
+    generate_llm_report(
+        current_run,
+        quality,
+        metrics,
+        fallback,
+        settings(key=""),
+    )
+    missing_key = json.loads(caplog.records[-1].message)
+    assert missing_key["reason_codes"] == ["missing_api_key"]
+    assert missing_key["stage"] == "configuration"
+    assert SECRET not in caplog.text
+
+
+def test_completed_false_analyzable_run_still_calls_provider() -> None:
+    current_run, quality, metrics, fallback = context()
+    current_run.completed = False
+    fake = FakeClient(
+        LLMReportContent.model_validate(
+            valid_payload(fallback.next_target_min, fallback.next_target_max, fallback.limitation)
+        )
+    )
+
+    content = generate_llm_report(
+        current_run,
+        quality,
+        metrics,
+        fallback,
+        settings(),
+        client_factory=lambda **_: fake,
+    )
+
+    assert content is not None
+    assert fake.kwargs is not None
+
+
+def test_hard_gate_and_schema_failures_log_stable_stage_and_reasons(monkeypatch, caplog) -> None:
+    current_run, quality, metrics, fallback = context()
+    fake = FakeClient(valid_payload(fallback.next_target_min, fallback.next_target_max, fallback.limitation))
+    caplog.set_level("INFO", logger="app.services.llm")
+
+    monkeypatch.setattr(
+        "app.services.llm.evaluate_report_output",
+        lambda *_: HardGateResult(
+            False,
+            (HardGateReason.PROTECTED_VALUE_CHANGED, HardGateReason.NEXT_GOAL_CONTRADICTION),
+        ),
+    )
+    assert (
+        generate_llm_report(
+            current_run,
+            quality,
+            metrics,
+            fallback,
+            settings(),
+            client_factory=lambda **_: fake,
+        )
+        is None
+    )
+    hard_gate = json.loads(caplog.records[-1].message)
+    assert hard_gate["stage"] == "output_hard_gate"
+    assert hard_gate["reason_codes"] == [
+        "PROTECTED_VALUE_CHANGED",
+        "NEXT_GOAL_CONTRADICTION",
+    ]
+
+    monkeypatch.undo()
+    caplog.clear()
+    fake = FakeClient({"evidence": []})
+    assert (
+        generate_llm_report(
+            current_run,
+            quality,
+            metrics,
+            fallback,
+            settings(),
+            client_factory=lambda **_: fake,
+        )
+        is None
+    )
+    schema = json.loads(caplog.records[-1].message)
+    assert schema["stage"] == "structured_schema"
+    assert schema["reason_codes"] == ["EVIDENCE_COUNT_INVALID", "SCHEMA_INVALID"]
 
 
 def test_deadline_returns_before_slow_provider_finishes() -> None:

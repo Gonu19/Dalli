@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from statistics import median
+import time
 from typing import Callable
 
 from openai import (
@@ -40,6 +41,59 @@ logger = logging.getLogger(__name__)
 
 
 _days_since_last_app_run = days_since_last_app_run
+
+
+def _reason_value(reason: object) -> str:
+    return str(getattr(reason, "value", reason))
+
+
+def log_llm_event(
+    level: int,
+    event: str,
+    run: Run,
+    *,
+    stage: str,
+    reason_codes: tuple[object, ...] | list[object] = (),
+    fallback: bool,
+    model: str | None,
+    started_at: float,
+    provider_status_code: int | None = None,
+) -> None:
+    """Emit only the allowlisted LLM diagnostics as a formatter-safe JSON line."""
+    codes = [_reason_value(reason) for reason in reason_codes]
+    fields = {
+        "event": event,
+        "run_id": str(run.id),
+        "stage": stage,
+        "reason_codes": codes,
+        "fallback": fallback,
+        "model": model,
+        "elapsed_ms": round(max(0.0, time.monotonic() - started_at) * 1000, 1),
+    }
+    if provider_status_code is not None:
+        fields["provider_status_code"] = provider_status_code
+
+    # Keep the same safe fields in ``extra`` for collectors that support them,
+    # while putting the canonical representation in the message because the
+    # default Uvicorn formatter drops arbitrary ``extra`` fields.
+    logger.log(
+        level,
+        json.dumps(fields, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+        extra={
+            "llm_event": event,
+            "llm_run_id": str(run.id),
+            "llm_stage": stage,
+            "llm_reason_codes": codes,
+            "llm_fallback": fallback,
+            "llm_model": model,
+            "llm_elapsed_ms": fields["elapsed_ms"],
+            **(
+                {"llm_provider_status_code": provider_status_code}
+                if provider_status_code is not None
+                else {}
+            ),
+        },
+    )
 
 
 def _sample_pairs(run: Run) -> list[tuple[float, float]]:
@@ -227,6 +281,29 @@ def _failure_reason(exc: Exception) -> str:
     return HardGateReason.EVALUATOR_ERROR
 
 
+def _failure_stage(exc: Exception) -> str:
+    if isinstance(exc, HardGateViolation):
+        if HardGateReason.SCHEMA_INVALID in exc.reasons:
+            return "structured_schema"
+        return "output_hard_gate"
+    if isinstance(exc, (ValidationError, ValueError)):
+        return "structured_schema"
+    if isinstance(exc, APITimeoutError):
+        return "sdk_timeout"
+    if isinstance(exc, TimeoutError):
+        return "deadline"
+    if isinstance(exc, (AuthenticationError, RateLimitError, APIConnectionError, APIStatusError)):
+        return "provider"
+    return "evaluator"
+
+
+def _provider_status_code(exc: Exception) -> int | None:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int) and 100 <= status_code <= 599:
+        return status_code
+    return None
+
+
 def generate_llm_report(
     run: Run,
     quality: RunQualityAssessment,
@@ -238,42 +315,70 @@ def generate_llm_report(
     response_observer: Callable[[object], None] | None = None,
     failure_observer: Callable[[Exception], None] | None = None,
 ) -> LLMReportContent | None:
+    started_at = time.monotonic()
     api_key = settings.openai_api_key.get_secret_value()
     if not settings.llm_enabled:
-        logger.info("llm_report_fallback", extra={"llm_reason": "disabled"})
+        log_llm_event(
+            logging.INFO,
+            "llm_report_fallback",
+            run,
+            stage="configuration",
+            reason_codes=("disabled",),
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
+        )
         return None
     if not api_key:
-        logger.warning("llm_report_fallback", extra={"llm_reason": "missing_api_key"})
+        log_llm_event(
+            logging.WARNING,
+            "llm_report_fallback",
+            run,
+            stage="configuration",
+            reason_codes=("missing_api_key",),
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
+        )
         return None
 
     if run.source == "MANUAL":
-        logger.warning(
+        log_llm_event(
+            logging.WARNING,
             "llm_report_fallback",
-            extra={
-                "run_id": str(run.id),
-                "llm_reason_codes": [HardGateReason.MANUAL_RUN_LLM_BLOCKED],
-            },
+            run,
+            stage="precondition",
+            reason_codes=(HardGateReason.MANUAL_RUN_LLM_BLOCKED,),
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
         )
         return None
     if not quality.is_analyzable:
-        logger.warning(
+        log_llm_event(
+            logging.WARNING,
             "llm_report_fallback",
-            extra={
-                "run_id": str(run.id),
-                "llm_reason_codes": [HardGateReason.UNANALYZABLE_RUN_LLM_BLOCKED],
-            },
+            run,
+            stage="precondition",
+            reason_codes=(HardGateReason.UNANALYZABLE_RUN_LLM_BLOCKED,),
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
         )
         return None
 
     summary = _safe_summary(run, quality, metrics, fallback)
     payload_gate = evaluate_outgoing_payload(summary, run.samples, run.events)
     if not payload_gate.passed:
-        logger.warning(
+        log_llm_event(
+            logging.WARNING,
             "llm_report_fallback",
-            extra={
-                "run_id": str(run.id),
-                "llm_reason_codes": list(payload_gate.reasons),
-            },
+            run,
+            stage="outgoing_payload_hard_gate",
+            reason_codes=list(payload_gate.reasons),
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
         )
         return None
 
@@ -316,19 +421,27 @@ def generate_llm_report(
             if isinstance(exc, HardGateViolation)
             else [_failure_reason(exc)]
         )
-        logger.warning(
+        log_llm_event(
+            logging.WARNING,
             "llm_report_fallback",
-            extra={
-                "run_id": str(run.id),
-                "llm_reason_codes": reasons,
-                "llm_fallback": True,
-            },
+            run,
+            stage=_failure_stage(exc),
+            reason_codes=reasons,
+            fallback=True,
+            model=settings.openai_model,
+            started_at=started_at,
+            provider_status_code=_provider_status_code(exc),
         )
         return None
 
-    logger.info(
+    log_llm_event(
+        logging.INFO,
         "llm_report_success",
-        extra={"llm_model": settings.openai_model, "llm_fallback": False},
+        run,
+        stage="llm_result",
+        fallback=False,
+        model=settings.openai_model,
+        started_at=started_at,
     )
     return content
 
