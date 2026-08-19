@@ -497,9 +497,26 @@ export async function getStats(token: string): Promise<Stats> {
   };
 }
 
+/**
+ * 계획의 제목·목표 리듬을 서버가 받을 수 있는지.
+ *
+ * `PlanCreate`가 `extra="forbid"`라 서버에 컬럼이 없는 동안 이 필드를 보내면 **422로 거절된다.**
+ * 컬럼(`title`·`target_cadence`)이 배포되면 이 값을 `true`로 바꾸는 것만으로 연결된다.
+ */
+export const PLAN_DETAIL_FIELDS_SUPPORTED = false;
+
 export async function createPlan(
   token: string,
-  input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string },
+  input: {
+    plannedDate: string;
+    goalType: 'TIME' | 'DISTANCE';
+    goalValue: number;
+    memo?: string;
+    /** 러닝 제목. 서버 지원 전까지는 전송하지 않는다. */
+    title?: string;
+    /** 목표 리듬(spm). 서버 지원 전까지는 전송하지 않는다. */
+    targetCadence?: number | null;
+  },
 ): Promise<Plan> {
   const body: PlanCreate = {
     planned_date: input.plannedDate,
@@ -507,9 +524,13 @@ export async function createPlan(
     goal_value: input.goalValue,
     memo: input.memo?.trim() || null,
   };
+  // 서버가 아직 모르는 필드는 붙이지 않는다. `extra="forbid"`라 붙이는 즉시 422가 된다.
+  const payload = PLAN_DETAIL_FIELDS_SUPPORTED
+    ? { ...body, title: input.title?.trim() || null, target_cadence: input.targetCadence ?? null }
+    : body;
   const response = await request<PlanResponse>('/plans', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   }, token);
   return {
     id: response.id,

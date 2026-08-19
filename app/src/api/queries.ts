@@ -143,7 +143,14 @@ export function useDeleteRun(token: string | null) {
 export function useCreatePlan(token: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { plannedDate: string; goalType: 'TIME' | 'DISTANCE'; goalValue: number; memo?: string }) => createPlan(requireToken(token), input),
+    mutationFn: (input: {
+      plannedDate: string;
+      goalType: 'TIME' | 'DISTANCE';
+      goalValue: number;
+      memo?: string;
+      title?: string;
+      targetCadence?: number | null;
+    }) => createPlan(requireToken(token), input),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['calendar'] }),

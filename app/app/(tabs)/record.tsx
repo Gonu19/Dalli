@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Image, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { isOfflineError, type CalendarDay } from '@/src/api/client';
+import { isOfflineError, PLAN_DETAIL_FIELDS_SUPPORTED, type CalendarDay } from '@/src/api/client';
 import { useCalendar, useCreateManualRun, useCreatePlan, useDeletePlan, useDeleteRun, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
@@ -33,6 +33,8 @@ export default function RecordScreen() {
   const [form, setForm] = useState<'plan' | 'manual' | null>(null);
   const [minutes, setMinutes] = useState('');
   const [distance, setDistance] = useState('');
+  const [title, setTitle] = useState('');
+  const [cadence, setCadence] = useState('');
   const [memo, setMemo] = useState('');
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const modalProgress = useRef(new Animated.Value(0)).current;
@@ -72,15 +74,37 @@ export default function RecordScreen() {
     return () => animation.stop();
   }, [isModalOpen, modalProgress]);
 
+  // 계획은 거리 목표, 기록은 달린 시간이 필수값이다.
+  const canSave = form === 'plan' ? Number(distance) > 0 : Number(minutes) > 0;
+
   const save = async () => {
-    if (Number(minutes) <= 0 || isSaving) return;
+    if (!canSave || isSaving) return;
     try {
-      if (form === 'plan') await createPlan.mutateAsync({ plannedDate: selectedDate, goalType: 'TIME', goalValue: Number(minutes) * 60, memo });
-      else await createManual.mutateAsync({ clientRunId: makeClientRunId(), startedAt: `${selectedDate}T09:00:00Z`, durationSec: Number(minutes) * 60, distanceM: distance ? Number(distance) * 1000 : undefined, memo });
-      setForm(null); setMinutes(''); setDistance(''); setMemo('');
+      if (form === 'plan') {
+        await createPlan.mutateAsync({
+          plannedDate: selectedDate,
+          goalType: 'DISTANCE',
+          goalValue: Math.round(Number(distance) * 1000),
+          memo,
+          title,
+          targetCadence: Number(cadence) > 0 ? Math.round(Number(cadence)) : null,
+        });
+      } else {
+        await createManual.mutateAsync({ clientRunId: makeClientRunId(), startedAt: `${selectedDate}T09:00:00Z`, durationSec: Number(minutes) * 60, distanceM: distance ? Number(distance) * 1000 : undefined, memo });
+      }
+      setForm(null); setMinutes(''); setDistance(''); setTitle(''); setCadence(''); setMemo('');
     } catch {
       // The mutation error is rendered in the modal; preserve the entered values.
     }
+  };
+
+  /**
+   * 계획 폼을 열 때 목표 리듬을 baseline으로 채운다.
+   * 빈칸으로 두면 사용자가 아무 숫자나 넣게 되고, 그 값이 다음 러닝의 판정 기준이 된다 (`ENGINE.md` §3).
+   */
+  const openPlanForm = () => {
+    if (cadence === '' && profile.data?.baselineCadence) setCadence(String(profile.data.baselineCadence));
+    setForm('plan');
   };
 
   if (calendar.isPending || stats.isPending) return <Screen includeBottomSafeArea={false}><StatePanel loading title="기록을 불러오는 중이에요" body="캘린더와 누적 활동일을 확인하고 있어요." /></Screen>;
@@ -193,7 +217,7 @@ export default function RecordScreen() {
         <Text style={[styles.detailCopy, styles.emptyDetailCopy]}>아직 등록된 일정이나 기록이 없어요</Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => setForm('plan')}
+          onPress={openPlanForm}
           style={({ pressed }) => [styles.detailActionButton, styles.emptyActionButton, pressed && styles.buttonPressed]}
         >
           <Text style={styles.detailActionText}>+ 계획/기록</Text>
@@ -201,7 +225,7 @@ export default function RecordScreen() {
       </View> : null}
       {selectedRun || selected?.plan ? <Pressable
         accessibilityRole="button"
-        onPress={() => setForm('plan')}
+        onPress={openPlanForm}
         style={({ pressed }) => [styles.detailActionButton, pressed && styles.buttonPressed]}
       >
         <Text style={styles.detailActionText}>+ 계획/기록</Text>
@@ -212,15 +236,31 @@ export default function RecordScreen() {
     <Modal animationType="fade" transparent visible={isModalOpen} onRequestClose={() => setForm(null)}>
       <View style={styles.overlay}><Pressable style={StyleSheet.absoluteFill} onPress={() => setForm(null)}/><Animated.View style={[styles.modalCard,{opacity:modalProgress,transform:[{translateY:modalProgress.interpolate({inputRange:[0,1],outputRange:[34,0]})},{scale:modalProgress.interpolate({inputRange:[0,1],outputRange:[.97,1]})}]}]}>
         <View style={styles.modalTabs}>
-          <Pressable onPress={() => setForm('plan')} style={({ pressed }) => [styles.modalTab, form === 'plan' && styles.activeTab, pressed && styles.buttonPressed]}><Text style={[styles.tabText, form === 'plan' && styles.activeTabText]}>계획 추가</Text></Pressable>
+          <Pressable onPress={openPlanForm} style={({ pressed }) => [styles.modalTab, form === 'plan' && styles.activeTab, pressed && styles.buttonPressed]}><Text style={[styles.tabText, form === 'plan' && styles.activeTabText]}>계획 추가</Text></Pressable>
           <Pressable onPress={() => setForm('manual')} style={({ pressed }) => [styles.modalTab, form === 'manual' && styles.activeTab, pressed && styles.buttonPressed]}><Text style={[styles.tabText, form === 'manual' && styles.activeTabText]}>기록 추가</Text></Pressable>
         </View>
         <Text style={styles.modalTitle}>{month}월 {Number(selectedDate.slice(-2))}일 {form === 'plan' ? '러닝 계획' : '러닝 기록'}</Text>
-        <Text style={styles.inputLabel}>달린 시간</Text><View style={styles.inputRow}><TextInput keyboardType="number-pad" placeholder="시간을 입력해 주세요" value={minutes} onChangeText={setMinutes} style={styles.input}/><Text style={styles.unit}>분</Text></View>
-        {form === 'manual' && <><Text style={styles.inputLabel}>달린 거리</Text><View style={styles.inputRow}><TextInput keyboardType="decimal-pad" value={distance} onChangeText={setDistance} placeholder="0" style={styles.input}/><Text style={styles.unit}>km</Text></View></>}
-        <Text style={styles.inputLabel}>메모</Text><TextInput value={memo} onChangeText={setMemo} placeholder="오늘의 러닝을 기록해 보세요" style={styles.memo}/>
+        {form === 'plan' ? <>
+          <Text style={styles.inputLabel}>러닝 제목</Text>
+          <TextInput value={title} onChangeText={setTitle} placeholder="3km 완주 러닝" style={styles.memo}/>
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.inputLabel}>목표 거리 (km)</Text>
+              <View style={styles.inputRow}><TextInput keyboardType="decimal-pad" value={distance} onChangeText={setDistance} placeholder="3" style={styles.input}/><Text style={styles.unit}>km</Text></View>
+            </View>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.inputLabel}>목표 SPM</Text>
+              <View style={styles.inputRow}><TextInput keyboardType="number-pad" value={cadence} onChangeText={setCadence} placeholder="157" style={styles.input}/><Text style={styles.unit}>spm</Text></View>
+            </View>
+          </View>
+          {!PLAN_DETAIL_FIELDS_SUPPORTED ? <Text style={styles.hint}>제목과 목표 리듬은 다음 업데이트부터 계획에 저장돼요.</Text> : null}
+        </> : <>
+          <Text style={styles.inputLabel}>달린 시간</Text><View style={styles.inputRow}><TextInput keyboardType="number-pad" placeholder="시간을 입력해 주세요" value={minutes} onChangeText={setMinutes} style={styles.input}/><Text style={styles.unit}>분</Text></View>
+          <Text style={styles.inputLabel}>달린 거리</Text><View style={styles.inputRow}><TextInput keyboardType="decimal-pad" value={distance} onChangeText={setDistance} placeholder="0" style={styles.input}/><Text style={styles.unit}>km</Text></View>
+        </>}
+        <Text style={styles.inputLabel}>메모</Text><TextInput value={memo} onChangeText={setMemo} placeholder={form === 'plan' ? '초반 과속하지 않기' : '오늘의 러닝을 기록해 보세요'} style={styles.memo}/>
         {(createPlan.error || createManual.error) && <Text style={styles.error}>{isOfflineError(createPlan.error ?? createManual.error) ? '오프라인 상태예요. 연결 후 다시 시도해 주세요.' : '서버에 저장하지 못했어요. 다시 시도해 주세요.'}</Text>}
-        <Pressable disabled={Number(minutes) <= 0 || isSaving} onPress={() => void save()} style={({ pressed }) => [styles.save, (pressed || isSaving) && styles.buttonPressed, (Number(minutes) <= 0 || isSaving) && styles.buttonDisabled]}><Text style={styles.saveText}>{isSaving ? '저장 중...' : '저장'}</Text></Pressable>
+        <Pressable disabled={!canSave || isSaving} onPress={() => void save()} style={({ pressed }) => [styles.save, (pressed || isSaving) && styles.buttonPressed, (!canSave || isSaving) && styles.buttonDisabled]}><Text style={styles.saveText}>{isSaving ? '저장 중...' : form === 'plan' ? '계획 저장하기' : '저장'}</Text></Pressable>
       </Animated.View></View>
     </Modal>
     </View>
@@ -264,5 +304,5 @@ const styles = StyleSheet.create({
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, avatarImage: { width: 42, height: 42, borderRadius: 21 }, runner: { color: colors.white, fontSize: 16, fontWeight: '800' }, profileCopy: { color: 'rgba(255,255,255,.85)', fontSize: 11.5, marginTop: 4 }, profileActions: { position: 'absolute', right: 16, top: 28 }, profileButton: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   calendarCard: { position: 'absolute', top: 200, left: 24, right: 24, height: 373, borderRadius: 25, backgroundColor: colors.white, paddingHorizontal: 17, paddingTop: 16 }, monthRow: { height: 34, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 21 }, monthButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }, month: { color: '#1C1A1A', fontSize: 17, fontWeight: '800' }, weekRow: { flexDirection: 'row', marginTop: 4 }, weekday: { width: '14.285%', textAlign: 'center', color: '#686868', fontSize: 12, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }, dayCell: { width: '14.285%', height: 44, alignItems: 'center', justifyContent: 'center' }, dayPressed: pressFeedback, dayCircle: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, selectedCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary }, completedCircle: { backgroundColor: colors.primary }, holidayCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#D94B4B' }, dayText: { color: '#1C1A1A', fontSize: 13, fontWeight: '700' }, holidayText: { color: '#D94B4B' }, white: { color: colors.white }, dot: { position: 'absolute', bottom: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#1C1A1A' }, manualDot: { backgroundColor: '#FFC2B3' }, holidayDot: { position: 'absolute', bottom: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#D94B4B' }, planDot: { width: 6, height: 6, bottom: 2, borderRadius: 3, backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.primary, borderStyle: 'solid' }, legend: { position: 'absolute', left: 45, right: 45, bottom: 12, flexDirection: 'row', justifyContent: 'space-between' }, legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 }, legendDot: { width: 7, height: 7, borderRadius: 4, borderWidth: 1 }, legendText: { color: '#686868', fontSize: 11 },
   detailCard: { position: 'absolute', top: 601, left: 24, right: 24, borderRadius: 22, backgroundColor: colors.white, paddingHorizontal: 18, paddingVertical: 17 }, detailHeader: { flexDirection: 'row', alignItems: 'center' }, detailMarker: { width: 10, height: 10, borderRadius: 5, marginRight: 8, backgroundColor: colors.primary }, manualMarker: { backgroundColor: '#FFC2B3' }, planMarker: { backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.primary }, detailDate: { flexShrink: 1, color: '#1C1A1A', fontSize: 16, lineHeight: 21, fontWeight: '800' }, detailMeta: { marginLeft: 'auto', paddingLeft: 8, color: '#858585', fontSize: 10.5, fontWeight: '500' }, planSummary: { position: 'relative', marginTop: 15 }, planActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }, runSummary: { marginTop: 15 }, runSummaryWithPlan: { marginTop: 13, paddingTop: 13, borderTopWidth: 1, borderTopColor: '#ECECEC' }, runTitle: { color: '#1C1A1A', fontSize: 14, lineHeight: 19, fontWeight: '600' }, runMetrics: { color: '#1C1A1A', fontSize: 15, fontWeight: '800', marginTop: 6 }, metricDivider: { color: '#686868', fontWeight: '500' }, detailCopy: { color: '#858585', fontSize: 12, lineHeight: 17, marginTop: 5 }, emptyDetailCopy: { flex: 1, marginTop: 0 }, deleteButton: { alignSelf: 'flex-start', minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 0 }, runDeleteButton: { marginTop: 12 }, deleteText: { color: colors.primary, fontSize: 12, fontWeight: '800' }, emptyDetail: { minHeight: 90, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, emptyActionButton: { marginTop: 0 }, detailActionButton: { alignSelf: 'flex-end', minWidth: 104, height: 32, borderRadius: 10, paddingHorizontal: 13, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 15 }, detailActionText: { color: colors.white, fontSize: 13, fontWeight: '800' }, doneButton: { minWidth: 72, height: 32, borderRadius: 11, borderWidth: 1, borderColor: colors.primary, paddingHorizontal: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, undoButton: { backgroundColor: colors.white }, doneText: { color: colors.white, fontSize: 12, fontWeight: '800' }, undoText: { color: colors.primary }, buttonDisabled: { opacity: 0.55 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.62)', alignItems: 'center', justifyContent: 'center' }, modalCard: { width: 346, minHeight: 465, borderRadius: 28, backgroundColor: colors.white, padding: 24 }, modalTabs: { flexDirection: 'row', height: 44, backgroundColor: '#F2F2F2', borderRadius: 13, padding: 3 }, modalTab: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, activeTab: { backgroundColor: colors.primary }, tabText: { color: '#777777', fontSize: 14, fontWeight: '800' }, activeTabText: { color: colors.white }, modalTitle: { color: '#1C1A1A', fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 20 }, inputLabel: { color: '#1C1A1A', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 8 }, inputRow: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: '#1C1A1A', paddingHorizontal: 13, fontSize: 15, fontWeight: '700' }, unit: { color: '#686868', marginRight: 14, fontSize: 13 }, memo: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, paddingHorizontal: 13, color: '#1C1A1A', fontSize: 15 }, error: { color: '#D64545', fontSize: 12, marginTop: 5 }, save: { height: 50, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }, saveText: { color: colors.white, fontSize: 17, fontWeight: '800' }, buttonPressed: pressFeedback,
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.62)', alignItems: 'center', justifyContent: 'center' }, modalCard: { width: 346, minHeight: 465, borderRadius: 28, backgroundColor: colors.white, padding: 24 }, modalTabs: { flexDirection: 'row', height: 44, backgroundColor: '#F2F2F2', borderRadius: 13, padding: 3 }, modalTab: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, activeTab: { backgroundColor: colors.primary }, tabText: { color: '#777777', fontSize: 14, fontWeight: '800' }, activeTabText: { color: colors.white }, modalTitle: { color: '#1C1A1A', fontSize: 20, fontWeight: '800', marginTop: 24, marginBottom: 20 }, inputLabel: { color: '#1C1A1A', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 8 }, inputRow: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, flexDirection: 'row', alignItems: 'center' }, input: { flex: 1, color: '#1C1A1A', paddingHorizontal: 13, fontSize: 15, fontWeight: '700' }, unit: { color: '#686868', marginRight: 14, fontSize: 13 }, memo: { height: 44, borderWidth: 1, borderColor: '#DDDDDD', borderRadius: 12, paddingHorizontal: 13, color: '#1C1A1A', fontSize: 15 }, fieldRow: { flexDirection: 'row', gap: 12 }, fieldHalf: { flex: 1 }, hint: { color: '#686868', fontSize: 11, marginTop: 7 }, error: { color: '#D64545', fontSize: 12, marginTop: 5 }, save: { height: 50, borderRadius: 17, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 24 }, saveText: { color: colors.white, fontSize: 17, fontWeight: '800' }, buttonPressed: pressFeedback,
 });
