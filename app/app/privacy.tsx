@@ -138,7 +138,7 @@ function PrivacyForm({ profile, token, onClose }: {
           <Ionicons color={colors.white} name={photoPicking ? 'hourglass-outline' : 'camera'} size={15} />
         </View>
       </Pressable>
-      <Text style={styles.nameLabel}>성함</Text>
+      <Text style={styles.nameLabel}>닉네임</Text>
       <TextInput value={name} onChangeText={setName} style={styles.name} />
       <Text style={styles.genderTitle}>성별</Text>
       <View style={styles.genders}>{([['M', '남성'], ['F', '여성'], ['O', '선택하지 않음']] as const).map(([value, label]) => <Pressable key={value} onPress={() => setGender(value)} style={({ pressed }) => [styles.gender, pressed && styles.pressed]}><View style={[styles.radio, gender === value && styles.radioOn]}>{gender === value ? <View style={styles.dot} /> : null}</View><Text style={[styles.genderText, gender === value && styles.selected]}>{label}</Text></Pressable>)}</View>
