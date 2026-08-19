@@ -14,6 +14,20 @@ import { colors, spacing, typography } from '@/src/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
 
+// 서체 (`assets/fonts/README.md`).
+//
+// 유료 라이선스라 파일이 저장소에 없다. Metro는 `require`를 빌드 시점에 해석하므로
+// 파일 없이 남겨두면 번들링 자체가 실패한다 — 그래서 주석으로 둔다.
+// 세 파일을 넣고 아래 두 블록을 살린 뒤 `fonts.ts`의 `CUSTOM_FONTS_ENABLED`를 켜면 적용된다.
+//
+// import { useFonts } from 'expo-font';
+// const [fontsLoaded] = useFonts({
+//   SandollPress: require('@/assets/fonts/SandollPress.otf'),
+//   'SDGretaSans-Bold': require('@/assets/fonts/SDGretaSans-Bold.otf'),
+//   'SDGretaSans-Heavy': require('@/assets/fonts/SDGretaSans-Heavy.otf'),
+// });
+// if (!fontsLoaded) return null;   // 스플래시가 떠 있는 동안 기다린다
+
 function AppNavigator() {
   const { loading, error, onboarded, retry, token } = useAuth();
   const router = useRouter();
