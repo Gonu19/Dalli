@@ -20,14 +20,14 @@ export type PlanCandidate<T extends PlanLike = PlanLike> = {
 };
 
 /** `YYYY-MM-DD` (기기 로컬 기준). 서버의 `planned_date`와 같은 축을 쓴다. */
-function localDateKey(value: Date): string {
+export function localDateKey(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
-function shiftDays(value: Date, days: number): Date {
+export function shiftDays(value: Date, days: number): Date {
   const next = new Date(value);
   next.setDate(next.getDate() + days);
   return next;

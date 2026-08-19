@@ -1,14 +1,20 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Animated, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
-import { useRunReport } from '@/src/api/queries';
+import { useCalendar, useCreatePlan, useProfile, useRunReport, useRuns } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useRunResult } from '@/src/components/run-result-provider';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
+import {
+  defaultPlanTitle,
+  nextFreeDate,
+  suggestDistanceM,
+  suggestPlanDate,
+} from '@/src/store/routine-suggestion';
 import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 export default function AIReport() {
@@ -22,6 +28,63 @@ export default function AIReport() {
     ? report.evidence.filter((item): item is string => typeof item === 'string')
     : [];
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // 다음 루틴 제안 — 리포트가 말한 목표를 날짜가 붙은 계획으로 옮긴다.
+  const profile = useProfile(token);
+  const runs = useRuns(token);
+  const now = new Date();
+  const calendar = useCalendar(token, now.getFullYear(), now.getMonth() + 1);
+  const createPlan = useCreatePlan(token);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [planDate, setPlanDate] = useState<string | null>(null);
+  const [planDistanceM, setPlanDistanceM] = useState<number | null>(null);
+  const [savedDate, setSavedDate] = useState<string | null>(null);
+
+  /** 계획이 이미 있는 날짜. 하루에 계획은 하나뿐이라 그런 날은 비켜간다 (`CONTRACT.md`). */
+  const takenDates = useMemo(
+    () => new Set((calendar.data ?? []).filter((day) => day.plan?.status === 'PLANNED').map((day) => day.date)),
+    [calendar.data],
+  );
+  const suggestedDistanceM = useMemo(
+    () => suggestDistanceM((runs.data ?? []).slice(0, 3).map((run) => run.distanceM)),
+    [runs.data],
+  );
+  const targetCadence = report ? Math.round((report.nextTargetMin + report.nextTargetMax) / 2) : null;
+  const heavy = (report?.metrics.fatigueIndex ?? 0) >= 0.6;
+
+  const openSheet = () => {
+    const base = suggestPlanDate(new Date(), profile.data?.weeklyGoalCount, report?.metrics.fatigueIndex ?? null);
+    setPlanDate(nextFreeDate(base, takenDates));
+    setPlanDistanceM(suggestedDistanceM);
+    setSheetOpen(true);
+  };
+
+  const shiftPlanDate = (days: number) => {
+    setPlanDate((current) => {
+      if (current === null) return current;
+      const next = new Date(current + 'T00:00:00');
+      next.setDate(next.getDate() + days);
+      const key = dateKey(next);
+      return key < dateKey(new Date()) ? current : key;
+    });
+  };
+
+  const savePlan = async () => {
+    if (planDate === null || planDistanceM === null || createPlan.isPending) return;
+    try {
+      await createPlan.mutateAsync({
+        plannedDate: planDate,
+        goalType: 'DISTANCE',
+        goalValue: planDistanceM,
+        title: defaultPlanTitle(planDistanceM),
+        targetCadence,
+      });
+      setSavedDate(planDate);
+      setSheetOpen(false);
+    } catch {
+      // The mutation error is rendered in the sheet; the entered values stay.
+    }
+  };
 
   return <FigmaScreen>
     <Animated.ScrollView
@@ -44,9 +107,32 @@ export default function AIReport() {
         {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
         <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text></View>
+        {savedDate !== null
+          ? <Text style={styles.planDone}>{formatDateLabel(savedDate)} 계획에 추가했어요.</Text>
+          : suggestedDistanceM !== null
+            ? <Pressable onPress={openSheet} style={({ pressed }) => [styles.suggest, pressed && styles.buttonPressed]}><Text style={styles.suggestText}>이 목표로 다음 러닝 예약하기</Text></Pressable>
+            : null}
       </> : null}
       <Pressable onPress={() => router.dismissTo('/')} style={({ pressed }) => [styles.home, pressed && styles.buttonPressed]}><Text style={styles.homeText}>홈으로 돌아가기</Text></Pressable>
     </Animated.ScrollView>
+    <Modal animationType="slide" onRequestClose={() => setSheetOpen(false)} transparent visible={sheetOpen}>
+      <Pressable onPress={() => setSheetOpen(false)} style={styles.backdrop} />
+      <View style={styles.sheet}>
+        <Text style={styles.sheetTitle}>다음 러닝 예약</Text>
+        <SheetRow label="날짜" value={planDate === null ? '—' : formatDateLabel(planDate)} onMinus={() => shiftPlanDate(-1)} onPlus={() => shiftPlanDate(1)} />
+        <SheetRow
+          label="목표 거리"
+          value={planDistanceM === null ? '—' : `${Number((planDistanceM / 1000).toFixed(2))} km`}
+          onMinus={() => setPlanDistanceM((current) => current === null ? current : Math.max(1000, current - 500))}
+          onPlus={() => setPlanDistanceM((current) => current === null ? current : current + 500)}
+        />
+        <View style={styles.sheetRow}><Text style={styles.sheetLabel}>목표 리듬</Text><Text style={styles.sheetValue}>{targetCadence ?? '—'} spm</Text></View>
+        {heavy ? <Text style={styles.sheetNote}>오늘 부담이 있어서 하루 더 쉬는 날짜로 잡았어요.</Text> : null}
+        {createPlan.error ? <Text style={styles.sheetError}>{isOfflineError(createPlan.error) ? '오프라인 상태예요. 연결 후 다시 시도해 주세요.' : '계획을 저장하지 못했어요. 다시 시도해 주세요.'}</Text> : null}
+        <Pressable disabled={createPlan.isPending} onPress={() => void savePlan()} style={({ pressed }) => [styles.sheetPrimary, (pressed || createPlan.isPending) && styles.buttonPressed]}><Text style={styles.sheetPrimaryText}>{createPlan.isPending ? '추가 중...' : '캘린더에 추가'}</Text></Pressable>
+        <Pressable onPress={() => setSheetOpen(false)} style={({ pressed }) => [styles.sheetSecondary, pressed && styles.buttonPressed]}><Text style={styles.sheetSecondaryText}>취소</Text></Pressable>
+      </View>
+    </Modal>
     <ScrollHeaderScrim scrollY={scrollY} />
     <FigmaBack onPress={() => router.back()} />
     <Text style={styles.header}>AI 상세 리포트</Text>
@@ -58,6 +144,31 @@ function fatigueLabel(value: number | null) {
   if (value < 0.35) return '여유로움';
   if (value < 0.6) return '보통';
   return '부담됨';
+}
+
+function SheetRow({ label, value, onMinus, onPlus }: { label: string; value: string; onMinus: () => void; onPlus: () => void }) {
+  return <View style={styles.sheetRow}>
+    <Text style={styles.sheetLabel}>{label}</Text>
+    <View style={styles.sheetControls}>
+      <Pressable accessibilityLabel={`${label} 줄이기`} onPress={onMinus} style={({ pressed }) => [styles.sheetStep, pressed && styles.buttonPressed]}><Text style={styles.sheetStepText}>-</Text></Pressable>
+      <Text style={styles.sheetValue}>{value}</Text>
+      <Pressable accessibilityLabel={`${label} 늘리기`} onPress={onPlus} style={({ pressed }) => [styles.sheetStep, pressed && styles.buttonPressed]}><Text style={styles.sheetStepText}>+</Text></Pressable>
+    </View>
+  </View>;
+}
+
+/** `YYYY-MM-DD` (기기 로컬 기준). 서버의 `planned_date`와 같은 축이다. */
+function dateKey(value: Date): string {
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${value.getFullYear()}-${month}-${day}`;
+}
+
+/** `YYYY-MM-DD` -> `9월 21일 (토)`. */
+function formatDateLabel(key: string): string {
+  const date = new Date(`${key}T00:00:00`);
+  const weekday = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 (${weekday})`;
 }
 
 function Card({ title, body, orange = false }: { title: string; body: string; orange?: boolean }) {
@@ -91,6 +202,24 @@ const styles = StyleSheet.create({
   nextTitle: { color: colors.white, fontSize: 17, fontWeight: '700' },
   nextValue: { color: colors.white, fontSize: 28, fontWeight: '800', marginTop: 6 },
   nextMeta: { color: colors.white, fontSize: 12, marginTop: 7 },
+  suggest: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  suggestText: { color: colors.white, fontSize: 16, fontWeight: '800' },
+  planDone: { color: colors.primary, fontSize: 14, fontWeight: '700', marginTop: 12, paddingHorizontal: 7 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.55)' },
+  sheet: { backgroundColor: colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 34 },
+  sheetTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', marginBottom: 18 },
+  sheetRow: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sheetLabel: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  sheetControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  sheetStep: { width: 34, height: 34, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  sheetStepText: { color: colors.ink, fontSize: 17, fontWeight: '800' },
+  sheetValue: { color: colors.ink, fontSize: 16, fontWeight: '800', minWidth: 96, textAlign: 'center' },
+  sheetNote: { color: colors.inkMuted, fontSize: 12, marginTop: 6 },
+  sheetError: { color: '#D64545', fontSize: 12, marginTop: 8 },
+  sheetPrimary: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
+  sheetPrimaryText: { color: colors.white, fontSize: 17, fontWeight: '800' },
+  sheetSecondary: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  sheetSecondaryText: { color: colors.inkMuted, fontSize: 15, fontWeight: '700' },
   home: { height: 52, borderRadius: 18, borderWidth: 0.5, borderColor: colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 35 },
   buttonPressed: pressFeedback,
   homeText: { color: colors.white, fontSize: 17, fontWeight: '700' },
