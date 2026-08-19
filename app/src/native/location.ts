@@ -53,7 +53,8 @@ let activeTracker: LocationTracker | null = null;
 // 태스크 정의는 모듈 최상단에서 한다 — 앱이 배경에서 깨어날 때 이미 등록돼 있어야 한다.
 try {
   if (!TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK)) {
-    TaskManager.defineTask(BACKGROUND_LOCATION_TASK, ({ data, error }) => {
+    // `defineTask`의 실행자는 Promise를 돌려줘야 한다 (`TaskManagerTaskExecutor`).
+    TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
       if (error !== null || data === null || data === undefined) return;
       const { locations } = data as { locations?: Location.LocationObject[] };
       for (const location of locations ?? []) activeTracker?.acceptFix(location);
