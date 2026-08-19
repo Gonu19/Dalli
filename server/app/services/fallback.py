@@ -7,7 +7,11 @@ from math import isfinite
 from typing import Final
 
 from app.models import Run
-from app.services.metrics import RunMetrics, compute_upper_range_sec
+from app.services.metrics import (
+    MIN_LATE_DROP_DURATION_SEC,
+    RunMetrics,
+    compute_upper_range_sec,
+)
 from app.services.run_quality import RunQualityAssessment
 from app.services.stats import count_this_week_run_days
 
@@ -189,7 +193,7 @@ def _limitations(run: Run, quality: RunQualityAssessment) -> list[str]:
     if run.distance_m is None or run.avg_pace_sec_per_km is None:
         limitations.append("위치 정보가 없어 거리와 페이스는 분석하지 않았어요.")
     if quality.is_analyzable and run.late_drop_rate is None:
-        if run.duration_sec < 360:
+        if quality.active_duration_sec < MIN_LATE_DROP_DURATION_SEC:
             limitations.append("러닝 시간이 6분 미만이라 후반 리듬 변화는 계산하지 않았어요.")
         else:
             limitations.append("후반 리듬 변화에 필요한 측정 데이터가 부족했어요.")

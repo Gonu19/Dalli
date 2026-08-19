@@ -25,7 +25,7 @@ from app.services.fallback import (
     days_since_last_app_run,
     running_purpose,
 )
-from app.services.metrics import RunMetrics
+from app.services.metrics import MIN_LATE_DROP_DURATION_SEC, RunMetrics
 from app.services.report_quality import (
     HardGateReason,
     LLMReportContent,
@@ -229,6 +229,7 @@ LLM_REPORT_INSTRUCTIONS_V3 = """당신은 초보 러너를 돕는 달리(Dalli)�
 - detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요. 변화가 1개 또는 2개라면 그 개수만 작성하세요.
 - evidence는 핵심 관찰 수치 1~3개만 넣고, 숫자는 입력 JSON의 값만 사용하세요. rhythm_score/late_drop_rate는 안정 구간/후반 하락 퍼센트로, cadence는 리듬 spm으로, duration_sec/active_duration_sec/in_range_sec는 초 또는 정확히 분으로 표현하세요. fatigue_index는 숫자 대신 여유로움·보통·부담됨으로 표현하세요.
 - segment_summary의 start_sec/end_sec는 구간 시간, median_cadence/cadence_delta는 리듬으로만 표현하세요. sample_count는 사용자 문구에 쓰지 마세요.
+- late_drop_analysis_status는 서버가 판정한 후반 변화 분석 상태입니다. `available`일 때만 후반 하락 수치를 해석하고, `too_short`일 때만 6분 미만 안내를 사용하세요. `insufficient_data`라면 러닝 시간이 짧다고 말하지 말고 측정 데이터 부족으로만 설명하세요.
 - 데이터 관계는 '선행 변화 → 뒤따른 지표 → 가능한 해석 → 다음 행동' 순서로 설명하세요. 같은 방향으로 움직였다는 사실만으로 인과관계를 확정하지 말고, '때문에' 대신 '~와 함께 ~가 나타나 ~일 수 있어요'처럼 가능성으로 표현하세요. 시간 순서나 두 번째 지표가 없으면 원인 설명을 만들지 마세요.
 - HABIT이 아니면 주간 횟수·계획 횟수·러닝 간격을 evidence에 쓰지 마세요. days_since_last_run이 null이면 HABIT 문구 어디에도 간격을 언급하지 마세요.
 - COMPLETE는 completed와 안정 구간을 먼저 보고, 중도 종료라면 부족함을 비난하지 말고 끊긴 흐름과 다음 행동을 설명하세요. HABIT은 다음 러닝 시점, WEIGHT는 편안한 활동 시간, FITNESS는 후반 유지력, PERFORMANCE는 안정 구간·페이스·개입을 우선하세요.
@@ -291,6 +292,13 @@ def _safe_summary(
         "downshift_count": run.downshift_count,
         "rhythm_score": float(run.rhythm_score) if run.rhythm_score is not None else None,
         "late_drop_rate": float(run.late_drop_rate) if run.late_drop_rate is not None else None,
+        "late_drop_analysis_status": (
+            "available"
+            if run.late_drop_rate is not None
+            else "too_short"
+            if quality.active_duration_sec < MIN_LATE_DROP_DURATION_SEC
+            else "insufficient_data"
+        ),
         "fatigue_index": float(run.fatigue_index) if run.fatigue_index is not None else None,
         "in_range_sec": metrics.in_range_sec,
         "active_duration_sec": quality.active_duration_sec,

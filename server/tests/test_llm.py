@@ -162,6 +162,7 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert len(summary["detail_time_blocks"]) == 3
     assert summary["detail_time_blocks"][0]["median_cadence"] == 157
     assert summary["detail_rapid_changes"] == []
+    assert summary["late_drop_analysis_status"] == "available"
     assert len(summary["segment_summary"]) == 3
     assert summary["segment_summary"][0]["median_cadence"] == 157
     assert summary["segment_summary"][2]["direction"] == "유지"

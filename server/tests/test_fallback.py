@@ -272,6 +272,30 @@ def test_fallback_limitation_covers_gps_short_run_and_sensor_shortage():
     assert "6분 미만" in under_six.limitation
 
 
+def test_fallback_uses_active_duration_for_late_drop_limitation():
+    long_run_with_sparse_late_data = build(
+        app_run(
+            duration_sec=900,
+            late_drop_rate=None,
+            samples=[{"t": t, "c": 157} for t in range(0, 900, 5)],
+        )
+    )
+    assert "6분 미만" not in long_run_with_sparse_late_data.limitation
+    assert "측정 데이터가 부족" in long_run_with_sparse_late_data.limitation
+
+    paused_run = app_run(
+        duration_sec=900,
+        late_drop_rate=None,
+        samples=[{"t": t, "c": 157} for t in range(700, 900, 5)],
+        events=[
+            {"t": 0, "type": "PAUSE"},
+            {"t": 700, "type": "RESUME"},
+        ],
+    )
+    paused_content = build(paused_run)
+    assert "6분 미만" in paused_content.limitation
+
+
 def test_fallback_uses_final_target_and_only_upshifts_on_confirmed_rule():
     maintained = build(
         app_run(
