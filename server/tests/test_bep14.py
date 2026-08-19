@@ -100,6 +100,8 @@ def test_list_plans_uses_injected_today_without_writing_stored_status() -> None:
             "planned_date": date(2026, 8, 16),
             "goal_type": "TIME",
             "goal_value": 600,
+            "target_cadence": None,
+            "title": None,
             "memo": None,
             "status": "PLANNED",
             "run": None,
@@ -130,8 +132,27 @@ def test_plan_contract_rejects_invalid_goal_and_undocumented_patch_fields() -> N
     with pytest.raises(ValidationError):
         PlanCreate(planned_date=date.today(), goal_type="TIME", goal_value=0)
     with pytest.raises(ValidationError):
+        PlanCreate(planned_date=date.today(), goal_type="TIME", goal_value=600, target_cadence=129)
+    with pytest.raises(ValidationError):
+        PlanUpdate.model_validate({"target_cadence": 186})
+    with pytest.raises(ValidationError):
         PlanUpdate.model_validate({})
     with pytest.raises(ValidationError):
         PlanUpdate.model_validate({"goal_value": None})
     with pytest.raises(ValidationError):
         PlanUpdate.model_validate({"planned_date": "2026-08-16"})
+
+
+def test_plan_contract_accepts_optional_title_and_target_cadence() -> None:
+    created = PlanCreate(
+        planned_date=date.today(),
+        goal_type="DISTANCE",
+        goal_value=5000,
+        target_cadence=157,
+        title="저녁 5km",
+    )
+    updated = PlanUpdate.model_validate({"target_cadence": None, "title": None})
+
+    assert created.target_cadence == 157
+    assert created.title == "저녁 5km"
+    assert updated.model_dump(exclude_unset=True) == {"target_cadence": None, "title": None}

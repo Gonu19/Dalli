@@ -138,6 +138,7 @@ def test_constraints_jsonb_numeric_and_delete_policies(postgres_engine: Engine) 
         (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="APP", condition=6, started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1), "ck_runs_condition"),
         (lambda user: Plan(user_id=user.id, planned_date=date(2026, 8, 21), goal_type="INVALID"), "ck_plans_goal_type"),
         (lambda user: Plan(user_id=user.id, planned_date=date(2026, 8, 21), status="INVALID"), "ck_plans_status"),
+        (lambda user: Plan(user_id=user.id, planned_date=date(2026, 8, 21), target_cadence=129), "ck_plans_target_cadence"),
     ],
 )
 def test_check_constraints(postgres_engine: Engine, model_factory, constraint_name: str) -> None:

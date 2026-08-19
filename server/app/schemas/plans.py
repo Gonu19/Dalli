@@ -15,6 +15,8 @@ class PlanCreate(BaseModel):
     planned_date: date
     goal_type: GoalType
     goal_value: int = Field(strict=True, ge=1)
+    target_cadence: int | None = Field(default=None, strict=True, ge=130, le=185)
+    title: str | None = None
     memo: str | None = None
 
 
@@ -24,6 +26,8 @@ class PlanUpdate(BaseModel):
     status: PlanStatus = Field(default=None)  # type: ignore[assignment]
     goal_type: GoalType = Field(default=None)  # type: ignore[assignment]
     goal_value: int = Field(default=None, strict=True, ge=1)  # type: ignore[assignment]
+    target_cadence: int | None = Field(default=None, strict=True, ge=130, le=185)
+    title: str | None = None
 
     @model_validator(mode="after")
     def require_a_field(self) -> "PlanUpdate":
@@ -37,6 +41,8 @@ class PlanResponse(BaseModel):
     planned_date: date
     goal_type: GoalType
     goal_value: int
+    target_cadence: int | None
+    title: str | None
     memo: str | None
     status: PlanStatus
     run_id: UUID | None

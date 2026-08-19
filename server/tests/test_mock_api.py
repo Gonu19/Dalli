@@ -139,6 +139,34 @@ def test_mock_plan_gets_apply_derived_statuses() -> None:
     assert calendar.status_code == 200
     planned_day = next(day for day in calendar.json()["days"] if day["date"] == "2026-08-16")
     assert planned_day["plan"]["status"] == "SKIPPED"
+    assert planned_day["plan"]["target_cadence"] == 157
+    assert planned_day["plan"]["title"] == "아침 러닝"
+
+
+def test_mock_plan_create_and_patch_preserve_title_and_target_cadence() -> None:
+    client = TestClient(create_mock_app())
+    payload = {
+        "planned_date": "2026-08-16",
+        "goal_type": "DISTANCE",
+        "goal_value": 5000,
+        "target_cadence": 157,
+        "title": "저녁 5km",
+        "memo": "천천히",
+    }
+
+    created = client.post("/plans", headers=AUTH, json=payload)
+    patched = client.patch(
+        "/plans/40000000-0000-4000-8000-000000000002",
+        headers=AUTH,
+        json={"target_cadence": 159, "title": "저녁 5km 2차"},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["target_cadence"] == 157
+    assert created.json()["title"] == "저녁 5km"
+    assert patched.status_code == 200
+    assert patched.json()["target_cadence"] == 159
+    assert patched.json()["title"] == "저녁 5km 2차"
 
 
 def test_mock_report_scenarios() -> None:

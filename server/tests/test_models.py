@@ -19,7 +19,8 @@ def test_model_column_sets_match_erd() -> None:
         "updated_at",
     }
     assert set(Plan.__table__.columns.keys()) == {
-        "id", "user_id", "planned_date", "goal_type", "goal_value", "memo",
+        "id", "user_id", "planned_date", "goal_type", "goal_value",
+        "target_cadence", "title", "memo",
         "status", "created_at", "updated_at",
     }
     assert set(Run.__table__.columns.keys()) == {
@@ -54,6 +55,8 @@ def test_postgresql_types_nullability_and_defaults() -> None:
 
     assert not User.__table__.c.device_uuid.nullable
     assert not Plan.__table__.c.user_id.nullable
+    assert Plan.__table__.c.target_cadence.nullable
+    assert Plan.__table__.c.title.nullable
     assert Run.__table__.c.plan_id.nullable
     assert Run.__table__.c.intervention_count.nullable
     assert Run.__table__.c.downshift_count.nullable
@@ -86,7 +89,7 @@ def test_checks_unique_constraints_and_indexes() -> None:
     }
     assert check_names == {
         "ck_users_running_purpose", "ck_users_gender", "ck_plans_goal_type",
-        "ck_plans_status", "ck_runs_source", "ck_runs_goal_type",
+        "ck_plans_status", "ck_plans_target_cadence", "ck_runs_source", "ck_runs_goal_type",
         "ck_runs_condition",
     }
 

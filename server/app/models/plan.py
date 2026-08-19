@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Text, func, text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, SmallInteger, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,10 @@ class Plan(Base):
         CheckConstraint(
             "status IN ('PLANNED','DONE','SKIPPED')", name="ck_plans_status"
         ),
+        CheckConstraint(
+            "target_cadence IS NULL OR target_cadence BETWEEN 130 AND 185",
+            name="ck_plans_target_cadence",
+        ),
         Index("idx_plans_user_date", "user_id", "planned_date"),
         Index("uq_plans_user_date", "user_id", "planned_date", unique=True),
     )
@@ -41,6 +45,8 @@ class Plan(Base):
     planned_date: Mapped[date] = mapped_column(Date, nullable=False)
     goal_type: Mapped[str | None] = mapped_column(Text)
     goal_value: Mapped[int | None] = mapped_column(Integer)
+    target_cadence: Mapped[int | None] = mapped_column(SmallInteger)
+    title: Mapped[str | None] = mapped_column(Text)
     memo: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'PLANNED'")

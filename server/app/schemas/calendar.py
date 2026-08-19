@@ -10,6 +10,8 @@ class CalendarPlanResponse(BaseModel):
     status: Literal["PLANNED", "DONE", "SKIPPED"]
     goal_type: Literal["TIME", "DISTANCE"]
     goal_value: int
+    target_cadence: int | None
+    title: str | None
 
 
 class CalendarRunResponse(BaseModel):

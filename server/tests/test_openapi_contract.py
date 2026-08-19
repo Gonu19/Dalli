@@ -193,10 +193,16 @@ def test_request_schema_required_optional_nullable_enum_and_jsonb_shapes() -> No
     assert set(plan_create["required"]) == {"planned_date", "goal_type", "goal_value"}
     assert plan_create["properties"]["planned_date"]["format"] == "date"
     assert _is_nullable(plan_create["properties"]["memo"])
+    assert _is_nullable(plan_create["properties"]["target_cadence"])
+    assert plan_create["properties"]["target_cadence"]["anyOf"][0]["minimum"] == 130
+    assert plan_create["properties"]["target_cadence"]["anyOf"][0]["maximum"] == 185
+    assert _is_nullable(plan_create["properties"]["title"])
     plan_update = components["PlanUpdate"]
     assert "required" not in plan_update
     assert plan_update["properties"]["status"]["enum"] == ["PLANNED", "DONE", "SKIPPED"]
     assert not _is_nullable(plan_update["properties"]["status"])
+    assert _is_nullable(plan_update["properties"]["target_cadence"])
+    assert _is_nullable(plan_update["properties"]["title"])
 
     manual_run = components["ManualRunCreate"]
     condition_options = manual_run["properties"]["condition"]["anyOf"]
@@ -250,5 +256,8 @@ def test_response_schema_formats_nullable_and_report_shapes() -> None:
     recent = components["RecentRunResponse"]
     assert calendar_day["properties"]["date"]["format"] == "date"
     assert _is_nullable(calendar_day["properties"]["plan"])
+    calendar_plan = components["CalendarPlanResponse"]
+    assert _is_nullable(calendar_plan["properties"]["target_cadence"])
+    assert _is_nullable(calendar_plan["properties"]["title"])
     assert recent["properties"]["date"]["format"] == "date"
     assert recent["properties"]["active_duration_sec"]["type"] == "integer"

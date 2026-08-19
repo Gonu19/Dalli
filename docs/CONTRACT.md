@@ -225,14 +225,17 @@ LLM 8초 타임아웃. 초과·실패·쿼터 초과 시 룰베이스 폴백 문
 ## /plans
 ```json
 // POST req
-{ "planned_date": "2026-08-15", "goal_type": "TIME", "goal_value": 1200, "memo": "저녁 러닝" }
+{ "planned_date": "2026-08-15", "goal_type": "DISTANCE", "goal_value": 5000,
+  "target_cadence": 157, "title": "저녁 5km", "memo": "천천히 이어가기" }
 // res / GET item
-{ "id": "uuid", "planned_date": "2026-08-15", "goal_type": "TIME", "goal_value": 1200,
-  "memo": "저녁 러닝", "status": "PLANNED", "run_id": null }
+{ "id": "uuid", "planned_date": "2026-08-15", "goal_type": "DISTANCE", "goal_value": 5000,
+  "target_cadence": 157, "title": "저녁 5km", "memo": "천천히 이어가기",
+  "status": "PLANNED", "run_id": null }
 ```
 `POST /plans`는 201, `PATCH /plans/{plan_id}`는 수정된 item을 200으로 반환한다.
 `GET /plans?from=2026-08-01&to=2026-08-31`는 `{ "items": [ ... ] }`를 반환한다.
-`PATCH`로 `status`(`PLANNED|DONE|SKIPPED`)·목표를 수정한다.
+`PATCH`로 `status`(`PLANNED|DONE|SKIPPED`)·목표·`target_cadence`·`title`을 수정한다.
+`target_cadence`는 `null` 또는 130~185의 정수이고, `title`은 `null`을 허용한다.
 
 `status` 컬럼은 유지하지만 `GET /plans`와 `GET /calendar`의 응답 status는 조회 시
 파생 계산한다. `PATCH`로 사용자가 직접 지정한 `DONE`·`SKIPPED`는 저장값을 우선한다.
@@ -258,7 +261,8 @@ LLM 8초 타임아웃. 초과·실패·쿼터 초과 시 룰베이스 폴백 문
     { "date": "2026-08-11", "plan": null,
       "runs": [ { "id": "uuid", "source": "APP", "duration_sec": 1230, "completed": true } ] },
     { "date": "2026-08-15",
-      "plan": { "id": "uuid", "status": "PLANNED", "goal_type": "TIME", "goal_value": 1200 },
+      "plan": { "id": "uuid", "status": "PLANNED", "goal_type": "DISTANCE", "goal_value": 5000,
+                "target_cadence": 157, "title": "저녁 5km" },
       "runs": [] }
   ]
 }

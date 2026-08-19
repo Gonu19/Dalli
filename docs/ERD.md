@@ -44,6 +44,8 @@ erDiagram
         uuid user_id FK
         date planned_date
         text status
+        smallint target_cadence
+        text title
     }
 ```
 
@@ -156,6 +158,8 @@ CREATE TABLE plans (
     planned_date  DATE NOT NULL,
     goal_type     TEXT CHECK (goal_type IN ('TIME','DISTANCE')),
     goal_value    INTEGER,
+    target_cadence SMALLINT CHECK (target_cadence IS NULL OR target_cadence BETWEEN 130 AND 185),
+    title         TEXT,
     memo          TEXT,
     status        TEXT NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED','DONE','SKIPPED')),
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),

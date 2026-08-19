@@ -360,6 +360,8 @@
             "planned_date": "2026-08-14",
             "goal_type": "TIME",
             "goal_value": 1200,
+            "target_cadence": 157,
+            "title": "저녁 러닝",
             "memo": "저녁 러닝",
             "status": "DONE",
             "run_id": "10000000-0000-4000-8000-000000000001"
@@ -374,6 +376,8 @@
         "planned_date": "2026-08-16",
         "goal_type": "TIME",
         "goal_value": 1200,
+        "target_cadence": 157,
+        "title": "아침 러닝",
         "memo": "아침 러닝",
         "status": "PLANNED",
         "run_id": null
@@ -398,7 +402,9 @@
               "id": "40000000-0000-4000-8000-000000000001",
               "status": "DONE",
               "goal_type": "TIME",
-              "goal_value": 1200
+              "goal_value": 1200,
+              "target_cadence": 157,
+              "title": "저녁 러닝"
             },
             "runs": [
               { "id": "10000000-0000-4000-8000-000000000001", "source": "APP", "duration_sec": 1230, "completed": true }
@@ -410,7 +416,9 @@
               "id": "40000000-0000-4000-8000-000000000002",
               "status": "PLANNED",
               "goal_type": "TIME",
-              "goal_value": 1200
+              "goal_value": 1200,
+              "target_cadence": 157,
+              "title": "아침 러닝"
             },
             "runs": []
           }

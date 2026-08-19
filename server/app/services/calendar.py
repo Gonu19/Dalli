@@ -42,6 +42,8 @@ def get_calendar(
             Plan.status,
             Plan.goal_type,
             Plan.goal_value,
+            Plan.target_cadence,
+            Plan.title,
             exists(select(Run.id).where(Run.plan_id == Plan.id)).label("has_run"),
         )
         .where(Plan.user_id == user.id, Plan.planned_date.between(first, last))
@@ -66,6 +68,8 @@ def get_calendar(
             ),
             goal_type=plan.goal_type,
             goal_value=plan.goal_value,
+            target_cadence=plan.target_cadence,
+            title=plan.title,
         )
     for run in runs:
         run_date = run.started_at.astimezone(KST).date()
