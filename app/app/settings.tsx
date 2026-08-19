@@ -6,7 +6,7 @@ import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { useProfile } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { useSimulationStore } from '@/src/store/simulation';
-import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
+import { colors, navigationHeader, pressFeedback, typography } from '@/src/theme/tokens';
 
 export default function Settings() {
   const router = useRouter();
@@ -52,11 +52,11 @@ function Row({ label, onPress, top = 150 - navigationHeader.contentLift }: { lab
 }
 
 const styles = StyleSheet.create({
-  header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white, fontSize: 17, fontWeight: '700' },
-  section: { position: 'absolute', left: 33, top: 111 - navigationHeader.contentLift, color: colors.white, fontSize: 17, fontWeight: '700' },
-  row: { position: 'absolute', left: 30, right: 30, height: 46, borderRadius: 13, borderWidth: .5, borderColor: 'rgba(255,255,255,.45)', backgroundColor: 'rgba(255,255,255,.1)', paddingHorizontal: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { ...typography.headline, position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', color: colors.white },
+  section: { ...typography.headline, position: 'absolute', left: 33, top: 111 - navigationHeader.contentLift, color: colors.white },
+  row: { position: 'absolute', left: 30, right: 30, height: 40, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,.4)', backgroundColor: 'transparent', paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pressed: pressFeedback,
-  rowText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  rowText: { color: colors.white, fontSize: 14, fontWeight: '700' },
   line: { position: 'absolute', left: 33, right: 32, top: 234 - navigationHeader.contentLift, height: 1, backgroundColor: 'rgba(255,255,255,.35)' },
   demo: { position: 'absolute', left: 30, right: 30, top: 383 - navigationHeader.contentLift, height: 40, alignItems: 'center', justifyContent: 'center' },
   demoText: { color: 'rgba(255,255,255,.55)', fontSize: 13, textDecorationLine: 'underline' },
