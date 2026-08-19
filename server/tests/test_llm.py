@@ -21,7 +21,7 @@ from app.models import Plan, Run, User
 from app.services.fallback import build_fallback_report
 from app.services.llm import (
     LLMReportContent,
-    LLM_REPORT_INSTRUCTIONS_V2,
+    LLM_REPORT_INSTRUCTIONS_V3,
     _call_with_deadline,
     _days_since_last_app_run,
     _safe_summary,
@@ -136,17 +136,17 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert factory_args == {"api_key": SECRET, "timeout": 1, "max_retries": 0}
     assert fake.kwargs["text_format"] is LLMReportContent
     assert fake.kwargs["store"] is False
-    assert fake.kwargs["instructions"] == LLM_REPORT_INSTRUCTIONS_V2
-    assert "문장은 모두 자연스러운 한국어" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "evidence는 핵심 관찰 수치 1~3개" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "prescription은 다음 러닝에서 할 행동 한 가지만" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "변화가 1개 또는 2개라면 그 개수만큼만 작성하세요" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "텍스트 합계가 최소 300자 이상" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "next_target_min/max는 어떤 목적에서도 서버가 결정한 값을 그대로 유지" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "days_since_last_run이 null이면 HABIT 문구 어디에도 러닝 간격을 언급하지 마세요" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "체중·칼로리·감량 수치는 만들지 마세요" in LLM_REPORT_INSTRUCTIONS_V2
-    assert "required_limitation 값을 그대로 복사" in LLM_REPORT_INSTRUCTIONS_V2
+    assert fake.kwargs["instructions"] == LLM_REPORT_INSTRUCTIONS_V3
+    assert "문장은 모두 자연스러운 한국어" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "evidence는 핵심 관찰 수치 1~3개" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "prescription: 다음 러닝에서 할 행동 하나만" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "전체 사용자 텍스트는 최소 300자 이상" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "next_target_min/max는 어떤 목적에서도 서버가 결정한 값을 그대로 유지" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "days_since_last_run이 null이면 HABIT 문구 어디에도 간격을 언급하지 마세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "체중·칼로리·감량 수치" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "required_limitation 값을 그대로 복사" in LLM_REPORT_INSTRUCTIONS_V3
     assert "samples" not in fake.kwargs["input"]
     assert "events" not in fake.kwargs["input"]
     assert SECRET not in fake.kwargs["input"]
@@ -160,6 +160,9 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert len(summary["detail_time_blocks"]) == 3
     assert summary["detail_time_blocks"][0]["median_cadence"] == 157
     assert summary["detail_rapid_changes"] == []
+    assert len(summary["segment_summary"]) == 3
+    assert summary["segment_summary"][0]["median_cadence"] == 157
+    assert summary["segment_summary"][2]["direction"] == "유지"
 
 
 def test_safe_summary_exposes_only_derived_rapid_change_metadata() -> None:
@@ -186,6 +189,47 @@ def test_safe_summary_exposes_only_derived_rapid_change_metadata() -> None:
     current_run.events = current_run.events[:2]
     summary_with_two_changes = _safe_summary(current_run, quality, metrics, fallback, now=NOW)
     assert len(summary_with_two_changes["detail_rapid_changes"]) == 2
+
+
+def test_segment_summary_excludes_paused_samples_and_exposes_actual_deltas() -> None:
+    current_run, quality, metrics, fallback = context()
+    current_run.samples = [
+        {"t": 0, "c": 150},
+        {"t": 200, "c": 150},
+        {"t": 205, "c": 190},
+        {"t": 400, "c": 160},
+    ]
+    current_run.events = [
+        {"t": 200, "type": "PAUSE"},
+        {"t": 300, "type": "RESUME"},
+    ]
+    quality = assess_run_quality(current_run)
+    summary = _safe_summary(current_run, quality, metrics, fallback, now=NOW)
+
+    assert summary["segment_summary"] == [
+        {
+            "label": "초반",
+            "start_sec": 0,
+            "end_sec": 200,
+            "sample_count": 1,
+            "median_cadence": 150,
+        },
+        {
+            "label": "중반",
+            "start_sec": 200,
+            "end_sec": 400,
+            "sample_count": 0,
+        },
+        {
+            "label": "후반",
+            "start_sec": 400,
+            "end_sec": 600,
+            "sample_count": 1,
+            "median_cadence": 160,
+            "cadence_delta": 10,
+            "direction": "상승",
+        },
+    ]
 
 
 def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:

@@ -169,6 +169,24 @@ def test_detail_segment_numbers_are_allowed_when_server_provides_aggregate_metad
         "detail_rapid_changes": [
             {"at_sec": 300, "direction": "상승", "before_cadence": 157, "after_cadence": 173},
         ],
+        "segment_summary": [
+            {
+                "label": "초반",
+                "start_sec": 0,
+                "end_sec": 600,
+                "sample_count": 120,
+                "median_cadence": 157,
+            },
+            {
+                "label": "중반",
+                "start_sec": 600,
+                "end_sec": 1200,
+                "sample_count": 120,
+                "median_cadence": 154,
+                "cadence_delta": -3,
+                "direction": "하락",
+            },
+        ],
     }
     result = evaluate_report_output(
         {
@@ -176,7 +194,7 @@ def test_detail_segment_numbers_are_allowed_when_server_provides_aggregate_metad
             "evidence": [
                 "첫 구간 0~10분은 리듬 157 spm이었어요.",
                 "5분 무렵 157에서 173 spm으로 급상승했어요.",
-                "마지막 구간은 리듬 150 spm이었어요.",
+                "중반은 리듬 154 spm으로 초반보다 3 spm 낮았고, 마지막 구간은 150 spm이었어요.",
             ],
             "next_goal_text": "다음 목표는 리듬 159를 유지해 보세요.",
         },
