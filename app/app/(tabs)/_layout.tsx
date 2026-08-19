@@ -30,6 +30,7 @@ export default function TabsLayout() {
   const activeIndexRef = useRef(initialRouteIndex);
   const previousPathname = useRef(pathname);
   const [activeIndex, setActiveIndex] = useState(initialRouteIndex);
+  const [tabSwipeEnabled, setTabSwipeEnabled] = useState(true);
 
   useEffect(() => {
     pager.current?.scrollTo({ x: activeIndexRef.current * width, animated: false });
@@ -73,10 +74,11 @@ export default function TabsLayout() {
       pagingEnabled
       ref={pager}
       scrollEventThrottle={16}
+      scrollEnabled={tabSwipeEnabled}
       showsHorizontalScrollIndicator={false}
       style={styles.pager}
     >
-      {tabs.map(({ path, Screen }) => <View key={path} style={[styles.page, { width }]}><Screen /></View>)}
+      {tabs.map(({ path, Screen }) => <View key={path} style={[styles.page, { width }]}>{path === '/analysis' ? <AnalysisScreen active={activeIndex === 0} onCardTouchChange={(active) => setTabSwipeEnabled(!active)} /> : <Screen />}</View>)}
     </ScrollView>
     <View style={[styles.tabBar, { height: 50 + insets.bottom, paddingBottom: insets.bottom }]}>
       {tabs.map((tab, index) => {

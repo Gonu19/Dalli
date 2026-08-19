@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { Alert, Animated, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError, type RunListItem } from '@/src/api/client';
 import { useDeleteRun, useRuns } from '@/src/api/queries';
@@ -10,18 +12,19 @@ import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
-export default function Analysis() {
+export default function Analysis({ active = true, onCardTouchChange }: { active?: boolean; onCardTouchChange?: (active: boolean) => void }) {
   const router = useRouter();
   const { token } = useAuth();
   const runs = useRuns(token);
   const remove = useDeleteRun(token);
+  const [cardTouchActive, setCardTouchActive] = useState(false);
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
 
-  const confirm = (run: RunListItem) => Alert.alert(
+  const confirm = (run: RunListItem, onCancel?: () => void) => Alert.alert(
     '이 러닝을 삭제할까요?',
     '캘린더와 누적 활동일에서도 함께 사라져요.',
     [
-      { text: '취소', style: 'cancel' },
+      { text: '취소', style: 'cancel', onPress: onCancel },
       { text: '삭제', style: 'destructive', onPress: () => void remove.mutateAsync(run.id) },
     ],
   );
@@ -33,6 +36,10 @@ export default function Analysis() {
     }
     router.push({ pathname: '/run/report', params: { runId: run.id } });
   };
+  const handleCardTouchChange = (activeTouch: boolean) => {
+    setCardTouchActive(activeTouch);
+    onCardTouchChange?.(activeTouch);
+  };
 
   return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
     <View style={styles.frame}>
@@ -43,6 +50,7 @@ export default function Analysis() {
       </Pressable>
       <Animated.ScrollView
         contentContainerStyle={styles.content}
+        scrollEnabled={!cardTouchActive}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.section}>나의 총 러닝 분석</Text>
@@ -67,35 +75,7 @@ export default function Analysis() {
                 <Text style={styles.prepareText}>러닝 준비하기</Text>
               </Pressable>
             </View>
-          : runs.data?.map((run) => <Pressable
-              key={run.id}
-              onLongPress={() => confirm(run)}
-              onPress={() => openDetail(run)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            >
-              <Text style={styles.date}>{run.startedAt.slice(0, 10)}</Text>
-              <Text style={styles.day}>{formatDay(run.startedAt)} 러닝</Text>
-              <View style={[styles.sourceBadge, run.source === 'MANUAL' && styles.manualBadge]}>
-                <Text style={styles.sourceBadgeText}>{run.source === 'MANUAL' ? '수기 기록' : '앱 측정'}</Text>
-              </View>
-              <Pressable
-                accessibilityLabel="러닝 상세보기"
-                accessibilityRole="button"
-                onPress={(event) => {
-                  event.stopPropagation();
-                  openDetail(run);
-                }}
-                style={({ pressed }) => [styles.detail, pressed && styles.detailPressed]}
-              >
-                <Text style={styles.detailText}>상세보기</Text>
-              </Pressable>
-              <View style={styles.line} />
-              <View style={styles.metrics}>
-                <Metric value={run.distanceM === null ? '—' : (run.distanceM / 1000).toFixed(2)} label="KM" />
-                <Metric value={run.rhythmScore === null ? '—' : `${Math.round(run.rhythmScore * 100)}%`} label="안정 구간" />
-                <Metric value={formatTime(run.durationSec)} label="시간" />
-              </View>
-            </Pressable>)}
+          : runs.data?.map((run) => <SwipeableRunCard key={run.id} active={active} onConfirmDelete={() => confirm(run)} onDelete={(onCancel) => confirm(run, onCancel)} onOpen={() => openDetail(run)} onCardTouchChange={handleCardTouchChange} run={run} />)}
       </Animated.ScrollView>
     </View>
   </Screen>;
@@ -112,6 +92,119 @@ function Metric({ value, label }: { value: string; label: string }) {
   return <View style={styles.metric}>
     <Text style={styles.metricValue}>{value}</Text>
     <Text style={styles.metricLabel}>{label}</Text>
+  </View>;
+}
+
+function SwipeableRunCard({ active, run, onConfirmDelete, onDelete, onOpen, onCardTouchChange }: { active: boolean; run: RunListItem; onConfirmDelete: () => void; onDelete: (onCancel?: () => void) => void; onOpen: () => void; onCardTouchChange?: (active: boolean) => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const deleteRef = useRef(onDelete);
+  const [, setRevealed] = useState(false);
+  const revealedRef = useRef(false);
+  const gestureStartOffset = useRef(0);
+  deleteRef.current = onDelete;
+  useEffect(() => {
+    if (!active) {
+      revealedRef.current = false;
+      setRevealed(false);
+      opacity.setValue(1);
+      Animated.spring(translateX, { damping: 22, mass: 0.7, stiffness: 180, toValue: 0, useNativeDriver: true }).start();
+    }
+  }, [active, opacity, translateX]);
+  const updateRevealed = (value: boolean) => {
+    revealedRef.current = value;
+    setRevealed(value);
+  };
+  const animateTo = (toValue: number) => Animated.spring(translateX, {
+    damping: 22,
+    mass: 0.7,
+    stiffness: 180,
+    toValue,
+    useNativeDriver: true,
+  }).start();
+  const restoreCard = () => {
+    opacity.setValue(1);
+    Animated.spring(translateX, {
+      damping: 20,
+      mass: 0.55,
+      stiffness: 300,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  };
+  const animateDelete = () => {
+    onCardTouchChange?.(false);
+    updateRevealed(false);
+    Animated.parallel([
+      Animated.timing(translateX, { duration: 240, toValue: -420, useNativeDriver: true }),
+      Animated.timing(opacity, { duration: 240, toValue: 0, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) deleteRef.current(restoreCard);
+    });
+  };
+  const panResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, gesture) => {
+      const isDeleteSwipe = gesture.dx < -8 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
+      const isCloseSwipe = revealedRef.current && gesture.dx > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy);
+      if (isDeleteSwipe || isCloseSwipe) onCardTouchChange?.(true);
+      return isDeleteSwipe || isCloseSwipe;
+    },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: () => { gestureStartOffset.current = revealedRef.current ? -100 : 0; },
+    onPanResponderMove: (_, gesture) => translateX.setValue(Math.max(-220, Math.min(0, gestureStartOffset.current + gesture.dx))),
+    onPanResponderRelease: (_, gesture) => {
+      const totalX = gestureStartOffset.current + gesture.dx;
+      const shouldConfirmDelete = totalX < -180;
+      const shouldRevealDelete = totalX < -80;
+      if (shouldConfirmDelete) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        animateDelete();
+      } else if (shouldRevealDelete) {
+        updateRevealed(true);
+        animateTo(-100);
+      } else {
+        updateRevealed(false);
+        animateTo(0);
+      }
+    },
+    onPanResponderTerminate: () => {
+      onCardTouchChange?.(false);
+      restoreCard();
+    },
+  })).current;
+
+  return <View
+    {...panResponder.panHandlers}
+    onTouchCancel={() => onCardTouchChange?.(false)}
+    onTouchEnd={() => onCardTouchChange?.(false)}
+    onTouchStart={() => { if (revealedRef.current) onCardTouchChange?.(true); }}
+    style={styles.swipeArea}
+  >
+    <Pressable accessibilityLabel="러닝 기록 삭제" onPress={() => { onCardTouchChange?.(false); updateRevealed(false); animateTo(0); onConfirmDelete(); }} style={({ pressed }) => [styles.deleteReveal, pressed && styles.deleteRevealPressed]}>
+      <Ionicons color={colors.white} name="trash-outline" size={22} /><Text style={styles.deleteRevealText}>삭제</Text>
+    </Pressable>
+    <Animated.View style={[styles.card, { opacity, transform: [{ translateX }] }]}>
+      <Text style={styles.date}>{run.startedAt.slice(0, 10)}</Text>
+      <Text style={styles.day}>{formatDay(run.startedAt)} 러닝</Text>
+      <View style={[styles.sourceBadge, run.source === 'MANUAL' && styles.manualBadge]}>
+        <Text style={styles.sourceBadgeText}>{run.source === 'MANUAL' ? '수기 기록' : '앱 측정'}</Text>
+      </View>
+      <Pressable
+        accessibilityLabel="러닝 상세보기"
+        accessibilityRole="button"
+        disabled={run.source === 'MANUAL'}
+        onPress={onOpen}
+        style={({ pressed }) => [styles.detail, run.source === 'MANUAL' && styles.detailDisabled, pressed && run.source === 'APP' && styles.detailPressed]}
+      >
+        <Text style={styles.detailText}>상세보기</Text>
+      </Pressable>
+      <View style={styles.line} />
+      <View style={styles.metrics}>
+        <Metric value={run.distanceM === null ? '—' : (run.distanceM / 1000).toFixed(2)} label="KM" />
+        <Metric value={run.rhythmScore === null ? '—' : `${Math.round(run.rhythmScore * 100)}%`} label="안정 구간" />
+        <Metric value={formatTime(run.durationSec)} label="시간" />
+      </View>
+    </Animated.View>
   </View>;
 }
 
@@ -142,14 +235,18 @@ const styles = StyleSheet.create({
   prepare: { position: 'absolute', left: 37, right: 39, top: 264, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,122,89,.85)', alignItems: 'center', justifyContent: 'center' },
   prepareText: { color: colors.white, fontSize: 15, fontWeight: '700' },
   buttonPressed: pressFeedback,
-  card: { height: 136, borderRadius: 20, backgroundColor: colors.white, marginTop: 13, padding: 26, position: 'relative' },
-  cardPressed: pressFeedback,
+  swipeArea: { height: 136, borderRadius: 20, backgroundColor: colors.danger, marginTop: 13, overflow: 'hidden' },
+  deleteReveal: { ...StyleSheet.absoluteFillObject, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 28, gap: 4 },
+    deleteRevealPressed: { opacity: 0.72 },
+  deleteRevealText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  card: { height: 136, borderRadius: 20, backgroundColor: colors.white, padding: 26, position: 'relative' },
   date: { fontSize: 13, fontWeight: '700', color: colors.ink },
   day: { fontSize: 13, color: '#747474', marginTop: 6 },
   sourceBadge: { position: 'absolute', right: 132, top: 20, height: 24, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   manualBadge: { backgroundColor: '#E9E9E9' },
   sourceBadgeText: { fontSize: 11, fontWeight: '700', color: colors.inkMuted },
   detail: { position: 'absolute', right: 26, top: 16, width: 93, height: 36, borderRadius: 9, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  detailDisabled: { opacity: 0.4 },
   detailPressed: compactPressFeedback,
   detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   line: { position: 'absolute', left: 26, right: 26, top: 65, height: 1, backgroundColor: colors.border },
