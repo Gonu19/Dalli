@@ -91,7 +91,7 @@ export default function TabsLayout() {
           onPress={() => moveToPage(index)}
           style={({ pressed }) => [styles.tabItem, pressed && styles.tabPressed]}
         >
-          <Ionicons color={color} name={tab.icon} size={23} />
+          <View style={styles.tabIcon}><Ionicons color={color} name={tab.icon} size={23} /></View>
           <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
         </Pressable>;
       })}
@@ -104,7 +104,8 @@ const styles = StyleSheet.create({
   pager: { flex: 1 },
   page: { flex: 1, overflow: 'hidden' },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.background },
-  tabItem: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  tabItem: { flex: 1, height: 50, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  tabIcon: { width: 26, height: 25, alignItems: 'center', justifyContent: 'center' },
   tabPressed: compactPressFeedback,
-  tabLabel: { ...typography.caption, fontWeight: '700' },
+  tabLabel: { ...typography.caption, fontWeight: '700', lineHeight: 16 },
 });
