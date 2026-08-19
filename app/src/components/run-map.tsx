@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Polyline, type Region } from 'react-native-maps';
 
@@ -33,9 +33,23 @@ type Props = {
  * 않는다 — 결과 이미지에서는 경로 전체를 프레임에 맞춘다.
  */
 export function RunMap({ live = false, style, interactive = false, routeOnly = false }: Props) {
-  const path = getRoutePath();
+  const [path, setPath] = useState<readonly RoutePoint[]>(() => getRoutePath());
   const mapRef = useRef<MapView>(null);
   const framedCount = useRef(0);
+
+  // live 모드일 때 2초 간격으로 getRoutePath()를 확인하여 좌표가 늘어났을 때만 state를 갱신한다.
+  // (Pedometer tick이 멈추어도 GPS 경로가 지도에 주기적으로 반영되도록 함)
+  useEffect(() => {
+    setPath(getRoutePath());
+    if (!live) return;
+
+    const timer = setInterval(() => {
+      const latest = getRoutePath();
+      setPath((prev) => (prev.length === latest.length ? prev : latest));
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [live]);
 
   // 첫 fix 전에도 지도를 자기 동네로 옮긴다. 마지막으로 알려진 위치면 충분하다.
   useEffect(() => {
