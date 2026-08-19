@@ -25,6 +25,26 @@ let preferences: CuePreferences = { voice: true, metronome: false };
 let click: AudioPlayer | null = null;
 let metronomeTimer: ReturnType<typeof setInterval> | null = null;
 let metronomeStop: ReturnType<typeof setTimeout> | null = null;
+/** 메트로놈 5초가 끝났음을 큐에 알리는 resolver. 중간에 멈춰도 반드시 부른다. */
+let metronomeDone: (() => void) | null = null;
+
+/** 재생 대기열과 진행 여부. 개입은 겹치지 않고 순서대로 나간다. */
+let queue: { cue: Cue; bpm: number }[] = [];
+let playing = false;
+
+/**
+ * 발화 안전망(ms). `onDone`이 오지 않는 기기가 있어 무한정 기다리지 않는다.
+ * 문구는 3초 이내 한 문장이므로 (`ENGINE.md` §7) 8초면 충분히 넉넉하다.
+ */
+const SPEECH_TIMEOUT_MS = 8_000;
+
+/**
+ * 덕킹을 걸고 나서 말하기 전까지의 여유(ms).
+ *
+ * `setAudioModeAsync`가 반환돼도 오디오 세션 전환은 하드웨어에서 조금 더 걸린다.
+ * 곧바로 말하면 **첫 음절이 잘린다.** 0.2초는 사람이 지연으로 느끼지 않는다.
+ */
+const DUCK_SETTLE_MS = 200;
 
 /** 설정 화면의 값을 그대로 넘겨준다. 러닝 중 변경도 즉시 반영된다. */
 export function configureCues(next: CuePreferences): void {
@@ -35,6 +55,18 @@ export function configureCues(next: CuePreferences): void {
  * 개입 1회 재생. 실패해도 러닝을 멈추지 않는다 — 오디오는 보조 수단이다.
  *
  * `bpm`은 목표 중심값이다. 메트로놈은 언제나 center로 울린다 (§3).
+ *
+ * ## 순서가 정해져 있다 ⚠️
+ *
+ * `duck(true) → 음성 끝까지 → 메트로놈 5초 → duck(false)`.
+ *
+ * 이걸 고정 타이머로 하면 말이 잘린다. `setAudioModeAsync`는 발화 중에 부르면
+ * iOS 오디오 세션을 다시 잡아서 TTS를 끊고, 메트로놈을 음성과 동시에 울리면
+ * 클릭이 목소리를 덮는다. 그래서 **실제 발화 종료(`onDone`)를 기다린다.**
+ *
+ * 하향과 리커버리처럼 **같은 tick에 두 이벤트가 나오는 경우**(`judge.ts`의
+ * `floor_reached`)도 있어서 대기열로 직렬화한다. 안 그러면 두 번째 발화가
+ * 첫 번째를 끊는다.
  */
 export async function playCue(cue: Cue, bpm: number): Promise<void> {
   if (!preferences.voice && !preferences.metronome) {
@@ -42,53 +74,91 @@ export async function playCue(cue: Cue, bpm: number): Promise<void> {
     return;
   }
 
+  queue.push({ cue, bpm });
+  if (playing) return;
+
+  playing = true;
   await duck(true);
+  if (preferences.voice) await delay(DUCK_SETTLE_MS);
+  try {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (next === undefined) break;
 
-  if (preferences.voice) {
-    try {
-      Speech.speak(cue.text, { language: 'ko-KR', rate: 1.0 });
-    } catch {
-      // 음성이 죽어도 메트로놈·햅틱 경로는 살린다.
+      if (preferences.voice) await speakOnce(next.cue.text);
+      if (preferences.metronome && next.cue.metronome) await runMetronome(next.bpm);
     }
-  }
-
-  if (preferences.metronome && cue.metronome) {
-    startMetronome(bpm);
-  } else {
-    // 메트로놈이 없으면 음성 길이만큼만 줄였다가 되돌린다.
-    setTimeout(() => void duck(false), 3000);
+  } finally {
+    playing = false;
+    await duck(false);
   }
 }
 
 /** 러닝 종료·화면 이탈 시 정리. */
 export function stopCues(): void {
+  queue = [];
   Speech.stop();
   stopMetronome();
   void duck(false);
 }
 
-function startMetronome(bpm: number): void {
-  stopMetronome();
-  if (bpm <= 0) return;
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  click ??= createAudioPlayer({ uri: CLICK_WAV_DATA_URI });
-  const intervalMs = (60 / bpm) * 1000;
+/** 한 문장을 끝까지 읽는다. 끝나거나·멈추거나·실패하면 resolve — 어느 쪽이든 다음으로 넘어간다. */
+function speakOnce(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      resolve();
+    };
+    const guard = setTimeout(finish, SPEECH_TIMEOUT_MS);
 
-  const beat = () => {
     try {
-      click?.seekTo(0);
-      click?.play();
+      Speech.speak(text, {
+        language: 'ko-KR',
+        rate: 1.0,
+        onDone: finish,
+        onStopped: finish,
+        onError: finish,
+      });
     } catch {
-      stopMetronome();
+      // 음성이 죽어도 메트로놈·햅틱 경로는 살린다.
+      finish();
     }
-  };
+  });
+}
 
-  beat();
-  metronomeTimer = setInterval(beat, intervalMs);
-  metronomeStop = setTimeout(() => {
+/** 메트로놈 5초 (`ENGINE.md` §7). `stopCues()`로 중간에 멈춰도 resolve된다. */
+function runMetronome(bpm: number): Promise<void> {
+  return new Promise((resolve) => {
     stopMetronome();
-    void duck(false);
-  }, METRONOME_SEC * 1000);
+    if (bpm <= 0) {
+      resolve();
+      return;
+    }
+
+    metronomeDone = resolve;
+    click ??= createAudioPlayer({ uri: CLICK_WAV_DATA_URI });
+    const intervalMs = (60 / bpm) * 1000;
+
+    const beat = () => {
+      try {
+        click?.seekTo(0);
+        click?.play();
+      } catch {
+        stopMetronome();
+      }
+    };
+
+    beat();
+    metronomeTimer = setInterval(beat, intervalMs);
+    metronomeStop = setTimeout(() => stopMetronome(), METRONOME_SEC * 1000);
+  });
 }
 
 function stopMetronome(): void {
@@ -96,6 +166,10 @@ function stopMetronome(): void {
   if (metronomeStop !== null) clearTimeout(metronomeStop);
   metronomeTimer = null;
   metronomeStop = null;
+
+  const done = metronomeDone;
+  metronomeDone = null;
+  done?.();
 }
 
 /** 개입 순간만 외부 음악을 살짝 줄인다. 끝나면 반드시 `mixWithOthers`로 되돌린다. */
