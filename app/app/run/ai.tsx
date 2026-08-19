@@ -67,7 +67,7 @@ function Card({ title, body, orange = false }: { title: string; body: string; or
 const styles = StyleSheet.create({
   content: { minHeight: 890, paddingTop: 80 - navigationHeader.contentLift, paddingHorizontal: 25, paddingBottom: 30 },
   header: { position: 'absolute', top: navigationHeader.titleTop, alignSelf: 'center', zIndex: 10, color: colors.white, fontSize: 17, fontWeight: '700' },
-  verdict: { height: 136, borderRadius: 30, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 21 },
+  verdict: { minHeight: 136, borderRadius: 30, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 21, justifyContent: 'center' },
   orange: { fontSize: 17, fontWeight: '700', color: colors.primary },
   verdictText: { fontSize: 20, fontWeight: '800', color: colors.white, marginTop: 15, lineHeight: 26 },
   state: { minHeight: 180, borderRadius: 28, backgroundColor: colors.white, padding: 24, justifyContent: 'center' },
