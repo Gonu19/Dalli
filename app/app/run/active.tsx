@@ -89,6 +89,7 @@ export default function ActiveRunScreen() {
 
   const save = async () => {
     const snapshot = run.snapshot();
+    const activeDurationSec = Math.round(run.activeSec);
     const completed = snapshot !== null && (
       snapshot.goal.type === 'TIME'
         ? run.activeSec >= snapshot.goal.value
@@ -104,7 +105,7 @@ export default function ActiveRunScreen() {
     if (!record) return;
 
     if (simulationActive) {
-      setResult({ record, uploaded: null, report: null, simulated: true });
+      setResult({ record, activeDurationSec, uploaded: null, report: null, simulated: true });
       router.replace('/run/finish');
       return;
     }
@@ -116,7 +117,7 @@ export default function ActiveRunScreen() {
     } catch {
       // The local result is preserved and shown on the finish screen.
     }
-    setResult({ record, uploaded, report: null, simulated: false });
+    setResult({ record, activeDurationSec, uploaded, report: null, simulated: false });
     router.replace('/run/finish');
   };
 
@@ -242,7 +243,7 @@ function getCadenceStatus(run: {
   }
   if (run.zone === 'IDLE') return { message: '움직임이 거의 없어요', color: colors.disabled };
   if (run.recovery) return { message: '회복 위주로 이어가요', color: colors.disabled };
-  if (run.phase === 'WARMUP') return { message: '몸을 푸는 중이에요', color: colors.disabled };
+  if (run.phase === 'WARMUP') return { message: '워밍업 중이에요', color: colors.disabled };
   if (run.verdict === 'TOO_FAST') return { message: '리듬을 조금 낮춰보세요', color: colors.danger };
   if (run.verdict === 'TOO_SLOW' || run.zone === 'WALK') {
     return { message: '리듬을 조금 올려보세요', color: colors.danger };

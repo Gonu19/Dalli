@@ -14,7 +14,8 @@ export default function Finish(){
   const[picking,setPicking]=useState(false);
   if(!result)return <FigmaScreen/>;
   const r=result.record;
-  const minutes=Math.round(r.durationSec/60);
+  const activeDurationSec = result.uploaded?.activeDurationSec ?? result.activeDurationSec;
+  const minutes=Math.round(activeDurationSec/60);
   const avg=r.avgCadence;
   const rhythmScore=result.uploaded?.rhythmScore??null;
 

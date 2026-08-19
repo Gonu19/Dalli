@@ -21,6 +21,7 @@ export default function ResultImage() {
   const router = useRouter();
   const { result, photoUri } = useRunResult();
   const record = result?.record;
+  const activeDurationSec = result?.uploaded?.activeDurationSec ?? result?.activeDurationSec ?? null;
   const scrollY = useRef(new Animated.Value(0)).current;
   const cardRef = useRef<View>(null);
   const [saving, setSaving] = useState(false);
@@ -80,7 +81,7 @@ export default function ResultImage() {
         {/* 종료 직후의 경로 스냅샷. 좌표는 메모리에만 있고 서버로 가지 않는다 (`ENGINE.md` §10). */}
         {included['경로'] ? <RunMap routeOnly style={styles.routeOnly} /> : null}
         {included['활동 시간'] || included.거리 || included['평균 케이던스'] ? <View style={styles.overlay}>
-          {included['활동 시간'] ? <Stat label="활동 시간" value={record ? format(record.durationSec) : '—'} /> : null}
+          {included['활동 시간'] ? <Stat label="활동 시간" value={activeDurationSec === null ? '—' : format(activeDurationSec)} /> : null}
           {included.거리 ? <Stat label="거리" value={record?.distanceM == null ? '—' : `${(record.distanceM / 1000).toFixed(2)} km`} /> : null}
           {included['평균 케이던스'] ? <Stat label="평균 케이던스" value={record?.avgCadence == null ? '—' : `${Math.round(record.avgCadence)} spm`} /> : null}
         </View> : null}

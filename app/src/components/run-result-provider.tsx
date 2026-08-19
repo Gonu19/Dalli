@@ -5,6 +5,7 @@ import type { RunRecord } from '@/src/store/runStore';
 
 type RunResult = {
   record: RunRecord;
+  activeDurationSec: number;
   uploaded: RunCreated | null;
   report: RunReport | null;
   simulated: boolean;

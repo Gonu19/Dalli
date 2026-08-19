@@ -447,6 +447,8 @@ export interface components {
             date: string;
             /** Duration Sec */
             duration_sec: number;
+            /** Active Duration Sec */
+            active_duration_sec: number;
             /** Completed */
             completed: boolean;
         };
@@ -516,6 +518,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Active Duration Sec */
+            active_duration_sec: number;
             /** Is Analyzable */
             is_analyzable: boolean;
             /** Analysis Limitation */
@@ -566,6 +570,8 @@ export interface components {
             final_target_max: number | null;
             /** Duration Sec */
             duration_sec: number;
+            /** Active Duration Sec */
+            active_duration_sec: number;
             /** Distance M */
             distance_m: number | null;
             /** Avg Cadence */
@@ -624,6 +630,8 @@ export interface components {
             started_at: string;
             /** Duration Sec */
             duration_sec: number;
+            /** Active Duration Sec */
+            active_duration_sec: number;
             /** Distance M */
             distance_m: number | null;
             /** Avg Cadence */

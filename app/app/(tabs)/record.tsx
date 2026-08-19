@@ -175,7 +175,7 @@ export default function RecordScreen() {
       </View> : null}
       {selectedRun ? <View style={[styles.runSummary, selected?.plan && styles.runSummaryWithPlan]}>
         <Text numberOfLines={1} style={styles.runTitle}>{runDetail.data?.memo?.trim() || (selectedRun.source === 'MANUAL' ? '직접 기록한 러닝' : '달리와 함께한 러닝')}</Text>
-        <Text style={styles.runMetrics}>{formatMinutes(selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
+        <Text style={styles.runMetrics}>{formatMinutes(runDetail.data?.activeDurationSec ?? selectedRun.durationSec)} <Text style={styles.metricDivider}>|</Text> {formatDistance(runDetail.data?.distanceM)} <Text style={styles.metricDivider}>|</Text> {formatCadence(runDetail.data?.avgCadence)}</Text>
         <Text numberOfLines={1} style={styles.detailCopy}>{describeRunCondition(runDetail.data?.condition, selectedRun.source)}</Text>
         <Pressable
           accessibilityRole="button"

@@ -99,6 +99,7 @@ export type RunUpload = {
 export type RunCreated = {
   id: string;
   clientRunId: string;
+  activeDurationSec: number;
   isAnalyzable: boolean;
   analysisLimitation: ApiSchemas['RunCreateResponse']['analysis_limitation'];
   rhythmScore: number | null;
@@ -110,6 +111,7 @@ export type RunListItem = {
   id: string;
   startedAt: string;
   durationSec: number;
+  activeDurationSec: number;
   distanceM: number | null;
   avgCadence: number | null;
   completed: boolean;
@@ -133,6 +135,7 @@ export type RunDetail = {
   finalTargetMin: number | null;
   finalTargetMax: number | null;
   durationSec: number;
+  activeDurationSec: number;
   distanceM: number | null;
   avgCadence: number | null;
   avgPaceSecPerKm: number | null;
@@ -197,6 +200,7 @@ export type Stats = {
     id: string;
     date: string;
     durationSec: number;
+    activeDurationSec: number;
     completed: boolean;
   } | null;
 };
@@ -359,6 +363,7 @@ export async function createRun(token: string, run: RunUpload): Promise<RunCreat
   return {
     id: response.id,
     clientRunId: response.client_run_id,
+    activeDurationSec: response.active_duration_sec ?? run.durationSec,
     isAnalyzable: response.is_analyzable,
     analysisLimitation: response.analysis_limitation,
     rhythmScore: response.rhythm_score,
@@ -373,6 +378,7 @@ export async function getRuns(token: string): Promise<RunListItem[]> {
     id: item.id,
     startedAt: item.started_at,
     durationSec: item.duration_sec,
+    activeDurationSec: item.active_duration_sec ?? item.duration_sec,
     distanceM: item.distance_m,
     avgCadence: item.avg_cadence,
     completed: item.completed,
@@ -400,6 +406,7 @@ export async function getRunDetail(token: string, runId: string): Promise<RunDet
     finalTargetMin: response.final_target_min,
     finalTargetMax: response.final_target_max,
     durationSec: response.duration_sec,
+    activeDurationSec: response.active_duration_sec ?? response.duration_sec,
     distanceM: response.distance_m,
     avgCadence: response.avg_cadence,
     avgPaceSecPerKm: response.avg_pace_sec_per_km,
@@ -484,6 +491,7 @@ export async function getStats(token: string): Promise<Stats> {
       id: response.recent_run.id,
       date: response.recent_run.date,
       durationSec: response.recent_run.duration_sec,
+      activeDurationSec: response.recent_run.active_duration_sec ?? response.recent_run.duration_sec,
       completed: response.recent_run.completed,
     } : null,
   };
@@ -572,6 +580,7 @@ export async function createManualRun(
   return {
     id: response.id,
     clientRunId: response.client_run_id,
+    activeDurationSec: response.active_duration_sec ?? input.durationSec,
     isAnalyzable: response.is_analyzable,
     analysisLimitation: response.analysis_limitation,
     rhythmScore: response.rhythm_score,

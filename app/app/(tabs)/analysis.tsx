@@ -218,7 +218,7 @@ function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelet
       <View style={styles.metrics}>
         <Metric value={run.distanceM === null ? '—' : (run.distanceM / 1000).toFixed(2)} label="KM" />
         <Metric value={run.rhythmScore === null ? '—' : `${Math.round(run.rhythmScore * 100)}%`} label="안정 구간" />
-        <Metric value={formatTime(run.durationSec)} label="시간" />
+        <Metric value={formatTime(run.activeDurationSec)} label="시간" />
       </View>
     </Animated.View>
   </View>;

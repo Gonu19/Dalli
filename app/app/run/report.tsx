@@ -48,7 +48,9 @@ export default function Report() {
   const rhythmScore = params.runId
     ? detail.data?.rhythmScore ?? report?.metrics.rhythmScore ?? null
     : local?.uploaded?.rhythmScore ?? null;
-  const seconds = params.runId ? detail.data?.durationSec ?? null : record?.durationSec ?? null;
+  const seconds = params.runId
+    ? detail.data?.activeDurationSec ?? null
+    : local?.uploaded?.activeDurationSec ?? local?.activeDurationSec ?? null;
   const cadence = params.runId ? detail.data?.avgCadence ?? null : record?.avgCadence ?? null;
   const pace = params.runId ? detail.data?.avgPaceSecPerKm ?? null : record?.avgPaceSecPerKm ?? null;
 

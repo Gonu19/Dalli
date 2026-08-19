@@ -63,7 +63,7 @@ export default function HomeScreen() {
         <Text style={styles.reportTitle}>최근 러닝 리포트</Text>
         {runs.isLoading ? <Text style={styles.reportEmpty}>최근 러닝을 불러오는 중이에요</Text> : runs.error ? <Pressable onPress={() => void runs.refetch()}><Text style={styles.reportEmpty}>{isOfflineError(runs.error) ? '오프라인 상태예요 · 다시 시도' : '최근 러닝을 불러오지 못했어요 · 다시 시도'}</Text></Pressable> : latest ? <>
           <Text style={styles.reportDate}>{latest.startedAt.slice(0, 10)}</Text>
-          <Text style={styles.reportValue}>{`${Math.round(latest.durationSec / 60)}분 ${latest.completed ? '완주' : '기록'}`}</Text>
+          <Text style={styles.reportValue}>{`${Math.round(latest.activeDurationSec / 60)}분 ${latest.completed ? '완주' : '기록'}`}</Text>
           <Text style={styles.reportCadence}>{latest.avgCadence === null ? '—' : `${Math.round(latest.avgCadence)} spm`}</Text>
           <Text style={styles.reportMeta}>{latest.rhythmScore === null ? '안정 구간 —' : `안정 구간 ${Math.round(latest.rhythmScore * 100)}%`}</Text>
           <Pressable disabled={latest.source === 'MANUAL'} onPress={() => router.push({ pathname: '/run/report', params: { runId: latest.id } })} style={({ pressed }) => [styles.detail, latest.source === 'MANUAL' && styles.detailManual, pressed && latest.source === 'APP' && styles.buttonPressed]}>
