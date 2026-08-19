@@ -157,6 +157,36 @@ def test_habit_interval_is_rejected_when_previous_app_run_is_missing() -> None:
     assert result.reasons == (HardGateReason.ROUTINE_INTERVAL_UNAVAILABLE,)
 
 
+def test_detail_segment_numbers_are_allowed_when_server_provides_aggregate_metadata() -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    detail_summary = {
+        **summary,
+        "detail_time_blocks": [
+            {"block_index": 1, "start_sec": 0, "end_sec": 600, "median_cadence": 157},
+            {"block_index": 2, "start_sec": 600, "end_sec": 1200, "median_cadence": 154},
+            {"block_index": 3, "start_sec": 1200, "end_sec": 1800, "median_cadence": 150},
+        ],
+        "detail_rapid_changes": [
+            {"at_sec": 300, "direction": "상승", "before_cadence": 157, "after_cadence": 173},
+        ],
+    }
+    result = evaluate_report_output(
+        {
+            **payload,
+            "evidence": [
+                "첫 구간 0~10분은 리듬 157 spm이었어요.",
+                "5분 무렵 157에서 173 spm으로 급상승했어요.",
+                "마지막 구간은 리듬 150 spm이었어요.",
+            ],
+            "next_goal_text": "다음 목표는 리듬 159를 유지해 보세요.",
+        },
+        fallback,
+        detail_summary,
+    )
+
+    assert result.passed is True
+
+
 @pytest.mark.parametrize(
     ("field", "text", "reason"),
     [

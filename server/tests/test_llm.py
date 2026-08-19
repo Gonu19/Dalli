@@ -139,6 +139,9 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert "문장은 모두 자연스러운 한국어" in LLM_REPORT_INSTRUCTIONS_V2
     assert "evidence는 핵심 관찰 수치 1~3개" in LLM_REPORT_INSTRUCTIONS_V2
     assert "prescription은 다음 러닝에서 할 행동 한 가지만" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "변화가 1개 또는 2개라면 그 개수만큼만 작성하세요" in LLM_REPORT_INSTRUCTIONS_V2
+    assert "텍스트 합계가 최소 300자 이상" in LLM_REPORT_INSTRUCTIONS_V2
     assert "next_target_min/max는 어떤 목적에서도 서버가 결정한 값을 그대로 유지" in LLM_REPORT_INSTRUCTIONS_V2
     assert "days_since_last_run이 null이면 HABIT 문구 어디에도 러닝 간격을 언급하지 마세요" in LLM_REPORT_INSTRUCTIONS_V2
     assert "체중·칼로리·감량 수치는 만들지 마세요" in LLM_REPORT_INSTRUCTIONS_V2
@@ -153,6 +156,35 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert summary["days_since_last_run"] is None
     assert summary["this_week_plan_done"] == 0
     assert summary["this_week_plan_total"] == 0
+    assert len(summary["detail_time_blocks"]) == 3
+    assert summary["detail_time_blocks"][0]["median_cadence"] == 157
+    assert summary["detail_rapid_changes"] == []
+
+
+def test_safe_summary_exposes_only_derived_rapid_change_metadata() -> None:
+    current_run, quality, metrics, fallback = context()
+    current_run.events = [
+        {"t": 300, "type": "TOO_FAST", "payload": {"cadence": 173, "secret": "drop"}},
+        {"t": 400, "type": "TOO_SLOW", "payload": {"cadence": 140}},
+        {"t": 500, "type": "TOO_FAST", "payload": {"cadence": 168}},
+        {"t": 550, "type": "TOO_FAST", "payload": {"cadence": 175}},
+    ]
+
+    summary = _safe_summary(current_run, quality, metrics, fallback, now=NOW)
+
+    assert len(summary["detail_rapid_changes"]) == 3
+    assert summary["detail_rapid_changes"][0] == {
+        "at_sec": 300,
+        "direction": "상승",
+        "before_cadence": 157,
+        "after_cadence": 173,
+    }
+    assert "samples" not in summary
+    assert "events" not in summary
+
+    current_run.events = current_run.events[:2]
+    summary_with_two_changes = _safe_summary(current_run, quality, metrics, fallback, now=NOW)
+    assert len(summary_with_two_changes["detail_rapid_changes"]) == 2
 
 
 def test_safe_summary_uses_user_purpose_and_previous_app_run_only() -> None:

@@ -155,6 +155,19 @@ def _numeric_allowlist(summary: Mapping[str, object]) -> set[str]:
     next_max = summary.get("next_target_max")
     if isinstance(next_min, int) and isinstance(next_max, int):
         allowed.add(_canonical_number(round((next_min + next_max) / 2)))
+    for field in ("detail_time_blocks", "detail_rapid_changes"):
+        values = summary.get(field)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if not isinstance(item, Mapping):
+                continue
+            for key, value in item.items():
+                if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+                    continue
+                allowed.add(_canonical_number(value))
+                if str(key).endswith("_sec") and float(value) % 60 == 0:
+                    allowed.add(_canonical_number(float(value) / 60))
     return allowed
 
 
@@ -221,6 +234,20 @@ def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]
     ):
         add("회", summary.get(key))
     add("일", summary.get("days_since_last_run"))
+    for field in ("detail_time_blocks", "detail_rapid_changes"):
+        values = summary.get(field)
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if not isinstance(item, Mapping):
+                continue
+            for key, value in item.items():
+                if str(key).endswith("_sec"):
+                    add("초", value)
+                    if isinstance(value, (int, float, Decimal)) and float(value) % 60 == 0:
+                        add("분", float(value) / 60)
+                elif "cadence" in str(key):
+                    add("spm", value)
     return allowed
 
 
