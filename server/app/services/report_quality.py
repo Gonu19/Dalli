@@ -32,6 +32,7 @@ class HardGateReason(StrEnum):
     SCHEMA_INVALID = "SCHEMA_INVALID"
     EVIDENCE_COUNT_INVALID = "EVIDENCE_COUNT_INVALID"
     ROUTINE_EVIDENCE_NOT_ALLOWED = "ROUTINE_EVIDENCE_NOT_ALLOWED"
+    ROUTINE_INTERVAL_UNAVAILABLE = "ROUTINE_INTERVAL_UNAVAILABLE"
     PROTECTED_VALUE_CHANGED = "PROTECTED_VALUE_CHANGED"
     LIMITATION_CHANGED = "LIMITATION_CHANGED"
     UNSUPPORTED_NUMERIC_CLAIM = "UNSUPPORTED_NUMERIC_CLAIM"
@@ -83,7 +84,7 @@ BLAMING_PATTERNS = tuple(
 )
 NUMBER_PATTERN = re.compile(
     r"(?<![\w])(?P<number>[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)"
-    r"\s*(?P<unit>spm|km|m|%|초|분|회)?",
+    r"\s*(?P<unit>spm|km|m|%|초|분|일|회)?",
     re.IGNORECASE,
 )
 RHYTHM_TARGET_PATTERN = re.compile(r"리듬\s*([-+]?\d+(?:\.\d+)?)")
@@ -97,6 +98,15 @@ ROUTINE_EVIDENCE_PATTERNS = tuple(
         r"\d+\s*회\s*중\s*\d+\s*회",
         r"(?:계획|플랜).{0,30}\d+\s*(?:개|회|일)?",
         r"(?:간격|직전\s*러닝|마지막\s*러닝|쉬고).{0,30}\d+\s*일",
+    )
+)
+HABIT_INTERVAL_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"러닝.{0,20}간격",
+        r"간격.{0,20}(?:러닝|달리기|운동)",
+        r"(?:하루|이틀|사흘|며칠)\s*(?:안에|후|간격|쉬고)",
+        r"\d+\s*일\s*(?:안에|후|간격|쉬고)",
     )
 )
 
@@ -153,6 +163,7 @@ def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]
         "%": set(),
         "초": set(),
         "분": set(),
+        "일": set(),
         "m": set(),
         "km": set(),
         "spm": set(),
@@ -209,6 +220,7 @@ def _numeric_unit_allowlist(summary: Mapping[str, object]) -> dict[str, set[str]
         "this_week_plan_total",
     ):
         add("회", summary.get(key))
+    add("일", summary.get("days_since_last_run"))
     return allowed
 
 
@@ -258,6 +270,21 @@ def _has_forbidden_routine_evidence(
         pattern.search(evidence) is not None
         for evidence in content.evidence
         for pattern in ROUTINE_EVIDENCE_PATTERNS
+    )
+
+
+def _has_unavailable_habit_interval(
+    content: LLMReportContent,
+    summary: Mapping[str, object],
+) -> bool:
+    if summary.get("running_purpose") != "HABIT":
+        return False
+    if summary.get("days_since_last_run") is not None:
+        return False
+    return any(
+        pattern.search(text) is not None
+        for text in _all_text(content)
+        for pattern in HABIT_INTERVAL_PATTERNS
     )
 
 
@@ -326,6 +353,8 @@ def evaluate_report_output(
         _add_reason(reasons, HardGateReason.UNSUPPORTED_NUMERIC_CLAIM)
     if _has_forbidden_routine_evidence(content, summary):
         _add_reason(reasons, HardGateReason.ROUTINE_EVIDENCE_NOT_ALLOWED)
+    if _has_unavailable_habit_interval(content, summary):
+        _add_reason(reasons, HardGateReason.ROUTINE_INTERVAL_UNAVAILABLE)
     joined = " ".join(_all_text(content))
     if any(pattern.search(joined) for pattern in MEDICAL_PATTERNS):
         _add_reason(reasons, HardGateReason.MEDICAL_CLAIM_DETECTED)

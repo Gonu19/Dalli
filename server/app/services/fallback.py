@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 from math import isfinite
 from typing import Final
@@ -8,6 +9,7 @@ from typing import Final
 from app.models import Run
 from app.services.metrics import RunMetrics, compute_upper_range_sec
 from app.services.run_quality import RunQualityAssessment
+from app.services.stats import count_this_week_run_days
 
 
 RUNNING_PURPOSES: Final = frozenset(
@@ -96,6 +98,88 @@ def _prescription(run: Run) -> str:
     }[running_purpose(run)]
 
 
+def _weekly_run_count(run: Run) -> int:
+    user = getattr(run, "user", None)
+    return count_this_week_run_days(
+        getattr(user, "runs", None) or [],
+        datetime.now(timezone.utc),
+    )
+
+
+def _format_duration(value: int | None) -> str | None:
+    if value is None or value < 0:
+        return None
+    if value % 60 == 0:
+        return f"{value // 60}분"
+    return f"{value}초"
+
+
+def _purpose_verdict(run: Run) -> str:
+    if _recovery_priority(run):
+        return "오늘은 회복을 우선하며 러닝을 이어갔어요."
+
+    return {
+        "COMPLETE": (
+            "안정적인 리듬으로 목표를 끊지 않고 완주한 러닝이에요."
+            if run.completed
+            else "안정 구간을 확인하며 오늘의 러닝을 이어가 보았어요."
+        ),
+        "HABIT": "이번 러닝으로 달리기 루틴을 이어갔어요.",
+        "WEIGHT": "오늘은 편안한 활동 시간을 쌓은 러닝이에요.",
+        "FITNESS": "후반 리듬 변화를 확인한 러닝이에요.",
+        "PERFORMANCE": "안정 구간과 평균 페이스를 확인한 러닝이에요.",
+    }[running_purpose(run)]
+
+
+def _purpose_evidence(
+    run: Run,
+    quality: RunQualityAssessment,
+    metrics: RunMetrics,
+    fatigue: str | None,
+) -> list[str]:
+    purpose = running_purpose(run)
+    if purpose == "HABIT":
+        evidence = [f"이번 주 {_weekly_run_count(run)}회 러닝"]
+        days = days_since_last_app_run(run)
+        if days is not None:
+            evidence.append(f"직전 러닝과 {days}일 간격")
+        return evidence
+
+    if purpose == "WEIGHT":
+        duration = _format_duration(quality.active_duration_sec)
+        return [f"활동 시간 {duration}"] if duration is not None else ["활동 시간을 기록했어요."]
+
+    if purpose == "FITNESS":
+        evidence: list[str] = []
+        if run.late_drop_rate is not None:
+            evidence.append(f"후반 리듬 하락 {round(float(run.late_drop_rate) * 100)}%")
+        if run.rhythm_score is not None:
+            evidence.append(f"안정 구간 {round(float(run.rhythm_score) * 100)}%")
+        return evidence or ["후반 리듬 변화를 계산하지 않았어요."]
+
+    if purpose == "PERFORMANCE":
+        evidence = []
+        if run.rhythm_score is not None:
+            evidence.append(f"안정 구간 {round(float(run.rhythm_score) * 100)}%")
+        if run.avg_pace_sec_per_km is not None:
+            evidence.append(f"평균 페이스 {run.avg_pace_sec_per_km}초/km")
+        if run.intervention_count is not None:
+            evidence.append(f"개입 {run.intervention_count}회")
+        return evidence or ["리듬과 페이스를 확인했어요."]
+
+    evidence = [
+        "완주했어요" if run.completed else "러닝을 기록했어요.",
+    ]
+    if run.rhythm_score is not None and metrics.in_range_sec is not None:
+        evidence.append(
+            f"안정 구간 {round(float(run.rhythm_score) * 100)}% "
+            f"({round(metrics.in_range_sec)}초)"
+        )
+    if fatigue is not None:
+        evidence.append(f"오늘의 부담: {fatigue}")
+    return evidence
+
+
 def _limitations(run: Run, quality: RunQualityAssessment) -> list[str]:
     limitations: list[str] = []
     if quality.analysis_limitation == "TOO_SHORT":
@@ -113,6 +197,21 @@ def _limitations(run: Run, quality: RunQualityAssessment) -> list[str]:
 
 
 def _goal_text(run: Run, center: int) -> str:
+    purpose = running_purpose(run)
+    if purpose == "HABIT":
+        days = days_since_last_app_run(run)
+        timing = (
+            "다음 러닝은 이틀 안에 한 번 더 나가 보세요."
+            if days is not None and days <= 2
+            else "다음 러닝 시점을 정해 다시 이어가 보세요."
+        )
+        return f"{timing} 목표 리듬 {center}"
+    if purpose == "WEIGHT":
+        return f"다음 목표: 활동 시간을 조금 더 늘리고, 리듬 {center}를 편하게 이어가 보세요."
+    if purpose == "FITNESS":
+        return f"다음 목표: 후반까지 안정 구간을 이어가 보세요. 리듬 {center}"
+    if purpose == "PERFORMANCE":
+        return f"다음 목표: 안정 구간과 평균 페이스를 유지해 보세요. 리듬 {center}"
     if run.goal_type == "TIME" and run.goal_value is not None:
         amount = (
             f"{run.goal_value // 60}분"
@@ -166,25 +265,8 @@ def build_fallback_report(
 ) -> FallbackReportContent:
     next_min, next_max = _next_target(run, quality)
     fatigue = fatigue_label(run.fatigue_index)
-    if fatigue == "여유로움":
-        verdict = "오늘은 리듬에 여유가 있었어요."
-    elif fatigue == "보통":
-        verdict = "오늘의 리듬을 무리 없이 이어간 러닝이에요."
-    elif fatigue == "부담됨":
-        verdict = "오늘은 부담이 있었지만 러닝을 차분히 기록했어요."
-    elif run.rhythm_score is not None:
-        verdict = "오늘의 안정 구간을 확인했어요."
-    else:
-        verdict = "오늘도 한 번의 러닝을 기록했어요."
-
-    evidence: list[str] = []
-    if run.rhythm_score is not None and metrics.in_range_sec is not None:
-        evidence.append(
-            f"안정 구간 {round(float(run.rhythm_score) * 100)}% "
-            f"({round(metrics.in_range_sec)}초)"
-        )
-    if fatigue is not None:
-        evidence.append(f"오늘의 부담: {fatigue}")
+    verdict = _purpose_verdict(run)
+    evidence = _purpose_evidence(run, quality, metrics, fatigue)
     if run.downshift_count:
         evidence.append(f"목표를 {run.downshift_count}회 낮췄어요")
 
