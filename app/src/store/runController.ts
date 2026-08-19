@@ -11,7 +11,11 @@ import { startBackgroundAudio, stopBackgroundAudio } from '../native/audio-sessi
 import { LocationTracker } from '../native/location';
 import type { RoutePoint } from '../native/location';
 import { PedometerSource } from '../native/pedometer';
-import { ensureLocationPermission, ensureMotionPermission } from '../native/permissions';
+import {
+  ensureBackgroundLocationPermission,
+  ensureLocationPermission,
+  ensureMotionPermission,
+} from '../native/permissions';
 import { selectPlanForRun } from './plan-link';
 import { useRunStore } from './runStore';
 import type { RunRecord, StartOptions } from './runStore';
@@ -64,8 +68,11 @@ export async function startTrackedRun(options: TrackedRunOptions): Promise<void>
 
   const location = await ensureLocationPermission();
   if (location.granted) {
+    // 배경 권한은 거절돼도 그만이다. 있으면 화면을 꺼도 거리가 이어지고,
+    // 없으면 전경 구독으로 내려가 화면이 켜진 동안만 쌓인다 (`location.ts`).
+    const background = await ensureBackgroundLocationPermission();
     tracker = new LocationTracker();
-    const started = await tracker.start();
+    const started = await tracker.start(background.granted);
     if (!started) {
       tracker = null;
       onLocationUnavailable?.();
@@ -102,10 +109,14 @@ export async function startTrackedRun(options: TrackedRunOptions): Promise<void>
  */
 export function pauseTrackedRun(): void {
   useRunStore.getState().pause();
+  // GPS도 같이 멈춘다. 멈춰서 이동한 거리가 러닝 기록에 섞이면 페이스까지 같이 틀어진다.
+  tracker?.pause();
 }
 
 export function resumeTrackedRun(): void {
+  if (useRunStore.getState().runState !== 'PAUSED') return;
   useRunStore.getState().resume();
+  tracker?.resume();
 }
 
 /**

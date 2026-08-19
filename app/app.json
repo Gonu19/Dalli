@@ -43,6 +43,16 @@
       "expo-router",
       "expo-secure-store",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "러닝 거리와 페이스 측정을 위해 위치를 사용합니다.",
+          "locationAlwaysAndWhenInUsePermission": "화면을 꺼도 러닝 거리가 이어지도록 위치를 사용합니다.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "러닝 결과 이미지에 사용할 사진을 선택하기 위해 사진 보관함에 접근합니다.",
