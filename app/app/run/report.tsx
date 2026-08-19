@@ -83,7 +83,7 @@ export default function Report() {
       {create.isPending ? <Text style={styles.reportState}>AI 리포트를 만들고 있어요...</Text> : null}
       {create.error ? <Pressable onPress={() => runId && create.mutate(runId)} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>{isOfflineError(create.error) ? '연결 후 AI 리포트 다시 만들기' : 'AI 리포트 다시 만들기'}</Text></Pressable> : null}
     </Animated.ScrollView>
-    <ScrollHeaderScrim scrollY={scrollY} />
+    <ScrollHeaderScrim opaque scrollY={scrollY} />
     <View style={styles.floatingActions}>
       <Pressable
         disabled={!report}

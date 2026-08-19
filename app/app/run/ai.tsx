@@ -100,8 +100,13 @@ export default function AIReport() {
         <View style={styles.verdict}><Text style={styles.orange}>{report.isFallback ? '기본 분석' : 'AI 한줄평'}</Text><Text style={styles.verdictText}>“{report.verdict}”</Text></View>
         {report.isFallback ? <Text style={styles.fallbackCopy}>외부 분석 대신 계약된 기본 분석 결과를 표시하고 있어요.</Text> : null}
         {report.limitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{report.limitation}</Text></View> : null}
-        <View style={styles.fiTitle}><Text style={styles.fiLabel}>오늘의 부담</Text><Text style={styles.fiValue}>{fatigueLabel(report.metrics.fatigueIndex)}</Text></View>
-        {report.metrics.fatigueIndex === null ? <Text style={styles.fiCopy}>분석할 데이터가 충분하지 않아 부담 정도를 표시하지 않아요.</Text> : null}
+        <View style={styles.fiTitle}><Text style={styles.fiLabel}>피로도 지수 (FI)</Text><Text style={styles.fiValue}>{fatiguePercent(report.metrics.fatigueIndex)}</Text></View>
+        {report.metrics.fatigueIndex === null
+          ? <Text style={styles.fiCopy}>분석할 데이터가 충분하지 않아 피로도를 표시하지 않아요.</Text>
+          : <>
+              <View style={styles.fiTrack}><View style={[styles.fiFill, { width: `${Math.round(Math.max(0, Math.min(1, report.metrics.fatigueIndex)) * 100)}%` }]} /></View>
+              <Text style={styles.fiCopy}>{fatigueCopy(report.metrics.fatigueIndex)}</Text>
+            </>}
         <View style={styles.card}><Text style={styles.cardTitle}>분석 근거</Text>{evidence.length ? evidence.map((item, index)=><Text key={`${item}-${index}`} style={styles.evidence}>• {item}</Text>) : <Text style={styles.cardBody}>표시할 근거가 없어요.</Text>}</View>
         {report.hypothesis ? <Card title="가능한 원인" body={report.hypothesis} /> : null}
         {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
@@ -139,11 +144,17 @@ export default function AIReport() {
   </FigmaScreen>;
 }
 
-function fatigueLabel(value: number | null) {
+/** 피로도는 0~1로 오지만 화면에는 퍼센트로 쓴다. 숫자 하나가 바와 같은 값을 가리켜야 한다. */
+function fatiguePercent(value: number | null) {
   if (value === null) return '—';
-  if (value < 0.35) return '여유로움';
-  if (value < 0.6) return '보통';
-  return '부담됨';
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)} %`;
+}
+
+/** 구간 경계는 부담 라벨과 같은 값이다 (여유로움 0.35 / 보통 0.6). */
+function fatigueCopy(value: number) {
+  if (value < 0.35) return '피로 누적이 적고 몸에 무리가 거의 없는 안정적인 상태예요.';
+  if (value < 0.6) return '피로가 조금 쌓였지만 무리한 수준은 아니에요.';
+  return '피로가 꽤 쌓였어요. 다음 러닝은 여유 있게 가는 편이 좋아요.';
 }
 
 function SheetRow({ label, value, onMinus, onPlus }: { label: string; value: string; onMinus: () => void; onPlus: () => void }) {
@@ -193,7 +204,9 @@ const styles = StyleSheet.create({
   fiTitle: { marginTop: 29, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 7 },
   fiLabel: { color: colors.white, fontSize: 17, fontWeight: '700' },
   fiValue: { color: colors.primary, fontSize: 17, fontWeight: '700' },
-  fiCopy: { color: colors.textMuted, fontSize: 12, marginTop: 14, paddingHorizontal: 7 },
+  fiCopy: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 12, paddingHorizontal: 7 },
+  fiTrack: { height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,.14)', marginTop: 16, marginHorizontal: 7, overflow: 'hidden' },
+  fiFill: { height: '100%', borderRadius: 7, backgroundColor: colors.primary },
   card: { minHeight: 116, borderRadius: 28, backgroundColor: colors.white, marginTop: 29, padding: 22 },
   cardTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
   cardBody: { fontSize: 15, color: colors.ink, lineHeight: 21, marginTop: 10 },

@@ -66,10 +66,15 @@ export default function HomeScreen() {
           <Text style={styles.reportValue}>{`${Math.round(latest.activeDurationSec / 60)}분 ${latest.completed ? '완주' : '기록'}`}</Text>
           <Text style={styles.reportCadence}>{latest.avgCadence === null ? '—' : `${Math.round(latest.avgCadence)} spm`}</Text>
           <Text style={styles.reportMeta}>{latest.rhythmScore === null ? '안정 구간 —' : `안정 구간 ${Math.round(latest.rhythmScore * 100)}%`}</Text>
-          <Pressable disabled={latest.source === 'MANUAL'} onPress={() => router.push({ pathname: '/run/report', params: { runId: latest.id } })} style={({ pressed }) => [styles.detail, latest.source === 'MANUAL' && styles.detailManual, pressed && latest.source === 'APP' && styles.buttonPressed]}>
+          {/* 수기 기록은 상세 분석이 없다. 버튼을 지우면 이유를 알 수 없으므로, 눌렀을 때 알려준다. */}
+          <Pressable
+            onPress={() => latest.source === 'MANUAL'
+              ? Alert.alert('상세 분석을 지원하지 않는 기록이에요', '직접 작성한 러닝은 기본 기록만 확인할 수 있어요.')
+              : router.push({ pathname: '/run/report', params: { runId: latest.id } })}
+            style={({ pressed }) => [styles.detail, pressed && styles.buttonPressed]}
+          >
             <Text style={styles.detailText}>상세 보기</Text>
           </Pressable>
-          {latest.source === 'MANUAL' ? <Pressable accessibilityLabel="상세보기 안내" onPress={() => Alert.alert('상세 분석을 지원하지 않는 기록이에요', '직접 작성한 러닝은 기본 기록만 확인할 수 있어요.')} style={({ pressed }) => [styles.detailHelp, pressed && styles.buttonPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={21} /></Pressable> : null}
         </> : <Text style={styles.reportEmpty}>아직 저장된 러닝이 없어요</Text>}
       </View>
     </View>
@@ -109,8 +114,6 @@ const styles = StyleSheet.create({
   reportMeta: { color: colors.white, fontSize: 12, marginTop: 5 },
   reportEmpty: { color: colors.textMuted, fontSize: 14, marginTop: 22 },
   detail: { position: 'absolute', right: 15, top: 13, width: 84, height: 32, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(221,224,225,.3)', alignItems: 'center', justifyContent: 'center' },
-  detailManual: { right: 57, opacity: 0.4 },
-  detailHelp: { position: 'absolute', right: 16, top: 11, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
 });
 
