@@ -142,7 +142,7 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert "prescription: 다음 러닝에서 할 행동 하나만" in LLM_REPORT_INSTRUCTIONS_V3
     assert "detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로" in LLM_REPORT_INSTRUCTIONS_V3
     assert "detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요" in LLM_REPORT_INSTRUCTIONS_V3
-    assert "전체 사용자 텍스트는 최소 300자 이상" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "사용자 노출 텍스트 합계를 약 500자(450~550자)" in LLM_REPORT_INSTRUCTIONS_V3
     assert "next_target_min/max는 어떤 목적에서도 서버가 결정한 값을 그대로 유지" in LLM_REPORT_INSTRUCTIONS_V3
     assert "days_since_last_run이 null이면 HABIT 문구 어디에도 간격을 언급하지 마세요" in LLM_REPORT_INSTRUCTIONS_V3
     assert "체중·칼로리·감량 수치" in LLM_REPORT_INSTRUCTIONS_V3

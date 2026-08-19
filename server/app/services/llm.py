@@ -224,7 +224,7 @@ LLM_REPORT_INSTRUCTIONS_V3 = """당신은 초보 러너를 돕는 달리(Dalli)�
 
 세부 규칙:
 - LLMReportContent의 필드만 JSON으로 반환하세요. 문장은 모두 자연스러운 한국어로 작성하세요.
-- 전체 사용자 텍스트는 최소 300자 이상이어야 하지만, 같은 문장·수치·칭찬을 반복해 길이를 채우지 마세요.
+- 정보가 충분하면 verdict/evidence/hypothesis/prescription/next_goal_text/recovery_note/limitation의 사용자 노출 텍스트 합계를 약 500자(450~550자)로 작성하세요. 데이터가 부족하거나 해당 필드가 null이면 반복·추측으로 분량을 채우지 말고 가능한 범위에서 구체적으로 작성하세요.
 - detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로 참고하세요. segment_summary의 값이 없으면 그 구간을 추정하지 마세요.
 - detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요. 변화가 1개 또는 2개라면 그 개수만 작성하세요.
 - evidence는 핵심 관찰 수치 1~3개만 넣고, 숫자는 입력 JSON의 값만 사용하세요. rhythm_score/late_drop_rate는 안정 구간/후반 하락 퍼센트로, cadence는 리듬 spm으로, duration_sec/active_duration_sec/in_range_sec는 초 또는 정확히 분으로 표현하세요. fatigue_index는 숫자 대신 여유로움·보통·부담됨으로 표현하세요.
