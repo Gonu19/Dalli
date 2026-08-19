@@ -70,7 +70,7 @@
   "gender": "F"
 }
 ```
-`PATCH /users/me` — `onboarded`를 제외한 위 필드 부분 수정. 첫 유효 APP 러닝의 `baseline_cadence`는 `POST /runs` 처리 중 서버가 자동 확정해 저장하며, PATCH는 사용자의 수동 변경·초기 설정에 사용한다. POST 응답 필드는 변경하지 않는다.
+`PATCH /users/me` — `onboarded`를 제외한 위 필드 부분 수정. `baseline_cadence`는 초기 설정·수동 변경 외에, `POST /runs` 처리 중 `source=APP`이고 `is_analyzable=true`인 러닝의 `next_target_min/max` 중심값을 서버가 `round((min + max) / 2)`로 계산해 130~185 범위로 저장한다. 분석 불가·MANUAL 러닝은 갱신하지 않는다. POST 응답 필드는 변경하지 않는다.
 
 `running_purpose`: `COMPLETE | HABIT | WEIGHT | FITNESS | PERFORMANCE`.
 

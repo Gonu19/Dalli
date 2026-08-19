@@ -233,7 +233,7 @@ def _goal_text(run: Run, center: int) -> str:
     return f"다음 목표: 현재 목표 유지, 리듬 {center}"
 
 
-def _next_target(
+def compute_next_target(
     run: Run,
     quality: RunQualityAssessment,
 ) -> tuple[int, int]:
@@ -267,7 +267,7 @@ def build_fallback_report(
     quality: RunQualityAssessment,
     metrics: RunMetrics,
 ) -> FallbackReportContent:
-    next_min, next_max = _next_target(run, quality)
+    next_min, next_max = compute_next_target(run, quality)
     fatigue = fatigue_label(run.fatigue_index)
     verdict = _purpose_verdict(run)
     evidence = _purpose_evidence(run, quality, metrics, fatigue)

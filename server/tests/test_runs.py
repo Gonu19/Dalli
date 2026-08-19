@@ -185,7 +185,7 @@ def test_new_analyzable_run_stores_metrics_and_repeat_keeps_existing_values():
     assert repeat_db.commits == 0 and not repeat_db.added
 
 
-def test_first_eligible_app_run_auto_persists_baseline_without_changing_response():
+def test_first_eligible_app_run_persists_next_target_center_without_changing_response():
     current_user = user()
     payload = app_payload(
         duration_sec=360,
@@ -197,23 +197,57 @@ def test_first_eligible_app_run_auto_persists_baseline_without_changing_response
     result = save_run(db, current_user, TypeAdapter(RunCreate).validate_python(payload))
 
     assert result.created is True
-    assert current_user.baseline_cadence == 157
+    assert current_user.baseline_cadence == 159
     assert db.commits == 1
     response = run_response(result.run)
     assert not hasattr(response, "baseline_cadence")
 
 
-def test_existing_baseline_is_not_overwritten_by_later_app_run():
+def test_next_target_center_is_clamped_before_baseline_persistence():
+    current_user = user()
+    payload = app_payload(
+        target_cadence_min=183,
+        target_cadence_max=187,
+        final_target_min=183,
+        final_target_max=187,
+        samples=[{"t": t, "c": 187, "p": None, "d": None} for t in range(0, 360, 5)],
+    )
+    db = FakeSession([None])
+
+    save_run(db, current_user, TypeAdapter(RunCreate).validate_python(payload))
+
+    # The calculated next center is 187; baseline persistence remains capped at 185.
+    assert current_user.baseline_cadence == 185
+
+
+def test_analyzable_app_run_updates_baseline_from_next_target_center():
     current_user = user()
     current_user.baseline_cadence = 149
     payload = app_payload(
         duration_sec=360,
         goal_value=360,
-        samples=[{"t": t, "c": 170, "p": None, "d": None} for t in range(0, 360, 5)],
+        samples=[{"t": t, "c": 161, "p": None, "d": None} for t in range(0, 360, 5)],
     )
     db = FakeSession([None])
 
     save_run(db, current_user, TypeAdapter(RunCreate).validate_python(payload))
+
+    # 153~161 held in the upper half, so next target is 155~163 and its
+    # center (159) becomes the next session baseline.
+    assert current_user.baseline_cadence == 159
+    assert db.executed
+
+
+def test_unanalyzable_app_run_does_not_update_baseline():
+    current_user = user()
+    current_user.baseline_cadence = 149
+    db = FakeSession([None])
+
+    save_run(
+        db,
+        current_user,
+        TypeAdapter(RunCreate).validate_python(app_payload(duration_sec=179)),
+    )
 
     assert current_user.baseline_cadence == 149
     assert not db.executed
