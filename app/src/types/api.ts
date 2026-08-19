@@ -276,6 +276,10 @@ export interface components {
             goal_type: "TIME" | "DISTANCE";
             /** Goal Value */
             goal_value: number;
+            /** Target Cadence */
+            target_cadence: number | null;
+            /** Title */
+            title: string | null;
         };
         /** CalendarResponse */
         CalendarResponse: {
@@ -381,6 +385,10 @@ export interface components {
             goal_type: "TIME" | "DISTANCE";
             /** Goal Value */
             goal_value: number;
+            /** Target Cadence */
+            target_cadence?: number | null;
+            /** Title */
+            title?: string | null;
             /** Memo */
             memo?: string | null;
         };
@@ -408,6 +416,10 @@ export interface components {
             goal_type: "TIME" | "DISTANCE";
             /** Goal Value */
             goal_value: number;
+            /** Target Cadence */
+            target_cadence: number | null;
+            /** Title */
+            title: string | null;
             /** Memo */
             memo: string | null;
             /**
@@ -432,6 +444,10 @@ export interface components {
             goal_type?: "TIME" | "DISTANCE";
             /** Goal Value */
             goal_value?: number;
+            /** Target Cadence */
+            target_cadence?: number | null;
+            /** Title */
+            title?: string | null;
         };
         /** RecentRunResponse */
         RecentRunResponse: {

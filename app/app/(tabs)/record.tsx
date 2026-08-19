@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Image, Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { isOfflineError, PLAN_DETAIL_FIELDS_SUPPORTED, type CalendarDay } from '@/src/api/client';
+import { isOfflineError, type CalendarDay } from '@/src/api/client';
 import { useCalendar, useCreateManualRun, useCreatePlan, useDeletePlan, useDeleteRun, useProfile, useRunDetail, useStats, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
@@ -87,7 +87,8 @@ export default function RecordScreen() {
           goalValue: Math.round(Number(distance) * 1000),
           memo,
           title,
-          targetCadence: Number(cadence) > 0 ? Math.round(Number(cadence)) : null,
+          // 서버가 130~185만 받는다 (`ENGINE.md` §3 절대 클램프).
+          targetCadence: Number(cadence) > 0 ? Math.max(130, Math.min(185, Math.round(Number(cadence)))) : null,
         });
       } else {
         await createManual.mutateAsync({ clientRunId: makeClientRunId(), startedAt: `${selectedDate}T09:00:00Z`, durationSec: Number(minutes) * 60, distanceM: distance ? Number(distance) * 1000 : undefined, memo });
@@ -253,7 +254,6 @@ export default function RecordScreen() {
               <View style={styles.inputRow}><TextInput keyboardType="number-pad" value={cadence} onChangeText={setCadence} placeholder="157" style={styles.input}/><Text style={styles.unit}>spm</Text></View>
             </View>
           </View>
-          {!PLAN_DETAIL_FIELDS_SUPPORTED ? <Text style={styles.hint}>제목과 목표 리듬은 다음 업데이트부터 계획에 저장돼요.</Text> : null}
         </> : <>
           <Text style={styles.inputLabel}>달린 시간</Text><View style={styles.inputRow}><TextInput keyboardType="number-pad" placeholder="시간을 입력해 주세요" value={minutes} onChangeText={setMinutes} style={styles.input}/><Text style={styles.unit}>분</Text></View>
           <Text style={styles.inputLabel}>달린 거리</Text><View style={styles.inputRow}><TextInput keyboardType="decimal-pad" value={distance} onChangeText={setDistance} placeholder="0" style={styles.input}/><Text style={styles.unit}>km</Text></View>

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useCalendar } from '@/src/api/queries';
@@ -43,10 +43,14 @@ export default function RunPrepare() {
     [calendar.data],
   );
 
+  // 계획 값은 한 번만 채운다. 응답이 늦게 와서 사용자가 조절한 값을 덮어쓰면 안 된다.
+  const planApplied = useRef(false);
   useEffect(() => {
-    if (goal !== null || plan === null) return;
+    if (planApplied.current || plan === null) return;
+    planApplied.current = true;
     setGoal({ type: plan.goalType, value: plan.goalValue });
-  }, [goal, plan]);
+    if (plan.targetCadence !== null) setCadence(plan.targetCadence);
+  }, [plan]);
   const { voiceEnabled, metronomeEnabled, hapticsEnabled, setVoiceEnabled, setMetronomeEnabled, setHapticsEnabled } = usePreferences();
 
   const begin = async () => {
@@ -91,7 +95,7 @@ export default function RunPrepare() {
         <Text style={[styles.time, goal === null && styles.timePlaceholder]}>{formatGoalValue(goal)}</Text>{goal !== null ? <Text style={styles.timeUnit}>{goal.type === 'DISTANCE' ? 'km' : '분'}</Text> : null}
         <Ionicons color={colors.inkMuted} name="chevron-down" size={14} style={styles.timeChevron} />
       </Pressable>
-      {plan !== null && goal?.type === 'DISTANCE' ? <Text numberOfLines={1} style={styles.planNote}>오늘 계획 목표예요. 누르면 시간으로 바꿔요.</Text> : null}
+      {plan !== null && goal?.type === 'DISTANCE' ? <Text numberOfLines={1} style={styles.planNote}>{plan.title?.trim() || '오늘 계획'} 목표예요. 누르면 시간으로 바꿔요.</Text> : null}
     </View>
     <View style={styles.guide}>
       <Text style={[styles.cardTitle, styles.guideTitle]}>러닝 가이드 방식</Text>

@@ -177,6 +177,8 @@ export function useUpdatePlan(token: string | null) {
                 status: updatedPlan.status,
                 goalType: updatedPlan.goalType,
                 goalValue: updatedPlan.goalValue,
+                targetCadence: updatedPlan.targetCadence,
+                title: updatedPlan.title,
               },
             }
           : day
