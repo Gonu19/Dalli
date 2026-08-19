@@ -142,6 +142,29 @@ def test_app_create_and_idempotent_repeat_statuses():
     assert first.json()["rhythm_score"] == 1.0
     assert first.json()["late_drop_rate"] is None
     assert first.json()["fatigue_index"] is None
+    assert first.json()["active_duration_sec"] == 180
+    assert stored.active_duration_sec == 180
+
+
+def test_pause_duration_is_saved_and_returned_as_active_duration():
+    current_user = user()
+    payload = app_payload(
+        duration_sec=600,
+        goal_value=600,
+        events=[
+            {"t": 0, "type": "RUN_START", "payload": {}},
+            {"t": 120, "type": "PAUSE", "payload": {}},
+            {"t": 240, "type": "RESUME", "payload": {}},
+            {"t": 600, "type": "RUN_END", "payload": {"completed": True}},
+        ],
+    )
+    db = FakeSession([None])
+
+    response = client_for(current_user, db).post("/runs", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["active_duration_sec"] == 480
+    assert db.added[0].active_duration_sec == 480
 
 
 def test_new_analyzable_run_stores_metrics_and_repeat_keeps_existing_values():

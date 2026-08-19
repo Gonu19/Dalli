@@ -26,7 +26,7 @@ def test_model_column_sets_match_erd() -> None:
         "id", "user_id", "client_run_id", "source", "plan_id", "started_at",
         "ended_at", "goal_type", "goal_value", "condition",
         "target_cadence_min", "target_cadence_max", "final_target_min",
-        "final_target_max", "duration_sec", "distance_m", "avg_cadence",
+        "final_target_max", "duration_sec", "active_duration_sec", "distance_m", "avg_cadence",
         "avg_pace_sec_per_km", "completed", "rhythm_score", "late_drop_rate",
         "fatigue_index", "intervention_count", "downshift_count", "samples",
         "events", "memo", "created_at",
@@ -57,6 +57,7 @@ def test_postgresql_types_nullability_and_defaults() -> None:
     assert Run.__table__.c.plan_id.nullable
     assert Run.__table__.c.intervention_count.nullable
     assert Run.__table__.c.downshift_count.nullable
+    assert not Run.__table__.c.active_duration_sec.nullable
     assert not Report.__table__.c.evidence.nullable
     assert Run.__table__.c.completed.server_default is not None
     assert Plan.__table__.c.status.server_default is not None

@@ -8,6 +8,7 @@ class RecentRunResponse(BaseModel):
     id: UUID
     date: date
     duration_sec: int
+    active_duration_sec: int
     completed: bool
 
 

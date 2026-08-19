@@ -118,6 +118,7 @@
 // res 201 — rhythm_score/late_drop_rate/fatigue_index는 서버 계산
 {
   "id": "uuid", "client_run_id": "...", "created_at": "...",
+  "active_duration_sec": 1230,
   "is_analyzable": true, "analysis_limitation": null,
   "rhythm_score": 0.72, "late_drop_rate": 0.11, "fatigue_index": 0.34
 }
@@ -137,6 +138,9 @@
 계산 규칙:
 
 - `active_duration_sec = duration_sec - PAUSE~RESUME 구간 합`. 종료까지 RESUME이 없으면 RUN_END까지 pause로 본다.
+- 러닝 저장 시 `active_duration_sec`를 정수로 저장하며, `POST /runs` 응답과 러닝 조회·통계 응답에서 반환한다.
+- `source: "MANUAL"`은 이벤트가 없으므로 `active_duration_sec = duration_sec`이다.
+- 항상 `active_duration_sec <= duration_sec`이다.
 - `expected_sample_count = max(1, floor(active_duration_sec / 5))` (`ENGINE.md`의 5초 저장 주기 기준).
 - 유효 샘플은 pause 구간 밖에 있고 `t`와 `c`가 유한한 수이며 `0 <= t <= duration_sec`, `c >= 0`인 샘플이다.
 - 동일한 `t`가 여러 번 오면 하나만 센다. 커버리지는 최대 1로 clamp한다.
@@ -156,7 +160,7 @@ GPS 누락 시 `null`을 허용하는 숫자다.
 ## GET /runs?limit=20&cursor=
 ```json
 {
-  "items": [ { "id": "uuid", "started_at": "...", "duration_sec": 1230, "distance_m": 2840,
+  "items": [ { "id": "uuid", "started_at": "...", "duration_sec": 1230, "active_duration_sec": 1230, "distance_m": 2840,
                "avg_cadence": 156, "completed": true, "source": "APP",
                "rhythm_score": 0.72, "has_report": true } ],
   "next_cursor": null
@@ -271,7 +275,7 @@ LLM 8초 타임아웃. 초과·실패·쿼터 초과 시 룰베이스 폴백 문
   "this_month_days": 8,
   "this_week_count": 1,
   "next_milestone": 20,
-  "recent_run": { "id": "uuid", "date": "2026-08-11", "duration_sec": 1200, "completed": true }
+  "recent_run": { "id": "uuid", "date": "2026-08-11", "duration_sec": 1200, "active_duration_sec": 1200, "completed": true }
 }
 ```
 

@@ -65,6 +65,7 @@ class Run(Base):
     final_target_min: Mapped[int | None] = mapped_column(SmallInteger)
     final_target_max: Mapped[int | None] = mapped_column(SmallInteger)
     duration_sec: Mapped[int] = mapped_column(Integer, nullable=False)
+    active_duration_sec: Mapped[int] = mapped_column(Integer, nullable=False)
     distance_m: Mapped[int | None] = mapped_column(Integer)
     avg_cadence: Mapped[int | None] = mapped_column(SmallInteger)
     avg_pace_sec_per_km: Mapped[int | None] = mapped_column(Integer)

@@ -38,6 +38,7 @@ def test_cursor_round_trip_preserves_tie_breaker() -> None:
         source="MANUAL",
         started_at=datetime(2026, 8, 15, 12, 34, tzinfo=timezone.utc),
         duration_sec=1,
+        active_duration_sec=1,
         completed=True,
     )
     assert _decode_cursor(_encode_cursor(run)) == (run.started_at, run.id)

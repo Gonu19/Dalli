@@ -333,6 +333,7 @@ def evaluate_synthetic_scenario(key: str) -> EvaluatedSyntheticScenario:
         )
     run = Run(id=scenario.run_id, user_id=UUID("d1500000-0000-4000-8000-999999999999"), **values)
     quality = assess_run_quality(run)
+    run.active_duration_sec = round(quality.active_duration_sec)
     metrics = compute_run_metrics(run, quality)
     run.rhythm_score = None if metrics.rhythm_score is None else Decimal(str(metrics.rhythm_score))
     run.late_drop_rate = (

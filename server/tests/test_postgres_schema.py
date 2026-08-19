@@ -60,6 +60,7 @@ def _run(session: Session, user: User, client_run_id: str, **values) -> Run:
         source="APP",
         started_at=datetime.now(timezone.utc),
         duration_sec=600,
+        active_duration_sec=600,
         **values,
     )
     session.add(run)
@@ -132,9 +133,9 @@ def test_constraints_jsonb_numeric_and_delete_policies(postgres_engine: Engine) 
     [
         (lambda user: User(device_uuid=str(uuid4()), running_purpose="INVALID"), "ck_users_running_purpose"),
         (lambda user: User(device_uuid=str(uuid4()), gender="X"), "ck_users_gender"),
-        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="INVALID", started_at=datetime.now(timezone.utc), duration_sec=1), "ck_runs_source"),
-        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="APP", goal_type="INVALID", started_at=datetime.now(timezone.utc), duration_sec=1), "ck_runs_goal_type"),
-        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="APP", condition=6, started_at=datetime.now(timezone.utc), duration_sec=1), "ck_runs_condition"),
+        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="INVALID", started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1), "ck_runs_source"),
+        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="APP", goal_type="INVALID", started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1), "ck_runs_goal_type"),
+        (lambda user: Run(user_id=user.id, client_run_id=str(uuid4()), source="APP", condition=6, started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1), "ck_runs_condition"),
         (lambda user: Plan(user_id=user.id, planned_date=date(2026, 8, 21), goal_type="INVALID"), "ck_plans_goal_type"),
         (lambda user: Plan(user_id=user.id, planned_date=date(2026, 8, 21), status="INVALID"), "ck_plans_status"),
     ],
@@ -163,8 +164,8 @@ def test_unique_constraints_and_user_cascade(postgres_engine: Engine) -> None:
     duplicate_cases = [
         User(device_uuid=device_uuid),
         Plan(user_id=user_id, planned_date=date(2026, 8, 22)),
-        Run(user_id=user_id, client_run_id="unique-run", source="APP", started_at=datetime.now(timezone.utc), duration_sec=1),
-        Run(user_id=user_id, client_run_id=str(uuid4()), source="APP", plan_id=plan_id, started_at=datetime.now(timezone.utc), duration_sec=1),
+        Run(user_id=user_id, client_run_id="unique-run", source="APP", started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1),
+        Run(user_id=user_id, client_run_id=str(uuid4()), source="APP", plan_id=plan_id, started_at=datetime.now(timezone.utc), duration_sec=1, active_duration_sec=1),
         Report(run_id=run_id, verdict="a", evidence=["a"], next_goal_text="a", next_target_min=1, next_target_max=2),
     ]
     with Session(postgres_engine) as session:

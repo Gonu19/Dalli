@@ -222,6 +222,12 @@ def test_response_schema_formats_nullable_and_report_shapes() -> None:
 
     detail = components["RunDetailResponse"]
     assert detail["properties"]["started_at"]["format"] == "date-time"
+    assert detail["properties"]["active_duration_sec"]["type"] == "integer"
+    assert "active_duration_sec" in detail["required"]
+    for schema_name in ("RunCreateResponse", "RunListItem"):
+        schema = components[schema_name]
+        assert schema["properties"]["active_duration_sec"]["type"] == "integer"
+        assert "active_duration_sec" in schema["required"]
     assert _is_nullable(detail["properties"]["samples"])
     assert _is_nullable(detail["properties"]["events"])
     assert _is_nullable(detail["properties"]["report"])
@@ -245,3 +251,4 @@ def test_response_schema_formats_nullable_and_report_shapes() -> None:
     assert calendar_day["properties"]["date"]["format"] == "date"
     assert _is_nullable(calendar_day["properties"]["plan"])
     assert recent["properties"]["date"]["format"] == "date"
+    assert recent["properties"]["active_duration_sec"]["type"] == "integer"

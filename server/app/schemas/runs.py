@@ -91,6 +91,7 @@ class RunCreateResponse(BaseModel):
     id: UUID
     client_run_id: str
     created_at: datetime
+    active_duration_sec: int
     is_analyzable: bool
     analysis_limitation: AnalysisLimitation | None
     rhythm_score: Decimal | None
@@ -106,6 +107,7 @@ class RunListItem(BaseModel):
     id: UUID
     started_at: datetime
     duration_sec: int
+    active_duration_sec: int
     distance_m: int | None
     avg_cadence: int | None
     completed: bool
@@ -138,6 +140,7 @@ class RunDetailResponse(BaseModel):
     final_target_min: int | None
     final_target_max: int | None
     duration_sec: int
+    active_duration_sec: int
     distance_m: int | None
     avg_cadence: int | None
     avg_pace_sec_per_km: int | None

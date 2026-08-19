@@ -72,7 +72,13 @@ def get_stats(db: Session, user: User, now: datetime | None = None) -> StatsResp
     ).one()
     total_days, dalli_days, month_days, week_days = (int(value or 0) for value in totals)
     recent = db.execute(
-        select(Run.id, Run.started_at, Run.duration_sec, Run.completed)
+        select(
+            Run.id,
+            Run.started_at,
+            Run.duration_sec,
+            Run.active_duration_sec,
+            Run.completed,
+        )
         .where(Run.user_id == user.id)
         .order_by(Run.started_at.desc(), Run.id.desc())
         .limit(1)
@@ -83,6 +89,7 @@ def get_stats(db: Session, user: User, now: datetime | None = None) -> StatsResp
             id=recent.id,
             date=recent.started_at.astimezone(KST).date(),
             duration_sec=recent.duration_sec,
+            active_duration_sec=recent.active_duration_sec,
             completed=recent.completed,
         )
     return StatsResponse(

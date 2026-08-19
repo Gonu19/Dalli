@@ -234,6 +234,7 @@ def test_metric_numeric_columns_store_zero_one_middle_and_null_boundaries(
                 source="APP",
                 started_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
                 duration_sec=600,
+                active_duration_sec=600,
                 completed=True,
                 rhythm_score=rhythm,
                 late_drop_rate=late_drop,

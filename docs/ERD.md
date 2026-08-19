@@ -96,6 +96,7 @@ CREATE TABLE runs (
     final_target_max    SMALLINT,
 
     duration_sec        INTEGER NOT NULL,
+    active_duration_sec INTEGER NOT NULL,            -- duration minus pause intervals
     distance_m          INTEGER,
     avg_cadence         SMALLINT,
     avg_pace_sec_per_km INTEGER,

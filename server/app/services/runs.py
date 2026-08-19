@@ -43,6 +43,7 @@ def run_response(run: Run) -> RunCreateResponse:
         id=run.id,
         client_run_id=run.client_run_id,
         created_at=run.created_at,
+        active_duration_sec=run.active_duration_sec,
         is_analyzable=quality.is_analyzable,
         analysis_limitation=quality.analysis_limitation,
         rhythm_score=run.rhythm_score if quality.is_analyzable else None,
@@ -103,6 +104,7 @@ def list_runs(db: Session, user: User, limit: int, cursor: str | None) -> RunLis
                 id=run.id,
                 started_at=run.started_at,
                 duration_sec=run.duration_sec,
+                active_duration_sec=run.active_duration_sec,
                 distance_m=run.distance_m,
                 avg_cadence=run.avg_cadence,
                 completed=run.completed,
@@ -144,6 +146,7 @@ def run_detail_response(run: Run) -> RunDetailResponse:
         final_target_min=run.final_target_min,
         final_target_max=run.final_target_max,
         duration_sec=run.duration_sec,
+        active_duration_sec=run.active_duration_sec,
         distance_m=run.distance_m,
         avg_cadence=run.avg_cadence,
         avg_pace_sec_per_km=run.avg_pace_sec_per_km,
@@ -210,6 +213,7 @@ def save_run(db: Session, user: User, payload: RunCreate) -> RunSaveResult:
         )
     run = Run(**common)
     quality = assess_run_quality(run)
+    run.active_duration_sec = round(quality.active_duration_sec)
     metrics = compute_run_metrics(run, quality)
     run.rhythm_score = _metric_decimal(metrics.rhythm_score)
     run.late_drop_rate = _metric_decimal(metrics.late_drop_rate)
