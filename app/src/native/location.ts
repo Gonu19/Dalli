@@ -91,6 +91,8 @@ export class LocationTracker {
   private previous: { lat: number; lon: number } | null = null;
   private previousAtMs: number | null = null;
   private lastFixAtMs: number | null = null;
+  /** 마지막으로 처리한 fix의 기기 시각. 전경·배경 두 경로가 같은 fix를 흘릴 때 걸러낸다. */
+  private lastFixTimestamp = 0;
   private route: RoutePoint[] = [];
 
   private distanceM = 0;
@@ -101,6 +103,11 @@ export class LocationTracker {
 
   /**
    * @param background 배경 위치 권한이 있으면 `true`. 화면을 꺼도 fix가 이어진다.
+   *
+   * **전경 구독은 언제나 건다.** 배경 태스크만 걸었더니 화면을 켜 둔 채 달리는 동안
+   * 좌표가 한 번도 안 들어와 지도와 거리가 출발 지점에 멈췄다. 배경 업데이트는
+   * 화면을 껐을 때를 위한 **추가 경로**이지 전경 구독의 대체재가 아니다.
+   * 두 경로가 같은 fix를 두 번 흘려도 `acceptFix`가 timestamp로 걸러낸다.
    */
   async start(background = false): Promise<boolean> {
     if (this.subscription !== null || this.backgroundStarted) return true;
@@ -110,13 +117,24 @@ export class LocationTracker {
     this.previous = null;
     this.previousAtMs = null;
     this.lastFixAtMs = null;
+    this.lastFixTimestamp = 0;
     this.pausedTotalMs = 0;
     this.pausedAtMs = null;
     this.route = [];
     activeTracker = this;
 
-    if (background && (await this.startBackgroundUpdates())) return true;
+    const foreground = await this.startForegroundWatch();
+    if (background) await this.startBackgroundUpdates();
 
+    if (!foreground && !this.backgroundStarted) {
+      // 권한 거부·미지원. 러닝은 계속되고 거리만 비어 있게 된다.
+      if (activeTracker === this) activeTracker = null;
+      return false;
+    }
+    return true;
+  }
+
+  private async startForegroundWatch(): Promise<boolean> {
     try {
       this.subscription = await Location.watchPositionAsync(
         {
@@ -128,15 +146,13 @@ export class LocationTracker {
       );
       return true;
     } catch {
-      // 권한 거부·미지원. 러닝은 계속되고 거리만 비어 있게 된다.
-      if (activeTracker === this) activeTracker = null;
       return false;
     }
   }
 
   /**
-   * 배경 위치 업데이트. 실패하면 `false`를 돌려주고 전경 구독으로 내려간다 —
-   * 배경 권한을 못 얻은 기기에서 거리 측정을 통째로 잃지 않기 위해서다.
+   * 배경 위치 업데이트. 화면이 꺼진 뒤에도 fix가 이어지게 하는 **추가** 경로다.
+   * 실패해도 전경 구독이 남아 있으므로 러닝은 그대로 간다.
    */
   private async startBackgroundUpdates(): Promise<boolean> {
     try {
@@ -238,6 +254,12 @@ export class LocationTracker {
    * 배경 태스크가 부를 수 있어야 해서 `public`이다 — 화면에서 부를 일은 없다.
    */
   acceptFix(position: Location.LocationObject): void {
+    // 전경 구독과 배경 태스크는 같은 fix를 각각 흘린다. 기기가 매긴 시각이 같으므로
+    // 그것으로 중복을 거른다. 순서가 뒤집힌 오래된 fix도 여기서 걸린다.
+    const timestamp = position.timestamp ?? 0;
+    if (timestamp > 0 && timestamp <= this.lastFixTimestamp) return;
+    this.lastFixTimestamp = timestamp;
+
     const { latitude, longitude, accuracy } = position.coords;
     if (accuracy != null && accuracy > ACCURACY_LIMIT_M) return;
 
