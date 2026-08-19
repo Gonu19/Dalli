@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
 import { usePlans, useProfile, useRuns, useStats } from '@/src/api/queries';
@@ -37,6 +37,7 @@ export default function HomeScreen() {
   const todayPlan = plans.data?.[0] ?? null;
   return <Screen includeBottomSafeArea={false} padded={false} scroll={false}>
     <View style={styles.frame}>
+      <View pointerEvents="none" style={styles.headerSurface} />
       <FigmaLogo left={31} />
       <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}>
         <Ionicons color={colors.white} name="settings-outline" size={26} />
@@ -65,9 +66,10 @@ export default function HomeScreen() {
           <Text style={styles.reportValue}>{`${Math.round(latest.durationSec / 60)}분 ${latest.completed ? '완주' : '기록'}`}</Text>
           <Text style={styles.reportCadence}>{latest.avgCadence === null ? '—' : `${Math.round(latest.avgCadence)} spm`}</Text>
           <Text style={styles.reportMeta}>{latest.rhythmScore === null ? '안정 구간 —' : `안정 구간 ${Math.round(latest.rhythmScore * 100)}%`}</Text>
-          <Pressable onPress={() => latest.source === 'APP' ? router.push({ pathname: '/run/report', params: { runId: latest.id } }) : router.push('/analysis')} style={({ pressed }) => [styles.detail, pressed && styles.buttonPressed]}>
+          <Pressable disabled={latest.source === 'MANUAL'} onPress={() => router.push({ pathname: '/run/report', params: { runId: latest.id } })} style={({ pressed }) => [styles.detail, latest.source === 'MANUAL' && styles.detailManual, pressed && latest.source === 'APP' && styles.buttonPressed]}>
             <Text style={styles.detailText}>상세 보기</Text>
           </Pressable>
+          {latest.source === 'MANUAL' ? <Pressable accessibilityLabel="상세보기 안내" onPress={() => Alert.alert('상세 분석을 지원하지 않는 기록이에요', '직접 작성한 러닝은 기본 기록만 확인할 수 있어요.')} style={({ pressed }) => [styles.detailHelp, pressed && styles.buttonPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={21} /></Pressable> : null}
         </> : <Text style={styles.reportEmpty}>아직 저장된 러닝이 없어요</Text>}
       </View>
     </View>
@@ -76,7 +78,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  settings: { position: 'absolute', right: 26, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
+  settings: { position: 'absolute', right: 26, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   iconPressed: compactPressFeedback,
   conditionTitle: { position: 'absolute', left: 27, top: 112 - navigationHeader.contentLift, color: colors.white, fontSize: 17, fontWeight: '700' },
   conditionCopy: { position: 'absolute', left: 27, top: 139 - navigationHeader.contentLift, color: colors.white, fontSize: 13 },
@@ -106,6 +109,8 @@ const styles = StyleSheet.create({
   reportMeta: { color: colors.white, fontSize: 12, marginTop: 5 },
   reportEmpty: { color: colors.textMuted, fontSize: 14, marginTop: 22 },
   detail: { position: 'absolute', right: 15, top: 13, width: 84, height: 32, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(221,224,225,.3)', alignItems: 'center', justifyContent: 'center' },
+  detailManual: { right: 57, opacity: 0.4 },
+  detailHelp: { position: 'absolute', right: 16, top: 11, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   detailText: { color: colors.white, fontSize: 13, fontWeight: '700' },
 });
 

@@ -125,7 +125,7 @@ function formatTime(value: number) {
 
 const styles = StyleSheet.create({
   frame: { flex: 1, position: 'relative' },
-  headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: 'rgba(28,26,26,.76)', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
+  headerSurface: { position: 'absolute', top: 0, left: 0, right: 0, height: navigationHeader.height + 8, zIndex: 8, backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,.08)' },
   settings: { position: 'absolute', right: 25, top: navigationHeader.actionTop, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
   iconPressed: compactPressFeedback,
   content: { paddingTop: 84, paddingHorizontal: 27, paddingBottom: 40 },
