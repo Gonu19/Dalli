@@ -13,7 +13,7 @@ import { FigmaLogo } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { RunMap } from '@/src/components/run-map';
 import { Screen } from '@/src/components/screen';
-import type { JudgeVerdict } from '@/src/engine/types';
+import type { CadenceZone, JudgePhase, JudgeVerdict, RunState } from '@/src/engine/types';
 import { attachCues } from '@/src/store/cue-bridge';
 import {
   detachSensor,
@@ -132,7 +132,7 @@ export default function ActiveRunScreen() {
   };
 
   const verdictColor = cadenceColor(run.verdict);
-  const cadenceStatus = getCadenceStatus(run.verdict, run.cadence, run.target.min, run.target.max);
+  const cadenceStatus = getCadenceStatus(run);
 
   return (
     <Screen padded={false} scroll={false}>
@@ -147,6 +147,7 @@ export default function ActiveRunScreen() {
       {run.recovery ? <Text style={styles.notice}>지금은 회복이 우선이에요</Text> : null}
 
       <View style={styles.statusPill}><View style={[styles.statusDot, { backgroundColor: cadenceStatus.color }]} /><Text style={styles.statusText}>{cadenceStatus.message}</Text></View>
+      {/* 초시계는 일시정지 구간을 뺀 `activeSec`이다. `totalSec`은 서버가 이벤트로 나누는 전체 시간축이라 화면에 쓰지 않는다. */}
       <Text style={styles.time}>{formatDuration(run.activeSec)}</Text>
 
       <View style={styles.metrics}>
@@ -207,21 +208,42 @@ function SheetButton({ label, onPress, variant = 'secondary' }: { label: string;
   ]}>{label}</Text></Pressable>;
 }
 
+/**
+ * 상태 문구·점 색.
+ *
+ * 문구·색은 화면 판단이지만 **근거는 엔진 값이다.** cadence를 목표 범위와 직접 비교하면
+ * 경계에서 매 초 문구가 뒤집히고(엔진은 ±4 진입 / ±3 회복 히스테리시스를 쓴다),
+ * 워밍업 90초처럼 아직 판정하지 않는 구간까지 재촉하게 된다 (`ENGINE.md` §5·§7).
+ *
+ * 반대로 `verdict` 하나만 보면 걷기·정지도 `IN_RANGE`로 내려와서
+ * 실제로 걷고 있는 사람에게 "안정적인 리듬"이라고 말한다 — 그래서 `zone`·`phase`를 같이 본다 (§4·§6).
+ */
+function getCadenceStatus(run: {
+  runState: RunState;
+  verdict: JudgeVerdict;
+  phase: JudgePhase;
+  zone: CadenceZone | null;
+  cadence: number | null;
+  recovery: boolean;
+}): { message: string; color: string } {
+  if (run.runState === 'PAUSED') return { message: '잠시 멈췄어요', color: colors.disabled };
+  if (run.verdict === 'UNAVAILABLE' || run.cadence === null) {
+    return { message: '케이던스를 측정하고 있어요', color: colors.disabled };
+  }
+  if (run.zone === 'IDLE') return { message: '움직임이 거의 없어요', color: colors.disabled };
+  if (run.recovery) return { message: '회복 위주로 이어가요', color: colors.disabled };
+  if (run.phase === 'WARMUP') return { message: '몸을 푸는 중이에요', color: colors.disabled };
+  if (run.verdict === 'TOO_FAST') return { message: '리듬을 조금 낮춰보세요', color: colors.danger };
+  if (run.verdict === 'TOO_SLOW' || run.zone === 'WALK') {
+    return { message: '리듬을 조금 올려보세요', color: colors.danger };
+  }
+  return { message: '안정적인 리듬이에요', color: colors.success };
+}
+
 function cadenceColor(verdict: JudgeVerdict) {
   if (verdict === 'UNAVAILABLE') return colors.disabled;
   if (verdict === 'TOO_FAST' || verdict === 'TOO_SLOW') return colors.accent;
   return colors.text;
-}
-
-function getCadenceStatus(verdict: JudgeVerdict, cadence: number | null, targetMin: number, targetMax: number) {
-  if (verdict === 'UNAVAILABLE') return { message: '케이던스를 측정하고 있어요', color: colors.disabled };
-  if (cadence !== null && cadence < targetMin || verdict === 'TOO_SLOW') {
-    return { message: '리듬을 조금 올려보세요', color: colors.danger };
-  }
-  if (cadence !== null && cadence > targetMax || verdict === 'TOO_FAST') {
-    return { message: '리듬을 조금 낮춰보세요', color: colors.danger };
-  }
-  return { message: '안정적인 리듬이에요', color: colors.success };
 }
 
 function formatDuration(value: number) {
