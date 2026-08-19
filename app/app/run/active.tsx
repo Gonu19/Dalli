@@ -153,9 +153,8 @@ export default function ActiveRunScreen() {
         <Pressable accessibilityLabel="가이드" onPress={() => setShowGuide((value) => !value)} style={({ pressed }) => [styles.help, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={26} /></Pressable>
         <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="settings-outline" size={26} /></Pressable>
         {simulationActive ? <Text style={styles.badge}>시연</Text> : null}
-
       {targetNotice ? <Text style={styles.notice}>{targetNotice}</Text> : null}
-      {run.recovery ? <Text style={styles.notice}>지금은 회복이 우선이에요</Text> : null}
+
 
       <View style={styles.statusPill}><View style={[styles.statusDot, { backgroundColor: cadenceStatus.color }]} /><Text style={styles.statusText}>{cadenceStatus.message}</Text></View>
       {/* 초시계는 일시정지 구간을 뺀 `activeSec`이다. `totalSec`은 서버가 이벤트로 나누는 전체 시간축이라 화면에 쓰지 않는다. */}
@@ -242,7 +241,7 @@ function getCadenceStatus(run: {
     return { message: '케이던스를 측정하고 있어요', color: colors.disabled };
   }
   if (run.zone === 'IDLE') return { message: '움직임이 거의 없어요', color: colors.disabled };
-  if (run.recovery) return { message: '회복 위주로 이어가요', color: colors.disabled };
+  if (run.recovery) return { message: '지금은 회복이 우선이에요', color: colors.disabled };
   if (run.phase === 'WARMUP') return { message: '워밍업 중이에요', color: colors.disabled };
   if (run.verdict === 'TOO_FAST') return { message: '리듬을 조금 낮춰보세요', color: colors.danger };
   if (run.verdict === 'TOO_SLOW' || run.zone === 'WALK') {
