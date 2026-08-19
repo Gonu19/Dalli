@@ -132,6 +132,7 @@ export default function ActiveRunScreen() {
   };
 
   const verdictColor = cadenceColor(run.verdict);
+  const cadenceStatus = getCadenceStatus(run.verdict, run.cadence, run.target.min, run.target.max);
 
   return (
     <Screen padded={false} scroll={false}>
@@ -145,8 +146,8 @@ export default function ActiveRunScreen() {
       {targetNotice ? <Text style={styles.notice}>{targetNotice}</Text> : null}
       {run.recovery ? <Text style={styles.notice}>지금은 회복이 우선이에요</Text> : null}
 
-      <View style={styles.statusPill}><View style={styles.statusDot} /><Text style={styles.statusText}>{run.verdict === 'UNAVAILABLE' ? '케이던스를 측정하고 있어요' : verdictColor === colors.text ? '안정적인 리듬이에요' : '리듬을 천천히 맞춰보세요'}</Text></View>
-      <Text style={styles.time}>{formatDuration(run.totalSec)}</Text>
+      <View style={styles.statusPill}><View style={[styles.statusDot, { backgroundColor: cadenceStatus.color }]} /><Text style={styles.statusText}>{cadenceStatus.message}</Text></View>
+      <Text style={styles.time}>{formatDuration(run.activeSec)}</Text>
 
       <View style={styles.metrics}>
         <Metric highlighted label="현재 케이던스" value={run.verdict === 'UNAVAILABLE' || run.cadence === null ? '—' : `${Math.round(run.cadence)} SPM`} color={verdictColor} />
@@ -210,6 +211,17 @@ function cadenceColor(verdict: JudgeVerdict) {
   if (verdict === 'UNAVAILABLE') return colors.disabled;
   if (verdict === 'TOO_FAST' || verdict === 'TOO_SLOW') return colors.accent;
   return colors.text;
+}
+
+function getCadenceStatus(verdict: JudgeVerdict, cadence: number | null, targetMin: number, targetMax: number) {
+  if (verdict === 'UNAVAILABLE') return { message: '케이던스를 측정하고 있어요', color: colors.disabled };
+  if (cadence !== null && cadence < targetMin || verdict === 'TOO_SLOW') {
+    return { message: '리듬을 조금 올려보세요', color: colors.danger };
+  }
+  if (cadence !== null && cadence > targetMax || verdict === 'TOO_FAST') {
+    return { message: '리듬을 조금 낮춰보세요', color: colors.danger };
+  }
+  return { message: '안정적인 리듬이에요', color: colors.success };
 }
 
 function formatDuration(value: number) {
