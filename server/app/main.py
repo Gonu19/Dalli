@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 
 from app.exceptions import register_exception_handlers
@@ -9,6 +11,13 @@ from app.routers.runs import router as runs_router
 from app.routers.stats import router as stats_router
 from app.routers.system import router as system_router
 from app.routers.users import router as users_router
+
+
+# Uvicorn configures its own loggers but leaves the root logger at WARNING.
+# Dalli's structured LLM diagnostics include successful INFO events, so make
+# the application log level explicit for every runtime entrypoint.
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 
 
 def create_app() -> FastAPI:

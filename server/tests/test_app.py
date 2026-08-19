@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Generator
 
 from fastapi import Depends, FastAPI
@@ -11,6 +12,10 @@ def test_application_imports() -> None:
     from app.main import app
 
     assert app.title == "Dalli API"
+
+
+def test_application_logging_allows_info_diagnostics() -> None:
+    assert logging.getLogger("app.services.llm").isEnabledFor(logging.INFO)
 
 
 def test_health_is_public_and_returns_liveness(app: FastAPI) -> None:
