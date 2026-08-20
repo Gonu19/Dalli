@@ -3,7 +3,6 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, StyleSheet, Switch, Text, View } from 'react-native';
-import * as Notifications from 'expo-notifications';
 
 import { useUploadRun } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
