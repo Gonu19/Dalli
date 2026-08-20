@@ -124,13 +124,15 @@ export default function AIReport() {
         {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
         <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text></View>
-        {savedDate !== null
+      </> : null}
+      <View style={styles.actions}>
+        {report && savedDate !== null
           ? <Text style={styles.planDone}>{formatDateLabel(savedDate)} 계획에 {savedOverwrote ? '바꿔 넣었어요' : '추가했어요'}.</Text>
-          : suggestedDistanceM !== null
+          : report && suggestedDistanceM !== null
             ? <Pressable onPress={openSheet} style={({ pressed }) => [styles.suggest, pressed && styles.buttonPressed]}><Text style={styles.suggestText}>이 목표로 다음 러닝 예약하기</Text></Pressable>
             : null}
-      </> : null}
-      <Pressable onPress={() => router.dismissTo('/')} style={({ pressed }) => [styles.home, pressed && styles.buttonPressed]}><Text style={styles.homeText}>홈으로 돌아가기</Text></Pressable>
+        <Pressable onPress={() => router.dismissTo('/')} style={({ pressed }) => [styles.home, pressed && styles.buttonPressed]}><Text style={styles.homeText}>홈으로 돌아가기</Text></Pressable>
+      </View>
     </Animated.ScrollView>
     <Modal animationType="slide" onRequestClose={() => setSheetOpen(false)} transparent visible={sheetOpen}>
       <Pressable onPress={() => setSheetOpen(false)} style={styles.backdrop} />
@@ -228,9 +230,10 @@ const styles = StyleSheet.create({
   nextTitle: { color: colors.white, fontSize: 17, fontWeight: '700' },
   nextValue: { color: colors.white, fontSize: 28, fontWeight: '800', marginTop: 6 },
   nextMeta: { color: colors.white, fontSize: 12, marginTop: 7 },
-  suggest: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  actions: { marginTop: 35, gap: 12 },
+  suggest: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   suggestText: { color: colors.white, fontSize: 16, fontWeight: '800' },
-  planDone: { color: colors.primary, fontSize: 14, fontWeight: '700', marginTop: 12, paddingHorizontal: 7 },
+  planDone: { color: colors.primary, fontSize: 14, fontWeight: '700', paddingHorizontal: 7 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.55)' },
   sheet: { backgroundColor: colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 34 },
   sheetTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', marginBottom: 18 },
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
   sheetPrimaryText: { color: colors.white, fontSize: 17, fontWeight: '800' },
   sheetSecondary: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
   sheetSecondaryText: { color: colors.inkMuted, fontSize: 15, fontWeight: '700' },
-  home: { height: 52, borderRadius: 18, borderWidth: 0.5, borderColor: colors.white, alignItems: 'center', justifyContent: 'center', marginTop: 35 },
+  home: { height: 52, borderRadius: 18, borderWidth: 0.5, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   buttonPressed: pressFeedback,
   homeText: { color: colors.white, fontSize: 17, fontWeight: '700' },
 });
