@@ -55,9 +55,14 @@ export function LineChart({ series }: { series: readonly ChartSeries[] }) {
 
   // 시간축은 줄이기 전 원본으로 잡는다. 구간 평균의 마지막 꼭짓점을 끝으로 삼으면
   // 30분 러닝이 28분으로 보인다.
-  const times = filtered.flatMap((item) => item.points.map((point) => point.t));
-  const timeMin = times.length ? Math.min(...times) : 0;
-  const timeSpan = times.length ? Math.max(...times) - timeMin : 0;
+  // 전개 연산자로 Math.min에 수천 개를 밀어넣지 않는다. 샘플은 5초 간격이라 지금은 여유가
+  // 있지만, 긴 러닝에서 인자 한도에 걸리면 화면이 통째로 죽는다.
+  const bounds = filtered.reduce((range, item) => item.points.reduce(
+    (inner, point) => ({ min: Math.min(inner.min, point.t), max: Math.max(inner.max, point.t) }),
+    range,
+  ), { min: Number.POSITIVE_INFINITY, max: Number.NEGATIVE_INFINITY });
+  const timeMin = Number.isFinite(bounds.min) ? bounds.min : 0;
+  const timeSpan = Number.isFinite(bounds.max) ? Math.max(0, bounds.max - timeMin) : 0;
   // 값 눈금은 축 왼쪽에 적는다. `8’00”`처럼 긴 눈금이 잘리지 않도록 축을 그만큼 민다.
   const soloTicks = solo ? valueTicks(domainOf(solo)).map((tick) => (solo.formatValue ?? String)(tick)) : [];
   const axisLeft = Math.max(AXIS_LEFT, ...soloTicks.map((label) => label.length * TICK_FONT_SIZE * 0.62 + 8));
@@ -111,13 +116,13 @@ export function LineChart({ series }: { series: readonly ChartSeries[] }) {
       />))}
 
       {minuteTicks(timeMin, timeMin + timeSpan).map((tick) => <SvgText
-        key={`x-${tick}`}
-        x={toX(timeMin + tick * 60)}
+        key={`x-${tick.label}`}
+        x={toX(tick.t)}
         y={TICK_BASELINE}
         fill={colors.ink}
         fontSize={TICK_FONT_SIZE}
         textAnchor="middle"
-      >{String(tick)}</SvgText>)}
+      >{tick.label}</SvgText>)}
       <SvgText x={axisRight + 12} y={TICK_BASELINE} fill={colors.ink} fontSize={TICK_FONT_SIZE}>분</SvgText>
 
       {solo ? valueTicks(domainOf(solo)).map((tick) => <SvgText
@@ -156,11 +161,24 @@ function downsample(points: readonly ChartPoint[], limit: number): ChartPoint[] 
   return folded;
 }
 
-/** x축은 분 단위로 읽는다. 시작과 끝을 포함해 고르게 나눈 뒤 같은 숫자는 접는다. */
-function minuteTicks(from: number, to: number): number[] {
-  const total = Math.max(0, (to - from) / 60);
-  const raw = Array.from({ length: TICK_COUNT }, (_, index) => Math.round((total * index) / (TICK_COUNT - 1)));
-  return [...new Set(raw)];
+/**
+ * x축 눈금. 자리는 실제 시각을 고르게 나눠 잡고, 글자는 그 시각을 분으로 반올림해 적는다.
+ *
+ * 분으로 먼저 반올림한 뒤 그 값을 다시 시각으로 되돌리면 안 된다. 30초 러닝에서 마지막
+ * 눈금이 `1`분으로 올라가 축 바깥 두 배 지점에 찍히고, 안정 구간만 켜서 60초부터 시작할 때는
+ * 첫 눈금이 실제 1분 지점인데 `0`이라고 적힌다.
+ */
+function minuteTicks(from: number, to: number): { t: number; label: string }[] {
+  const span = Math.max(0, to - from);
+  if (span === 0) return [{ t: from, label: String(Math.round(from / 60)) }];
+  const seen = new Set<string>();
+  return Array.from({ length: TICK_COUNT }, (_, index) => from + (span * index) / (TICK_COUNT - 1))
+    .flatMap((time) => {
+      const label = String(Math.round(time / 60));
+      if (seen.has(label)) return [];
+      seen.add(label);
+      return [{ t: time, label }];
+    });
 }
 
 function valueTicks(domain: { min: number; max: number }): number[] {

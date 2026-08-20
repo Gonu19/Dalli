@@ -14,6 +14,14 @@
 /** 롤링 윈도우 길이. 이보다 짧은 구간은 표본이 적어 0%·100%로만 튄다. */
 export const HOLD_WINDOW_SEC = 60;
 
+/**
+ * 윈도우가 이만큼 차야 점을 찍는다.
+ *
+ * 벽시계로 60초가 지났는지만 보면 안 된다. 10분 쉬었다 재개한 직후에도 벽시계로는
+ * 한참 지난 상태지만 윈도우 안의 실제 러닝은 몇 초뿐이라, 표본 부족으로 0%·100%가 튄다.
+ */
+const MIN_WINDOW_COVERAGE = 0.99;
+
 export type HoldPoint = { t: number; value: number };
 
 /** 로컬 러닝(`RunRecord`)과 서버 상세(`RunDetail`)의 이벤트를 함께 받는 최소 형태. */
@@ -117,14 +125,34 @@ function toSegments(
     const end = samples[index].t;
     if (end <= start) continue;
 
-    const middle = (start + end) / 2;
-    if (pauses.some((pause) => middle >= pause.start && middle < pause.end)) continue;
-
-    const range = rangeAt(middle, initial, adjustments);
     const cadence = samples[index].c;
-    segments.push({ start, end, weight: end - start, inRange: cadence >= range.min && cadence <= range.max });
+    // pause와 겹치는 부분만 정확히 도려낸다. 구간 중간점 하나로 판정하면 샘플 간격(5초)만큼
+    // 오차가 생겨, 잠깐 멈춘 구간이 통째로 버려지거나 반대로 분모에 그대로 남는다.
+    for (const active of subtractPauses(start, end, pauses)) {
+      const range = rangeAt((active.start + active.end) / 2, initial, adjustments);
+      segments.push({
+        start: active.start,
+        end: active.end,
+        weight: active.end - active.start,
+        inRange: cadence >= range.min && cadence <= range.max,
+      });
+    }
   }
   return segments;
+}
+
+/** 한 구간에서 pause와 겹치는 부분을 빼고 남은 조각들. */
+function subtractPauses(start: number, end: number, pauses: readonly Interval[]): Interval[] {
+  let remaining: Interval[] = [{ start, end }];
+  for (const pause of pauses) {
+    remaining = remaining.flatMap((piece) => {
+      if (pause.end <= piece.start || pause.start >= piece.end) return [piece];
+      const head = { start: piece.start, end: Math.min(piece.end, pause.start) };
+      const tail = { start: Math.max(piece.start, pause.end), end: piece.end };
+      return [head, tail].filter((part) => part.end > part.start);
+    });
+  }
+  return remaining;
 }
 
 /** 해당 시각에 유효한 목표 범위 = 그 시각 이전의 마지막 하향, 없으면 시작 목표. */
@@ -139,17 +167,14 @@ function rangeAt(time: number, initial: Range, adjustments: readonly (Range & { 
 
 /**
  * 각 구간 끝에서 직전 `windowSec` 동안의 비율을 낸다.
- * 윈도우가 다 차기 전에는 표본이 모자라 0%·100%로만 튀므로 그리지 않는다.
+ * 윈도우가 러닝으로 다 차기 전에는 표본이 모자라 0%·100%로만 튀므로 그리지 않는다.
  */
 function toRollingRatios(segments: readonly Segment[], windowSec: number): HoldPoint[] {
-  const origin = segments[0].start;
   const ratios: HoldPoint[] = [];
   let first = 0;
 
   for (let index = 0; index < segments.length; index += 1) {
     const now = segments[index].end;
-    if (now - origin < windowSec) continue;
-
     const from = now - windowSec;
     while (first < index && segments[first].end <= from) first += 1;
 
@@ -163,7 +188,7 @@ function toRollingRatios(segments: readonly Segment[], windowSec: number): HoldP
       if (segment.inRange) held += overlap;
     }
 
-    if (total > 0) ratios.push({ t: now, value: (held / total) * 100 });
+    if (total >= windowSec * MIN_WINDOW_COVERAGE) ratios.push({ t: now, value: (held / total) * 100 });
   }
   return ratios;
 }

@@ -178,7 +178,10 @@ function SampleGraphs({ samples, events, targetCadenceMin, targetCadenceMax, rhy
 
   const toggle = (id: SeriesId) => setHidden((previous) => {
     // 마지막 한 개까지 끄면 빈 카드가 남는다. 켜진 것이 하나뿐이면 그 버튼은 동작하지 않는다.
-    if (!previous.has(id) && shown.length <= 1) return previous;
+    // 켜진 개수는 렌더 시점의 `shown`이 아니라 `previous`에서 센다. 빠르게 연달아 누르면
+    // 두 번째 호출이 낡은 `shown`을 보고 가드를 지나쳐 전부 꺼진다.
+    const shownCount = available.filter((item) => !previous.has(item.id)).length;
+    if (!previous.has(id) && shownCount <= 1) return previous;
     const next = new Set(previous);
     if (next.has(id)) next.delete(id);
     else next.add(id);
