@@ -1,7 +1,9 @@
 /**
  * 개입 오디오 재생 (`ENGINE.md` §7·§11).
  *
- * - 음성 ≤3초 한 문장 + 메트로놈 5초 + 진동, 셋 다 각각 설정으로 끌 수 있다
+ * - 음성 ≤3초 한 문장 + 메트로놈 + 진동, 셋 다 각각 설정으로 끌 수 있다
+ * - **메트로놈은 박자를 미리 구운 트랙 하나를 재생한다** (`metronome-track.ts`).
+ *   JS 타이머로 박을 찍으면 음악이 나올 때 박자가 아예 고르지 않다
  * - **셋을 모두 끄면 아무것도 내보내지 않는다.** 끈 것을 대신 울려 주지 않는다
  * - 외부 음악은 멈추지 않는다. 개입 순간만 `duckOthers`로 잠깐 줄였다가 되돌린다
  *
@@ -14,7 +16,7 @@ import * as Speech from 'expo-speech';
 
 import { METRONOME_SEC } from '../engine/constants';
 import type { Cue } from '../engine/cues';
-import { CLICK_WAV_DATA_URI } from './click-sound';
+import { buildMetronomeTrack } from './metronome-track';
 
 export type CuePreferences = {
   voice: boolean;
@@ -23,17 +25,8 @@ export type CuePreferences = {
 };
 
 let preferences: CuePreferences = { voice: true, metronome: false, haptics: true };
-/**
- * 클릭 플레이어 풀.
- *
- * 하나를 되감아 재사용하면 박자가 빠진다. `seekTo`가 **Promise를 돌려주는 비동기**라
- * 되감기가 끝나기 전에 `play()`가 나가고, 재생 머리가 소리 끝에 남아 있어 아무 소리도
- * 안 난다. 여러 개를 돌려 쓰면 되감을 시간을 벌 수 있다.
- */
-let clicks: AudioPlayer[] = [];
-/** 재생 회차. `stopMetronome()`이 올린다 — 되감기를 기다리는 사이 멈췄는지 이걸로 안다. */
-let metronomeRun = 0;
-let metronomeTimer: ReturnType<typeof setTimeout> | null = null;
+/** 지금 울리고 있는 트랙. 한 번 재생하고 버린다 — 되감아 재사용하지 않는다. */
+let track: AudioPlayer | null = null;
 let metronomeStop: ReturnType<typeof setTimeout> | null = null;
 /** 메트로놈 5초가 끝났음을 큐에 알리는 resolver. 중간에 멈춰도 반드시 부른다. */
 let metronomeDone: (() => void) | null = null;
@@ -41,17 +34,6 @@ let metronomeDone: (() => void) | null = null;
 /** 재생 대기열과 진행 여부. 개입은 겹치지 않고 순서대로 나간다. */
 let queue: { cue: Cue; bpm: number }[] = [];
 let playing = false;
-
-/** 목표 리듬 상한(spm). 화면은 185까지 허용하지만 여유를 둔다. */
-const MAX_BPM = 200;
-/**
- * 클릭 플레이어 개수 = 5초 동안 나올 수 있는 최대 박 수.
- *
- * **한 박에 플레이어 하나를 쓰고 재생 중에는 재사용하지 않는다.** 되감아 다시 쓰려 했더니
- * 풀을 한 바퀴 돈 시점(4박)에 소리가 끊겼다. `seekTo`가 비동기인 데다, 끝까지 재생된
- * 플레이어는 되감아도 곧바로 다시 울려 주지 않는다.
- */
-const CLICK_POOL_SIZE = Math.ceil((METRONOME_SEC * MAX_BPM) / 60) + 1;
 
 /**
  * 발화 안전망(ms). `onDone`이 오지 않는 기기가 있어 무한정 기다리지 않는다.
@@ -191,65 +173,47 @@ function speakOnce(text: string): Promise<void> {
   });
 }
 
-/** 메트로놈 5초 (`ENGINE.md` §7). `stopCues()`로 중간에 멈춰도 resolve된다. */
-async function runMetronome(bpm: number): Promise<void> {
-  stopMetronome();
-  const run = metronomeRun;
-  if (bpm <= 0) return;
-
-  if (clicks.length === 0) {
-    clicks = Array.from({ length: CLICK_POOL_SIZE }, () => createAudioPlayer({ uri: CLICK_WAV_DATA_URI }));
-  }
-  // 앞선 재생으로 재생 머리가 소리 끝에 남아 있다. 울리기 전에 전부 되감는다.
-  // 재생 중에 되감지 않으므로 여기서 한 번만 기다리면 된다.
-  await Promise.all(clicks.map((player) => player.seekTo(0).catch(() => {})));
-  if (metronomeRun !== run) return;
-
+/**
+ * 메트로놈 (`ENGINE.md` §7). `stopCues()`로 중간에 멈춰도 resolve된다.
+ *
+ * 박을 하나씩 울리지 않는다. `durationSec` 길이의 트랙을 통째로 만들어 한 번 재생하고,
+ * 끝나는 시각만 타이머로 잡는다. 박 사이 간격은 샘플 단위로 확정돼 있어 JS 스레드가
+ * 밀려도 흔들리지 않는다.
+ */
+function runMetronome(bpm: number, durationSec: number = METRONOME_SEC): Promise<void> {
   return new Promise((resolve) => {
+    stopMetronome();
+    if (bpm <= 0 || durationSec <= 0) {
+      resolve();
+      return;
+    }
+
     metronomeDone = resolve;
-    const intervalMs = (60 / bpm) * 1000;
-
-    const beat = (index: number) => {
-      const player = clicks[index];
-      if (player === undefined) {
-        stopMetronome();
-        return;
-      }
-      try {
-        player.play();
-      } catch {
-        stopMetronome();
-      }
-    };
-
-    /**
-     * 박자를 **절대 시각 기준**으로 잡는다.
-     *
-     * `setInterval`은 JS 스레드가 밀리면 그만큼씩 늦어지고 그 오차가 쌓여 박자가 흔들린다.
-     * 매 박마다 시작 시각으로부터의 목표 시각을 다시 계산해 밀린 만큼을 흡수한다.
-     * 시간을 재지 않는다는 규칙은 판정을 맡는 `engine/`의 것이고, 여기는 오디오 스케줄러다.
-     */
-    const startedAt = Date.now();
-    let played = 0;
-    const schedule = () => {
-      beat(played);
-      played += 1;
-      const target = played * intervalMs;
-      metronomeTimer = setTimeout(schedule, Math.max(0, target - (Date.now() - startedAt)));
-    };
-
-    schedule();
-    metronomeStop = setTimeout(() => stopMetronome(), METRONOME_SEC * 1000);
+    try {
+      track = createAudioPlayer({ uri: buildMetronomeTrack(bpm, durationSec) });
+      track.play();
+    } catch {
+      stopMetronome();
+      return;
+    }
+    // 트랙 길이만큼만 잡아 둔다. 재생이 조금 늦게 시작돼도 박자는 트랙 안에서 정확하다.
+    metronomeStop = setTimeout(() => stopMetronome(), durationSec * 1000);
   });
 }
 
 function stopMetronome(): void {
-  // 되감기를 기다리는 중이라면 그 재생은 시작하지 않는다.
-  metronomeRun += 1;
-  if (metronomeTimer !== null) clearTimeout(metronomeTimer);
   if (metronomeStop !== null) clearTimeout(metronomeStop);
-  metronomeTimer = null;
   metronomeStop = null;
+
+  if (track !== null) {
+    try {
+      track.pause();
+      track.remove();
+    } catch {
+      // 이미 정리된 플레이어를 다시 닫아도 문제 없다.
+    }
+    track = null;
+  }
 
   const done = metronomeDone;
   metronomeDone = null;
