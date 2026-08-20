@@ -8,6 +8,7 @@ import { AppProviders } from '@/src/components/app-providers';
 import { useAuth } from '@/src/components/auth-provider';
 import { PrimaryButton } from '@/src/components/primary-button';
 import { createRun } from '@/src/api/client';
+import { disableShakeDevMenu } from '@/src/native/dev-menu';
 import { recoverInterruptedRun } from '@/src/store/session-recovery';
 import { flushQueue, hasPendingRuns } from '@/src/store/upload-queue';
 import { colors, spacing, typography } from '@/src/theme/tokens';
@@ -35,6 +36,9 @@ function AppNavigator() {
   const { preview } = useGlobalSearchParams<{ preview?: string }>();
   const previewOnboarding = __DEV__ && preview === 'onboarding';
   const recovered = useRef(false);
+
+  // 러닝은 휴대폰이 계속 흔들리는 상황이라 개발자 메뉴가 수시로 튀어나온다. 개발 빌드에서만 끈다.
+  useEffect(disableShakeDevMenu, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' && !recovered.current) {
