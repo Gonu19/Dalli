@@ -466,6 +466,17 @@ def generate_llm_report(
     try:
         parsed = _call_with_deadline(request, settings.llm_timeout_sec)
         gate = evaluate_report_output(parsed, fallback, summary)
+        if gate.warnings:
+            log_llm_event(
+                logging.WARNING,
+                "llm_report_quality_warning",
+                run,
+                stage="output_numeric_soft_gate",
+                reason_codes=gate.warnings,
+                fallback=False,
+                model=settings.openai_model,
+                started_at=started_at,
+            )
         if not gate.passed or gate.content is None:
             raise HardGateViolation(gate.reasons)
         content = gate.content

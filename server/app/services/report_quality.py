@@ -51,6 +51,7 @@ class HardGateResult:
     passed: bool
     reasons: tuple[HardGateReason, ...]
     content: LLMReportContent | None = None
+    warnings: tuple[HardGateReason, ...] = ()
 
 
 MEDICAL_PATTERNS = (
@@ -442,6 +443,7 @@ def evaluate_report_output(
     summary: Mapping[str, object],
 ) -> HardGateResult:
     reasons: list[HardGateReason] = []
+    warnings: list[HardGateReason] = []
     if isinstance(parsed, dict):
         evidence = parsed.get("evidence")
         if isinstance(evidence, list) and not 1 <= len(evidence) <= 3:
@@ -459,8 +461,10 @@ def evaluate_report_output(
         _add_reason(reasons, HardGateReason.PROTECTED_VALUE_CHANGED)
     if content.limitation != fallback.limitation:
         _add_reason(reasons, HardGateReason.LIMITATION_CHANGED)
+    # Numeric wording is advisory: rounded or differently unitized phrases
+    # must not discard an otherwise safe report and replace it with fallback.
     if _has_unsupported_numeric_claim(content, summary):
-        _add_reason(reasons, HardGateReason.UNSUPPORTED_NUMERIC_CLAIM)
+        _add_reason(warnings, HardGateReason.UNSUPPORTED_NUMERIC_CLAIM)
     if _has_forbidden_routine_evidence(content, summary):
         _add_reason(reasons, HardGateReason.ROUTINE_EVIDENCE_NOT_ALLOWED)
     if _has_unavailable_habit_interval(content, summary):
@@ -472,7 +476,12 @@ def evaluate_report_output(
         _add_reason(reasons, HardGateReason.BLAMING_LANGUAGE_DETECTED)
     if _next_goal_contradicts(content, fallback, summary):
         _add_reason(reasons, HardGateReason.NEXT_GOAL_CONTRADICTION)
-    return HardGateResult(not reasons, tuple(reasons), content if not reasons else None)
+    return HardGateResult(
+        not reasons,
+        tuple(reasons),
+        content if not reasons else None,
+        tuple(warnings),
+    )
 
 
 def evaluate_outgoing_payload(payload: object, raw_samples: object, raw_events: object) -> HardGateResult:

@@ -564,6 +564,39 @@ def test_hard_gate_and_schema_failures_log_stable_stage_and_reasons(monkeypatch,
     assert schema["reason_codes"] == ["EVIDENCE_COUNT_INVALID", "SCHEMA_INVALID"]
 
 
+def test_numeric_warning_does_not_replace_valid_report_with_fallback(caplog) -> None:
+    current_run, quality, metrics, fallback = context()
+    fake = FakeClient(
+        LLMReportContent.model_validate(
+            {
+                **valid_payload(fallback.next_target_min, fallback.next_target_max, fallback.limitation),
+                "evidence": ["안정 구간은 87%였어요."],
+            }
+        )
+    )
+    caplog.set_level("INFO", logger="app.services.llm")
+
+    content = generate_llm_report(
+        current_run,
+        quality,
+        metrics,
+        fallback,
+        settings(),
+        client_factory=lambda **_: fake,
+    )
+
+    assert content is not None
+    events = [json.loads(record.message) for record in caplog.records]
+    assert any(
+        event["event"] == "llm_report_quality_warning"
+        and event["stage"] == "output_numeric_soft_gate"
+        and event["reason_codes"] == ["UNSUPPORTED_NUMERIC_CLAIM"]
+        and event["fallback"] is False
+        for event in events
+    )
+    assert events[-1]["event"] == "llm_report_success"
+
+
 def test_deadline_returns_before_slow_provider_finishes() -> None:
     started = time.monotonic()
     with pytest.raises(TimeoutError):

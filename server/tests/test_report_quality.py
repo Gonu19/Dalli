@@ -73,7 +73,7 @@ def test_schema_protected_value_and_limitation_failures_are_distinct() -> None:
     assert HardGateReason.LIMITATION_CHANGED in changed.reasons
 
 
-def test_unsupported_numeric_claim_is_rejected_but_documented_rounding_passes() -> None:
+def test_unsupported_numeric_claim_is_a_warning_but_report_still_passes() -> None:
     _, _, _, fallback, summary, payload = gate_context()
     allowed = evaluate_report_output(
         {
@@ -90,7 +90,9 @@ def test_unsupported_numeric_claim_is_rejected_but_documented_rounding_passes() 
         summary,
     )
     assert allowed.passed is True
-    assert unsupported.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
+    assert unsupported.passed is True
+    assert unsupported.reasons == ()
+    assert unsupported.warnings == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
 
 
 def test_non_minute_duration_allows_exact_components_and_grounded_approximation() -> None:
@@ -125,8 +127,12 @@ def test_non_minute_duration_allows_exact_components_and_grounded_approximation(
 
     assert exact.passed is True
     assert approximate.passed is True
-    assert unmarked_approximation.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
-    assert invented.reasons == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
+    assert unmarked_approximation.passed is True
+    assert unmarked_approximation.reasons == ()
+    assert unmarked_approximation.warnings == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
+    assert invented.passed is True
+    assert invented.reasons == ()
+    assert invented.warnings == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
 
 
 def test_routine_numbers_are_allowed_in_habit_evidence_only() -> None:
@@ -285,11 +291,11 @@ def test_multiple_semantic_failures_are_collected_without_response_text_in_reaso
         summary,
     )
     assert set(result.reasons) >= {
-        HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,
         HardGateReason.MEDICAL_CLAIM_DETECTED,
         HardGateReason.BLAMING_LANGUAGE_DETECTED,
         HardGateReason.NEXT_GOAL_CONTRADICTION,
     }
+    assert result.warnings == (HardGateReason.UNSUPPORTED_NUMERIC_CLAIM,)
     assert all("부상" not in reason for reason in result.reasons)
 
 
@@ -358,7 +364,6 @@ def test_evaluator_error_fails_closed_before_llm_content_is_returned(monkeypatch
 @pytest.mark.parametrize(
     ("changes", "reason"),
     [
-        ({"evidence": ["안정 구간 87%"]}, HardGateReason.UNSUPPORTED_NUMERIC_CLAIM),
         ({"hypothesis": "무릎 부상입니다."}, HardGateReason.MEDICAL_CLAIM_DETECTED),
         ({"verdict": "의지가 부족한 러닝이에요."}, HardGateReason.BLAMING_LANGUAGE_DETECTED),
         ({"next_goal_text": "다음 목표: 리듬 150"}, HardGateReason.NEXT_GOAL_CONTRADICTION),
@@ -436,7 +441,10 @@ def test_six_report_blind_materials_are_deterministic_and_hide_model_metadata() 
 def test_aiq04_reproduced_validator_gaps_are_blocked(field, text, reason) -> None:
     _, _, _, fallback, summary, payload = gate_context()
     result = evaluate_report_output({**payload, field: text}, fallback, summary)
-    assert reason in result.reasons
+    if reason == HardGateReason.UNSUPPORTED_NUMERIC_CLAIM:
+        assert reason in result.warnings
+    else:
+        assert reason in result.reasons
 
 
 @pytest.mark.parametrize(
@@ -472,7 +480,7 @@ def test_aiq04_normal_korean_contrast_reports_are_not_overblocked(field, text) -
 def test_invented_numeric_claim_is_checked_in_every_free_text_field(field, claim) -> None:
     _, _, _, fallback, summary, payload = gate_context()
     result = evaluate_report_output({**payload, field: claim}, fallback, summary)
-    assert HardGateReason.UNSUPPORTED_NUMERIC_CLAIM in result.reasons
+    assert HardGateReason.UNSUPPORTED_NUMERIC_CLAIM in result.warnings
 
 
 @pytest.mark.parametrize(
@@ -516,7 +524,6 @@ def test_aiq02_analyzable_scenarios_accept_neutral_contract_valid_reports(
 @pytest.mark.parametrize(
     "violation",
     [
-        {"evidence": ["안정 구간 87%"]},
         {"hypothesis": "족저근막염으로 진단됩니다."},
         {"verdict": "고작 이것밖에 못 달린 러닝이에요."},
         {"next_goal_text": "다음 목표에서는 리듬을 더 느리게 맞춰 보세요."},
