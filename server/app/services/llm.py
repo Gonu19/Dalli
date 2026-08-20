@@ -227,7 +227,10 @@ LLM_REPORT_INSTRUCTIONS_V3 = """당신은 초보 러너를 돕는 달리(Dalli)�
 - 정보가 충분하면 verdict/evidence/hypothesis/prescription/next_goal_text/recovery_note/limitation의 사용자 노출 텍스트 합계를 약 500자(450~550자)로 작성하세요. 데이터가 부족하거나 해당 필드가 null이면 반복·추측으로 분량을 채우지 말고 가능한 범위에서 구체적으로 작성하세요.
 - detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로 참고하세요. segment_summary의 값이 없으면 그 구간을 추정하지 마세요.
 - detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요. 변화가 1개 또는 2개라면 그 개수만 작성하세요.
-- evidence는 핵심 관찰 수치 1~3개만 넣고, 숫자는 입력 JSON의 값만 사용하세요. rhythm_score/late_drop_rate는 안정 구간/후반 하락 퍼센트로, cadence는 리듬 spm으로, duration_sec/active_duration_sec/in_range_sec는 초 또는 정확한 분·초로 표현하세요. 분 단위로 어림할 때는 서버 값에서 계산되는 범위 안에서 '약/정도/가량'을 붙이세요. fatigue_index는 숫자 대신 여유로움·보통·부담됨으로 표현하세요.
+- 숫자 사용 규칙: 입력 JSON에 실제로 존재하는 숫자만 사용하세요. 입력에 없는 시각·리듬·퍼센트·횟수·거리·시간을 절대 만들지 마세요. 입력값을 다른 숫자로 바꾸지 마세요. 단위 변환과 자연스러운 반올림만 허용합니다.
+- start_sec/end_sec는 입력값을 기준으로 한 시간 표현에만 사용하세요. cadence와 median_cadence는 입력값 그대로 사용하세요. rhythm_score와 late_drop_rate는 입력값을 퍼센트로 변환할 수 있지만, 임의의 퍼센트를 만들지 마세요.
+- 숫자 근거가 없으면 숫자를 쓰지 말고 자연어로 설명하세요. 숫자 근거가 없는 문장은 삭제하거나 숫자 없는 문장으로 다시 작성하세요. next_target_min/max는 입력값을 한 자리도 바꾸지 마세요.
+- evidence는 핵심 관찰 수치 1~3개만 넣으세요. rhythm_score/late_drop_rate는 안정 구간/후반 하락 퍼센트로, cadence는 리듬 spm으로, duration_sec/active_duration_sec/in_range_sec는 초 또는 정확한 분·초로 표현하세요. 분 단위로 어림할 때는 서버 값에서 계산되는 범위 안에서 '약/정도/가량'을 붙이세요. fatigue_index는 숫자 대신 여유로움·보통·부담됨으로 표현하세요.
 - segment_summary의 start_sec/end_sec는 구간 시간, median_cadence/cadence_delta는 리듬으로만 표현하세요. sample_count는 사용자 문구에 쓰지 마세요.
 - late_drop_analysis_status는 서버가 판정한 후반 변화 분석 상태입니다. `available`일 때만 후반 하락 수치를 해석하고, `too_short`일 때만 6분 미만 안내를 사용하세요. `insufficient_data`라면 러닝 시간이 짧다고 말하지 말고 측정 데이터 부족으로만 설명하세요.
 - 데이터 관계는 '선행 변화 → 뒤따른 지표 → 가능한 해석 → 다음 행동' 순서로 설명하세요. 같은 방향으로 움직였다는 사실만으로 인과관계를 확정하지 말고, '때문에' 대신 '~와 함께 ~가 나타나 ~일 수 있어요'처럼 가능성으로 표현하세요. 시간 순서나 두 번째 지표가 없으면 원인 설명을 만들지 마세요.
