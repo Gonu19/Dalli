@@ -31,7 +31,8 @@ let preferences: CuePreferences = { voice: true, metronome: false, haptics: true
  * 안 난다. 여러 개를 돌려 쓰면 되감을 시간을 벌 수 있다.
  */
 let clicks: AudioPlayer[] = [];
-let beatIndex = 0;
+/** 재생 회차. `stopMetronome()`이 올린다 — 되감기를 기다리는 사이 멈췄는지 이걸로 안다. */
+let metronomeRun = 0;
 let metronomeTimer: ReturnType<typeof setTimeout> | null = null;
 let metronomeStop: ReturnType<typeof setTimeout> | null = null;
 /** 메트로놈 5초가 끝났음을 큐에 알리는 resolver. 중간에 멈춰도 반드시 부른다. */
@@ -41,10 +42,16 @@ let metronomeDone: (() => void) | null = null;
 let queue: { cue: Cue; bpm: number }[] = [];
 let playing = false;
 
-/** 클릭음 길이(ms). 소리가 끝난 뒤에 되감아야 클릭이 한 번 더 울리지 않는다. */
-const CLICK_MS = 35;
-/** 클릭 플레이어 개수. 한 플레이어의 다음 차례가 3박 뒤라 되감기가 끝날 시간이 넉넉하다. */
-const CLICK_POOL_SIZE = 4;
+/** 목표 리듬 상한(spm). 화면은 185까지 허용하지만 여유를 둔다. */
+const MAX_BPM = 200;
+/**
+ * 클릭 플레이어 개수 = 5초 동안 나올 수 있는 최대 박 수.
+ *
+ * **한 박에 플레이어 하나를 쓰고 재생 중에는 재사용하지 않는다.** 되감아 다시 쓰려 했더니
+ * 풀을 한 바퀴 돈 시점(4박)에 소리가 끊겼다. `seekTo`가 비동기인 데다, 끝까지 재생된
+ * 플레이어는 되감아도 곧바로 다시 울려 주지 않는다.
+ */
+const CLICK_POOL_SIZE = Math.ceil((METRONOME_SEC * MAX_BPM) / 60) + 1;
 
 /**
  * 발화 안전망(ms). `onDone`이 오지 않는 기기가 있어 무한정 기다리지 않는다.
@@ -185,27 +192,31 @@ function speakOnce(text: string): Promise<void> {
 }
 
 /** 메트로놈 5초 (`ENGINE.md` §7). `stopCues()`로 중간에 멈춰도 resolve된다. */
-function runMetronome(bpm: number): Promise<void> {
-  return new Promise((resolve) => {
-    stopMetronome();
-    if (bpm <= 0) {
-      resolve();
-      return;
-    }
+async function runMetronome(bpm: number): Promise<void> {
+  stopMetronome();
+  const run = metronomeRun;
+  if (bpm <= 0) return;
 
+  if (clicks.length === 0) {
+    clicks = Array.from({ length: CLICK_POOL_SIZE }, () => createAudioPlayer({ uri: CLICK_WAV_DATA_URI }));
+  }
+  // 앞선 재생으로 재생 머리가 소리 끝에 남아 있다. 울리기 전에 전부 되감는다.
+  // 재생 중에 되감지 않으므로 여기서 한 번만 기다리면 된다.
+  await Promise.all(clicks.map((player) => player.seekTo(0).catch(() => {})));
+  if (metronomeRun !== run) return;
+
+  return new Promise((resolve) => {
     metronomeDone = resolve;
-    if (clicks.length === 0) {
-      clicks = Array.from({ length: CLICK_POOL_SIZE }, () => createAudioPlayer({ uri: CLICK_WAV_DATA_URI }));
-    }
     const intervalMs = (60 / bpm) * 1000;
 
-    const beat = () => {
-      const player = clicks[beatIndex % clicks.length];
-      beatIndex += 1;
+    const beat = (index: number) => {
+      const player = clicks[index];
+      if (player === undefined) {
+        stopMetronome();
+        return;
+      }
       try {
         player.play();
-        // 되감기는 소리가 끝난 뒤에 건다. 재생 중에 되감으면 같은 클릭이 다시 울린다.
-        setTimeout(() => void player.seekTo(0).catch(() => {}), CLICK_MS + 20);
       } catch {
         stopMetronome();
       }
@@ -221,7 +232,7 @@ function runMetronome(bpm: number): Promise<void> {
     const startedAt = Date.now();
     let played = 0;
     const schedule = () => {
-      beat();
+      beat(played);
       played += 1;
       const target = played * intervalMs;
       metronomeTimer = setTimeout(schedule, Math.max(0, target - (Date.now() - startedAt)));
@@ -233,6 +244,8 @@ function runMetronome(bpm: number): Promise<void> {
 }
 
 function stopMetronome(): void {
+  // 되감기를 기다리는 중이라면 그 재생은 시작하지 않는다.
+  metronomeRun += 1;
   if (metronomeTimer !== null) clearTimeout(metronomeTimer);
   if (metronomeStop !== null) clearTimeout(metronomeStop);
   metronomeTimer = null;
