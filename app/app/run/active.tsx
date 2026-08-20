@@ -125,8 +125,6 @@ export default function ActiveRunScreen() {
         <Pressable accessibilityLabel="가이드" onPress={() => setShowGuide((value) => !value)} style={({ pressed }) => [styles.help, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="help-circle-outline" size={26} /></Pressable>
         <Pressable accessibilityLabel="설정" onPress={() => router.push('/settings')} style={({ pressed }) => [styles.settings, pressed && styles.iconPressed]}><Ionicons color={colors.white} name="settings-outline" size={26} /></Pressable>
         {simulationActive ? <Text style={styles.badge}>시연</Text> : null}
-      {targetNotice ? <Text style={styles.notice}>{targetNotice}</Text> : null}
-
 
       <View style={styles.statusPill}><View style={[styles.statusDot, { backgroundColor: cadenceStatus.color }]} /><Text style={styles.statusText}>{cadenceStatus.message}</Text></View>
       {/* 초시계는 일시정지 구간을 뺀 `activeSec`이다. `totalSec`은 서버가 이벤트로 나누는 전체 시간축이라 화면에 쓰지 않는다. */}
@@ -139,6 +137,7 @@ export default function ActiveRunScreen() {
       </View>
       </View>
 
+      {targetNotice ? <Text pointerEvents="none" style={styles.notice}>{targetNotice}</Text> : null}
       {!showGuide ? <RunMap live style={styles.map} /> : null}
       {showGuide ? <View style={styles.guide}><Text style={styles.guideTitle}>러닝 가이드 방식</Text><GuideToggle label="음성 안내" copy="목표 이탈 시에만 짧게 코칭합니다" value={voiceEnabled} onChange={setVoiceEnabled}/><GuideToggle label="메트로놈 비트" copy="목표 SPM 리듬에 맞춘 박자 소리" value={metronomeEnabled} onChange={setMetronomeEnabled}/><GuideToggle label="진동 알림" copy="리듬 조절 필요 시 스마트폰 진동" value={hapticsEnabled} onChange={setHapticsEnabled}/></View> : null}
       <View style={styles.controls}>
@@ -245,7 +244,17 @@ const styles = StyleSheet.create({
   iconPressed: compactPressFeedback,
   time: { fontSize: 64, lineHeight: 76, fontWeight: '800', color: colors.text, marginTop: 20 },
   badge: { position: 'absolute', left: 95, top: 38, ...typography.caption, color: colors.primary },
-  notice: { ...typography.bodyStrong, color: colors.primary, textAlign: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
+  /**
+   * 목표 하향 안내. **흐름에 두면 안 된다.**
+   *
+   * 4.5초 동안 나타났다 사라지는데, 흐름에 있으면 그동안 아래가 통째로 밀린다.
+   * 지도는 절대 배치라 같이 안 밀려서 지표가 지도로 38px 파고든다 (실측: 지표 하단이
+   * 284 → 339로, 지도 시작선 301을 넘는다).
+   *
+   * 지표 아래(284)에서 시작해 지도 위에 띄운다. 떠 있으므로 나타나든 사라지든
+   * 아래 배치가 움직이지 않는다.
+   */
+  notice: { position: 'absolute', left: 20, right: 20, top: 312 - navigationHeader.contentLift, zIndex: 3, ...typography.bodyStrong, color: colors.primary, textAlign: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
   statusPill: { alignSelf: 'center', width: 270, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: .5, borderColor: 'rgba(221,224,225,.2)', borderRadius: 30, backgroundColor: colors.surfaceMuted },
   statusDot: { width: 9, height: 9, borderRadius: radius.pill, backgroundColor: colors.success },
   statusText: { ...typography.bodyStrong, color: colors.text },
