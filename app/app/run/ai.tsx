@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
+import { safeEvidence, safeNextGoalText, safeVerdict } from '@/src/api/report-text';
 import { useCalendar, useCreatePlan, useProfile, useRunReport, useRuns, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
@@ -23,9 +24,8 @@ export default function AIReport() {
   const { result } = useRunResult();
   const fetched = useRunReport(token, params.runId || null);
   const report = result?.report ?? fetched.data;
-  const evidence = Array.isArray(report?.evidence)
-    ? report.evidence.filter((item): item is string => typeof item === 'string')
-    : [];
+  // 서버 문장이 규칙을 어겨도 화면은 최소한을 지킨다 (`report-text.ts`).
+  const evidence = report ? safeEvidence(report) : [];
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // 다음 루틴 제안 — 리포트가 말한 목표를 날짜가 붙은 계획으로 옮긴다.
@@ -109,7 +109,7 @@ export default function AIReport() {
       {fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>{isOfflineError(fetched.error) ? '오프라인 상태예요' : '리포트를 불러오지 못했어요'}</Text><Text style={styles.stateCopy}>러닝 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요.</Text><Pressable onPress={() => void fetched.refetch()} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>다시 시도</Text></Pressable></View> : null}
       {!fetched.isLoading && !fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>아직 표시할 리포트가 없어요</Text><Text style={styles.stateCopy}>앱으로 측정한 러닝을 저장하면 서버가 리포트를 만들어요.</Text></View> : null}
       {report ? <>
-        <View style={styles.verdict}><Text style={styles.orange}>{report.isFallback ? '기본 분석' : 'AI 한줄평'}</Text><Text style={styles.verdictText}>“{report.verdict}”</Text></View>
+        <View style={styles.verdict}><Text style={styles.orange}>{report.isFallback ? '기본 분석' : 'AI 한줄평'}</Text><Text style={styles.verdictText}>“{safeVerdict(report)}”</Text></View>
         {report.isFallback ? <Text style={styles.fallbackCopy}>외부 분석 대신 계약된 기본 분석 결과를 표시하고 있어요.</Text> : null}
         {report.limitation ? <View style={styles.limitation}><Text style={styles.limitationTitle}>분석 안내</Text><Text style={styles.limitationText}>{report.limitation}</Text></View> : null}
         <View style={styles.fiTitle}><Text style={styles.fiLabel}>피로도 지수 (FI)</Text><Text style={styles.fiValue}>{fatiguePercent(report.metrics.fatigueIndex)}</Text></View>
@@ -123,7 +123,7 @@ export default function AIReport() {
         {report.hypothesis ? <Card title="가능한 원인" body={report.hypothesis} /> : null}
         {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
-        <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text></View>
+        <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{safeNextGoalText(report)}</Text></View>
       </> : null}
       <View style={styles.actions}>
         {report && savedDate !== null
