@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { Polyline, type Region } from 'react-native-maps';
+import Svg, { Path } from 'react-native-svg';
 
 import { getLastKnownPoint, getRoutePath, type RoutePoint } from '@/src/store/runController';
 import { colors } from '@/src/theme/tokens';
@@ -11,6 +12,10 @@ const fallbackImage = require('@/assets/images/run-map.png');
 const LIVE_DELTA = 0.004;
 /** 결과 이미지에서 경로가 화면 안에 들어오도록 남기는 여백 비율. */
 const PADDING_RATIO = 0.35;
+/** 결과 이미지의 경로 자리. 부모가 크기를 주지 않으므로 여기 값에 맞춰 그린다. */
+const ROUTE_BOX = { width: 104, height: 116, padding: 10 } as const;
+/** 곡선에 쓸 최대 점 개수. 30분 러닝이면 원본이 수백 개다. */
+const ROUTE_MAX_POINTS = 120;
 
 type Props = {
   /** 러닝 중에는 마지막 좌표를 따라간다. 결과 이미지에서는 경로 전체를 담는다. */
@@ -111,45 +116,99 @@ export function RunMap({ live = false, style, interactive = false, routeOnly = f
   );
 }
 
+/**
+ * 결과 이미지의 경로선.
+ *
+ * 회전시킨 사각형을 이어 붙이면 꺾이는 자리마다 틈과 각이 생겨 코스가 끊겨 보인다.
+ * 한 붓으로 그린 곡선 하나로 그린다 — 이음새가 없고 GPS 떨림도 눈에 덜 띈다.
+ */
 function RouteOnly({ path, style }: { path: readonly RoutePoint[]; style?: StyleProp<ViewStyle> }) {
   if (path.length < 2) return <View pointerEvents="none" style={[styles.routeOnlyFill, style]} />;
 
-  const points = normalizePath(path);
+  const points = smooth(decimate(normalizePath(path)));
   return (
     <View pointerEvents="none" style={[styles.routeOnlyFill, style]}>
-      {points.slice(1).map((point, index) => {
-        const previous = points[index];
-        const dx = point.x - previous.x;
-        const dy = point.y - previous.y;
-        const length = Math.sqrt((dx * dx) + (dy * dy));
-        const angle = Math.atan2(dy, dx);
-        return <View key={`${index}-${point.x}-${point.y}`} style={[styles.routeSegment, {
-          left: (previous.x + point.x) / 2 - length / 2,
-          top: (previous.y + point.y) / 2 - 1.5,
-          width: length,
-          transform: [{ rotate: `${angle}rad` }],
-        }]} />;
-      })}
+      <Svg width={ROUTE_BOX.width} height={ROUTE_BOX.height}>
+        <Path
+          d={toCurve(points)}
+          fill="none"
+          stroke={colors.primary}
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
     </View>
   );
 }
 
-function normalizePath(path: readonly RoutePoint[]) {
+type Point = { x: number; y: number };
+
+/**
+ * 점이 많으면 곡선이 무거워지고, GPS 떨림이 그대로 남는다.
+ * 고르게 솎아 모양은 유지하면서 개수를 줄인다. 시작과 끝은 반드시 남긴다.
+ */
+function decimate(points: Point[]): Point[] {
+  if (points.length <= ROUTE_MAX_POINTS) return points;
+  const step = (points.length - 1) / (ROUTE_MAX_POINTS - 1);
+  return Array.from({ length: ROUTE_MAX_POINTS }, (_, index) => points[Math.round(index * step)]);
+}
+
+/** 이웃 세 점의 평균으로 떨림을 눌러 준다. 양 끝은 그대로 둔다. */
+function smooth(points: Point[]): Point[] {
+  if (points.length < 3) return points;
+  return points.map((point, index) => {
+    if (index === 0 || index === points.length - 1) return point;
+    const before = points[index - 1];
+    const after = points[index + 1];
+    return {
+      x: (before.x + point.x + after.x) / 3,
+      y: (before.y + point.y + after.y) / 3,
+    };
+  });
+}
+
+/**
+ * Catmull-Rom을 3차 베지어로 옮겨 한 붓 곡선을 만든다.
+ * 점을 그대로 지나가면서도 꺾이는 자리가 둥글게 이어진다.
+ */
+function toCurve(points: Point[]): string {
+  if (points.length < 2) return '';
+  let d = `M ${round(points[0].x)} ${round(points[0].y)}`;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[index - 1] ?? points[index];
+    const current = points[index];
+    const next = points[index + 1];
+    const after = points[index + 2] ?? next;
+    const c1x = current.x + (next.x - previous.x) / 6;
+    const c1y = current.y + (next.y - previous.y) / 6;
+    const c2x = next.x - (after.x - current.x) / 6;
+    const c2y = next.y - (after.y - current.y) / 6;
+    d += ` C ${round(c1x)} ${round(c1y)}, ${round(c2x)} ${round(c2y)}, ${round(next.x)} ${round(next.y)}`;
+  }
+  return d;
+}
+
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function normalizePath(path: readonly RoutePoint[]): Point[] {
   const minLat = Math.min(...path.map((point) => point.latitude));
   const maxLat = Math.max(...path.map((point) => point.latitude));
   const minLon = Math.min(...path.map((point) => point.longitude));
   const maxLon = Math.max(...path.map((point) => point.longitude));
   const latRange = Math.max(maxLat - minLat, 0.00001);
   const lonRange = Math.max(maxLon - minLon, 0.00001);
-  // The route view is sized by its parent, so coordinates use a 0–100 box and
-  // percentage positioning is not available for native Views. A fixed design
-  // box keeps the line stable inside the 104×116 result-image slot.
-  const width = 104;
-  const height = 116;
-  const padding = 10;
+  const { width, height, padding } = ROUTE_BOX;
+  // 위경도는 종횡비가 다르므로 더 넓은 쪽에 맞춰 같은 배율로 줄인다.
+  // 축마다 따로 늘리면 코스 모양이 찌그러진다.
+  const scale = Math.min((width - padding * 2) / lonRange, (height - padding * 2) / latRange);
+  const offsetX = (width - lonRange * scale) / 2;
+  const offsetY = (height - latRange * scale) / 2;
   return path.map((point) => ({
-    x: padding + ((point.longitude - minLon) / lonRange) * (width - padding * 2),
-    y: padding + ((maxLat - point.latitude) / latRange) * (height - padding * 2),
+    x: offsetX + (point.longitude - minLon) * scale,
+    y: offsetY + (maxLat - point.latitude) * scale,
   }));
 }
 
@@ -184,15 +243,4 @@ function regionForPath(path: readonly RoutePoint[]): Region {
 const styles = StyleSheet.create({
   fill: { position: 'absolute', left: 0, right: 0, width: '100%', bottom: 0 },
   routeOnlyFill: { position: 'absolute' },
-  routeSegment: {
-    position: 'absolute',
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
-    shadowColor: colors.black,
-    shadowOpacity: 0.8,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
 });
