@@ -107,7 +107,7 @@ export default function AIReport() {
     >
       {fetched.isLoading && !report ? <View style={styles.state}><Text style={styles.stateTitle}>리포트를 불러오는 중이에요</Text><Text style={styles.stateCopy}>분석 결과가 준비되면 바로 보여드릴게요.</Text></View> : null}
       {fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>{isOfflineError(fetched.error) ? '오프라인 상태예요' : '리포트를 불러오지 못했어요'}</Text><Text style={styles.stateCopy}>러닝 기록은 보존되어 있어요. 연결을 확인한 뒤 다시 시도해 주세요.</Text><Pressable onPress={() => void fetched.refetch()} style={({ pressed }) => [styles.retry, pressed && styles.buttonPressed]}><Text style={styles.retryText}>다시 시도</Text></Pressable></View> : null}
-      {!fetched.isLoading && !fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>아직 표시할 리포트가 없어요</Text><Text style={styles.stateCopy}>분석 가능한 앱 러닝을 저장하면 서버가 리포트를 만들어요.</Text></View> : null}
+      {!fetched.isLoading && !fetched.error && !report ? <View style={styles.state}><Text style={styles.stateTitle}>아직 표시할 리포트가 없어요</Text><Text style={styles.stateCopy}>앱으로 측정한 러닝을 저장하면 서버가 리포트를 만들어요.</Text></View> : null}
       {report ? <>
         <View style={styles.verdict}><Text style={styles.orange}>{report.isFallback ? '기본 분석' : 'AI 한줄평'}</Text><Text style={styles.verdictText}>“{report.verdict}”</Text></View>
         {report.isFallback ? <Text style={styles.fallbackCopy}>외부 분석 대신 계약된 기본 분석 결과를 표시하고 있어요.</Text> : null}

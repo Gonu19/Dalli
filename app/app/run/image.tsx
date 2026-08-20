@@ -14,7 +14,7 @@ import { colors, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const photo = require('@/assets/images/run-share-sample.png');
 
-const imageOptions = ['활동 시간', '거리', '평균 케이던스', '경로'] as const;
+const imageOptions = ['활동 시간', '거리', '평균 리듬', '평균 페이스', '경로'] as const;
 type ImageOption = typeof imageOptions[number];
 
 export default function ResultImage() {
@@ -28,7 +28,8 @@ export default function ResultImage() {
   const [included, setIncluded] = useState<Record<ImageOption, boolean>>({
     '활동 시간': true,
     '거리': true,
-    '평균 케이던스': true,
+    '평균 리듬': true,
+    '평균 페이스': true,
     '경로': true,
   });
 
@@ -80,10 +81,11 @@ export default function ResultImage() {
         <FigmaLogo top={13} left={9} />
         {/* 종료 직후의 경로 스냅샷. 좌표는 메모리에만 있고 서버로 가지 않는다 (`ENGINE.md` §10). */}
         {included['경로'] ? <RunMap routeOnly style={styles.routeOnly} /> : null}
-        {included['활동 시간'] || included.거리 || included['평균 케이던스'] ? <View style={styles.overlay}>
+        {included['활동 시간'] || included.거리 || included['평균 리듬'] || included['평균 페이스'] ? <View style={styles.overlay}>
           {included['활동 시간'] ? <Stat label="활동 시간" value={activeDurationSec === null ? '—' : format(activeDurationSec)} /> : null}
           {included.거리 ? <Stat label="거리" value={record?.distanceM == null ? '—' : `${(record.distanceM / 1000).toFixed(2)} km`} /> : null}
-          {included['평균 케이던스'] ? <Stat label="평균 케이던스" value={record?.avgCadence == null ? '—' : `${Math.round(record.avgCadence)} spm`} /> : null}
+          {included['평균 리듬'] ? <Stat label="평균 리듬" value={record?.avgCadence == null ? '—' : `${Math.round(record.avgCadence)} spm`} /> : null}
+          {included['평균 페이스'] ? <Stat label="평균 페이스" value={formatPace(record?.avgPaceSecPerKm ?? null)} /> : null}
         </View> : null}
       </ImageBackground>
       </View>
@@ -112,6 +114,12 @@ export default function ResultImage() {
     </Animated.ScrollView>
     <ScrollHeaderScrim scrollY={scrollY} />
   </FigmaScreen>;
+}
+
+/** 페이스는 분·초로 읽는다. GPS 미수신이면 값이 없다. */
+function formatPace(value: number | null) {
+  if (value === null) return '—';
+  return `${Math.floor(value / 60)}’${String(Math.round(value % 60)).padStart(2, '0')}” /km`;
 }
 
 function format(value: number) {

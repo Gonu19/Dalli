@@ -27,9 +27,12 @@ export default function Report() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // 지표가 모자라도 리포트는 만든다. 서버가 `is_analyzable`이 false면 LLM만 건너뛰고
+    // 규칙 기반 폴백을 201로 돌려주므로(`services/reports.py`), 앱이 미리 막을 이유가 없다.
+    // 수기 러닝만 서버가 422로 거부하니 그것만 남긴다.
     const analysisUnavailable = params.runId
-      ? detail.data !== undefined && (!detail.data.isAnalyzable || detail.data.source !== 'APP')
-      : local?.uploaded !== null && local?.uploaded !== undefined && !local.uploaded.isAnalyzable;
+      ? detail.data !== undefined && detail.data.source !== 'APP'
+      : false;
     if (!runId || local?.report || detail.data?.report || requested.current || (params.runId && !detail.data) || analysisUnavailable) return;
     requested.current = true;
     create.mutateAsync(runId)
