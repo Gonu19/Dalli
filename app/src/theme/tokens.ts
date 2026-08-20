@@ -18,6 +18,20 @@ export const colors = {
   black: '#000000',
 } as const;
 
+/** 변화 그래프 (`해커톤-박자단속반` 98:1153). 시리즈 색과 그래프 판의 값. */
+export const chart = {
+  /** 리듬 = 브랜드 포인트색. 디자인 변수 `포인트`와 같은 값이다. */
+  cadence: colors.primary,
+  pace: '#2196F3',
+  hold: '#32F321',
+  /** 선 아래를 채울 때 쓰는 투명도. 한 개만 켰을 때만 채운다. */
+  fillOpacity: 0.16,
+  /** 그래프 판 (카드보다 한 단 낮은 면). */
+  surface: 'rgba(221,224,225,0.30)',
+  surfaceRadius: 30,
+  height: 204,
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,
