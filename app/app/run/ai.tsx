@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
-import { useCalendar, useCreatePlan, useProfile, useRunReport, useRuns } from '@/src/api/queries';
+import { useCalendar, useCreatePlan, useProfile, useRunReport, useRuns, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
 import { HapticPressable as Pressable } from '@/src/components/haptics';
@@ -11,7 +11,6 @@ import { useRunResult } from '@/src/components/run-result-provider';
 import { ScrollHeaderScrim } from '@/src/components/scroll-header-scrim';
 import {
   defaultPlanTitle,
-  nextFreeDate,
   suggestDistanceM,
   suggestPlanDate,
 } from '@/src/store/routine-suggestion';
@@ -35,14 +34,21 @@ export default function AIReport() {
   const now = new Date();
   const calendar = useCalendar(token, now.getFullYear(), now.getMonth() + 1);
   const createPlan = useCreatePlan(token);
+  const updatePlan = useUpdatePlan(token);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [planDate, setPlanDate] = useState<string | null>(null);
   const [planDistanceM, setPlanDistanceM] = useState<number | null>(null);
   const [savedDate, setSavedDate] = useState<string | null>(null);
+  const [savedOverwrote, setSavedOverwrote] = useState(false);
 
-  /** 계획이 이미 있는 날짜. 하루에 계획은 하나뿐이라 그런 날은 비켜간다 (`CONTRACT.md`). */
-  const takenDates = useMemo(
-    () => new Set((calendar.data ?? []).filter((day) => day.plan?.status === 'PLANNED').map((day) => day.date)),
+  /**
+   * 날짜별로 이미 잡힌 계획. 하루에 계획은 하나뿐이라(`CONTRACT.md` §/plans) 같은 날에
+   * 또 만들면 409다. 날짜를 몰래 비켜가지 않고, 고른 날에 계획이 있으면 덮어쓸지 묻는다.
+   */
+  const plannedByDate = useMemo(
+    () => new Map((calendar.data ?? [])
+      .filter((day) => day.plan?.status === 'PLANNED')
+      .map((day) => [day.date, day.plan!] as const)),
     [calendar.data],
   );
   const suggestedDistanceM = useMemo(
@@ -52,9 +58,13 @@ export default function AIReport() {
   const targetCadence = report ? Math.round((report.nextTargetMin + report.nextTargetMax) / 2) : null;
   const heavy = (report?.metrics.fatigueIndex ?? 0) >= 0.6;
 
+  /** 고른 날에 이미 있는 계획. 있으면 새로 만들지 않고 그 계획을 고쳐 쓴다. */
+  const existingPlan = planDate === null ? undefined : plannedByDate.get(planDate);
+  const saving = createPlan.isPending || updatePlan.isPending;
+  const saveError = createPlan.error ?? updatePlan.error;
+
   const openSheet = () => {
-    const base = suggestPlanDate(new Date(), profile.data?.weeklyGoalCount, report?.metrics.fatigueIndex ?? null);
-    setPlanDate(nextFreeDate(base, takenDates));
+    setPlanDate(suggestPlanDate(new Date(), profile.data?.weeklyGoalCount, report?.metrics.fatigueIndex ?? null));
     setPlanDistanceM(suggestedDistanceM);
     setSheetOpen(true);
   };
@@ -70,16 +80,18 @@ export default function AIReport() {
   };
 
   const savePlan = async () => {
-    if (planDate === null || planDistanceM === null || createPlan.isPending) return;
+    if (planDate === null || planDistanceM === null || saving) return;
+    const goal = {
+      goalType: 'DISTANCE',
+      goalValue: planDistanceM,
+      title: defaultPlanTitle(planDistanceM),
+      targetCadence,
+    } as const;
     try {
-      await createPlan.mutateAsync({
-        plannedDate: planDate,
-        goalType: 'DISTANCE',
-        goalValue: planDistanceM,
-        title: defaultPlanTitle(planDistanceM),
-        targetCadence,
-      });
+      if (existingPlan) await updatePlan.mutateAsync({ planId: existingPlan.id, ...goal });
+      else await createPlan.mutateAsync({ plannedDate: planDate, ...goal });
       setSavedDate(planDate);
+      setSavedOverwrote(existingPlan !== undefined);
       setSheetOpen(false);
     } catch {
       // The mutation error is rendered in the sheet; the entered values stay.
@@ -113,7 +125,7 @@ export default function AIReport() {
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
         <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{report.nextGoalText}</Text></View>
         {savedDate !== null
-          ? <Text style={styles.planDone}>{formatDateLabel(savedDate)} 계획에 추가했어요.</Text>
+          ? <Text style={styles.planDone}>{formatDateLabel(savedDate)} 계획에 {savedOverwrote ? '바꿔 넣었어요' : '추가했어요'}.</Text>
           : suggestedDistanceM !== null
             ? <Pressable onPress={openSheet} style={({ pressed }) => [styles.suggest, pressed && styles.buttonPressed]}><Text style={styles.suggestText}>이 목표로 다음 러닝 예약하기</Text></Pressable>
             : null}
@@ -133,8 +145,9 @@ export default function AIReport() {
         />
         <View style={styles.sheetRow}><Text style={styles.sheetLabel}>목표 리듬</Text><Text style={styles.sheetValue}>{targetCadence ?? '—'} spm</Text></View>
         {heavy ? <Text style={styles.sheetNote}>오늘 부담이 있어서 하루 더 쉬는 날짜로 잡았어요.</Text> : null}
-        {createPlan.error ? <Text style={styles.sheetError}>{isOfflineError(createPlan.error) ? '오프라인 상태예요. 연결 후 다시 시도해 주세요.' : '계획을 저장하지 못했어요. 다시 시도해 주세요.'}</Text> : null}
-        <Pressable disabled={createPlan.isPending} onPress={() => void savePlan()} style={({ pressed }) => [styles.sheetPrimary, (pressed || createPlan.isPending) && styles.buttonPressed]}><Text style={styles.sheetPrimaryText}>{createPlan.isPending ? '추가 중...' : '캘린더에 추가'}</Text></Pressable>
+        {existingPlan ? <Text style={styles.sheetNote}>이날은 이미 {existingPlan.title?.trim() || '다른 계획'}이 있어요. 덮어쓸까요?</Text> : null}
+        {saveError ? <Text style={styles.sheetError}>{isOfflineError(saveError) ? '오프라인 상태예요. 연결 후 다시 시도해 주세요.' : '계획을 저장하지 못했어요. 다시 시도해 주세요.'}</Text> : null}
+        <Pressable disabled={saving} onPress={() => void savePlan()} style={({ pressed }) => [styles.sheetPrimary, (pressed || saving) && styles.buttonPressed]}><Text style={styles.sheetPrimaryText}>{saving ? '저장 중...' : existingPlan ? '덮어쓰기' : '캘린더에 추가'}</Text></Pressable>
         <Pressable onPress={() => setSheetOpen(false)} style={({ pressed }) => [styles.sheetSecondary, pressed && styles.buttonPressed]}><Text style={styles.sheetSecondaryText}>취소</Text></Pressable>
       </View>
     </Modal>

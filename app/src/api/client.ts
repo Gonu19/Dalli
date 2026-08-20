@@ -563,12 +563,20 @@ function mapPlan(response: PlanResponse): Plan {
 export async function updatePlan(
   token: string,
   planId: string,
-  input: { goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; status?: 'PLANNED' | 'DONE' | 'SKIPPED' },
+  input: {
+    goalType?: 'TIME' | 'DISTANCE';
+    goalValue?: number;
+    status?: 'PLANNED' | 'DONE' | 'SKIPPED';
+    targetCadence?: number | null;
+    title?: string | null;
+  },
 ): Promise<Plan> {
   const body: PlanUpdate = {
     ...(input.goalType ? { goal_type: input.goalType } : {}),
     ...(input.goalValue !== undefined ? { goal_value: input.goalValue } : {}),
     ...(input.status ? { status: input.status } : {}),
+    ...(input.targetCadence !== undefined ? { target_cadence: input.targetCadence } : {}),
+    ...(input.title !== undefined ? { title: input.title } : {}),
   };
   const response = await request<PlanResponse>(`/plans/${planId}`, {
     method: 'PATCH',

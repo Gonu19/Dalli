@@ -17,6 +17,15 @@ import type { RunGoal } from '@/src/store/runStore';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
 const timeOptions = Array.from({ length: 24 }, (_, index) => String((index + 1) * 5));
+/** 1.0 ~ 15.0 km, 0.5 km 간격. 리포트가 만드는 계획도 0.5 km 단위로 움직인다. */
+const distanceOptions = Array.from({ length: 29 }, (_, index) => (1 + index * 0.5).toFixed(1));
+const goalKinds = [
+  { kind: 'TIME', label: '시간' },
+  { kind: 'DISTANCE', label: '거리' },
+] as const;
+/** 처음 전환했을 때 채워 넣을 값. 빈 칸으로 두면 시작 버튼이 잠겨 이유를 알 수 없다. */
+const DEFAULT_TIME_SEC = 30 * 60;
+const DEFAULT_DISTANCE_M = 3000;
 const cadenceControls = [
   { delta: -5, label: '-5' },
   { delta: -1, label: '−' },
@@ -31,8 +40,14 @@ export default function RunPrepare() {
   const referenceCadence = Number.isFinite(parsedCadence) && parsedCadence > 0 ? parsedCadence : null;
   const condition = (params.condition as ConditionLevel) || 'NORMAL';
   const [cadence, setCadence] = useState<number | null>(referenceCadence);
-  const [goal, setGoal] = useState<RunGoal | null>(null);
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  // 시간·거리 값을 따로 들고 있는다. 토글을 오갈 때 방금 고른 값이 사라지면 안 된다.
+  const [goalKind, setGoalKind] = useState<RunGoal['type']>('TIME');
+  const [timeSec, setTimeSec] = useState<number | null>(null);
+  const [distanceM, setDistanceM] = useState<number | null>(null);
+  const [goalPickerOpen, setGoalPickerOpen] = useState(false);
+  const goal: RunGoal | null = goalKind === 'TIME'
+    ? (timeSec === null ? null : { type: 'TIME', value: timeSec })
+    : (distanceM === null ? null : { type: 'DISTANCE', value: distanceM });
 
   // 오늘 계획이 있으면 그 목표로 시작한다. 계획을 세운 사람에게 목표를 다시 묻지 않는다.
   const { token } = useAuth();
@@ -48,10 +63,24 @@ export default function RunPrepare() {
   useEffect(() => {
     if (planApplied.current || plan === null) return;
     planApplied.current = true;
-    setGoal({ type: plan.goalType, value: plan.goalValue });
+    setGoalKind(plan.goalType);
+    if (plan.goalType === 'TIME') setTimeSec(plan.goalValue);
+    else setDistanceM(plan.goalValue);
     if (plan.targetCadence !== null) setCadence(plan.targetCadence);
   }, [plan]);
   const { voiceEnabled, metronomeEnabled, hapticsEnabled, setVoiceEnabled, setMetronomeEnabled, setHapticsEnabled } = usePreferences();
+
+  /** 토글로 종류를 바꾼다. 그쪽 값이 아직 없으면 기본값을 채워 시작 버튼이 잠기지 않게 한다. */
+  const selectGoalKind = (kind: RunGoal['type']) => {
+    setGoalKind(kind);
+    if (kind === 'TIME' && timeSec === null) setTimeSec(DEFAULT_TIME_SEC);
+    if (kind === 'DISTANCE' && distanceM === null) setDistanceM(DEFAULT_DISTANCE_M);
+  };
+
+  /** 오늘 계획에서 온 목표를 그대로 쓰고 있을 때만 어디서 온 값인지 알린다. */
+  const planNote = plan !== null && goal !== null && goal.type === plan.goalType && goal.value === plan.goalValue
+    ? `${plan.title?.trim() || '오늘 계획'} 목표예요.`
+    : null;
 
   const begin = async () => {
     if (cadence === null || goal === null) return;
@@ -90,12 +119,18 @@ export default function RunPrepare() {
         style={({ pressed }) => [styles.control, cadence === null && styles.disabled, pressed && styles.controlPressed]}
       ><Text style={styles.controlText}>{label}</Text></Pressable>)}</View>
       <View style={styles.line} />
-      <Text style={styles.timeTitle}>{goal?.type === 'DISTANCE' ? '목표 거리' : '목표 시간'}</Text>
-      <Pressable accessibilityRole="button" onPress={() => setTimePickerOpen(true)} style={({ pressed }) => [styles.timeBox, pressed && styles.controlPressed]}>
-        <Text style={[styles.time, goal === null && styles.timePlaceholder]}>{formatGoalValue(goal)}</Text>{goal !== null ? <Text style={styles.timeUnit}>{goal.type === 'DISTANCE' ? 'km' : '분'}</Text> : null}
+      <View style={styles.segment}>{goalKinds.map(({ kind, label }) => <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: goalKind === kind }}
+        key={kind}
+        onPress={() => selectGoalKind(kind)}
+        style={({ pressed }) => [styles.segmentItem, goalKind === kind && styles.segmentItemOn, pressed && styles.controlPressed]}
+      ><Text style={[styles.segmentText, goalKind === kind && styles.segmentTextOn]}>{label}</Text></Pressable>)}</View>
+      <Pressable accessibilityLabel={goalKind === 'DISTANCE' ? '목표 거리' : '목표 시간'} accessibilityRole="button" onPress={() => setGoalPickerOpen(true)} style={({ pressed }) => [styles.timeBox, pressed && styles.controlPressed]}>
+        <Text style={[styles.time, goal === null && styles.timePlaceholder]}>{formatGoalValue(goal)}</Text>{goal !== null ? <Text style={styles.timeUnit}>{goalKind === 'DISTANCE' ? 'km' : '분'}</Text> : null}
         <Ionicons color={colors.inkMuted} name="chevron-down" size={14} style={styles.timeChevron} />
       </Pressable>
-      {plan !== null && goal?.type === 'DISTANCE' ? <Text numberOfLines={1} style={styles.planNote}>{plan.title?.trim() || '오늘 계획'} 목표예요. 누르면 시간으로 바꿔요.</Text> : null}
+      {planNote !== null ? <Text numberOfLines={1} style={styles.planNote}>{planNote}</Text> : null}
     </View>
     <View style={styles.guide}>
       <Text style={[styles.cardTitle, styles.guideTitle]}>러닝 가이드 방식</Text>
@@ -106,18 +141,25 @@ export default function RunPrepare() {
     <Pressable disabled={cadence === null || goal === null} onPress={() => void begin()} style={({ pressed }) => [styles.start, (cadence === null || goal === null) && styles.disabledStart, pressed && styles.buttonPressed]}>
       <Ionicons color={colors.white} name="play" size={20} /><Text style={styles.startText}>러닝 시작하기</Text>
     </Pressable>
-    {timePickerOpen ? <WheelPickerModal
-      columns={[{
-        values: timeOptions,
-        initialIndex: Math.max(0, goal?.type === 'TIME' ? timeOptions.indexOf(String(goal.value / 60)) : 0),
-        suffix: '분',
-      }]}
-      onCancel={() => setTimePickerOpen(false)}
+    {goalPickerOpen ? <WheelPickerModal
+      columns={[goalKind === 'DISTANCE'
+        ? {
+            values: distanceOptions,
+            initialIndex: Math.max(0, distanceM === null ? -1 : distanceOptions.indexOf((distanceM / 1000).toFixed(1))),
+            suffix: 'km',
+          }
+        : {
+            values: timeOptions,
+            initialIndex: Math.max(0, timeSec === null ? -1 : timeOptions.indexOf(String(timeSec / 60))),
+            suffix: '분',
+          }]}
+      onCancel={() => setGoalPickerOpen(false)}
       onConfirm={(indexes) => {
-        setGoal({ type: 'TIME', value: Number(timeOptions[indexes[0]]) * 60 });
-        setTimePickerOpen(false);
+        if (goalKind === 'DISTANCE') setDistanceM(Math.round(Number(distanceOptions[indexes[0]]) * 1000));
+        else setTimeSec(Number(timeOptions[indexes[0]]) * 60);
+        setGoalPickerOpen(false);
       }}
-      title="목표 시간"
+      title={goalKind === 'DISTANCE' ? '목표 거리' : '목표 시간'}
       visible
     /> : null}
   </FigmaScreen>;
@@ -149,7 +191,6 @@ const styles = StyleSheet.create({
   controlText: { fontSize: 13, fontWeight: '700', color: colors.ink },
   disabled: { opacity: 0.45 },
   line: { position: 'absolute', left: 18, right: 18, top: 168, height: 1, backgroundColor: colors.border },
-  timeTitle: { position: 'absolute', left: 18, top: 198, fontSize: 17, fontWeight: '700', color: colors.ink },
   timeBox: { position: 'absolute', left: 105, top: 190, width: 104, height: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   time: { marginLeft: 17, fontSize: 14, fontWeight: '700', color: colors.ink },
   timePlaceholder: { color: colors.inkMuted },
@@ -157,6 +198,13 @@ const styles = StyleSheet.create({
   timeChevron: { position: 'absolute', right: 8 },
   guide: { position: 'absolute', left: 29, right: 27, top: 425 - navigationHeader.contentLift, height: 203, borderRadius: 20, backgroundColor: colors.white, padding: 21 },
   guideTitle: { marginBottom: 10 },
+  // 카드가 절대좌표 레이아웃이라 세그먼트도 같은 방식으로 놓는다. 제목 자리를 대신하므로
+  // `timeBox`(left 105)와 겹치지 않게 폭을 묶어 둔다. 둘 다 왼쪽 기준이라 화면 폭과 무관하다.
+  segment: { position: 'absolute', left: 18, top: 192, flexDirection: 'row', borderRadius: 999, borderWidth: 1, borderColor: colors.border, padding: 2 },
+  segmentItem: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
+  segmentItemOn: { backgroundColor: colors.primary },
+  segmentText: { color: colors.inkMuted, fontSize: 11, fontWeight: '700' },
+  segmentTextOn: { color: colors.white },
   planNote: { position: 'absolute', left: 18, right: 18, top: 228, fontSize: 11, color: colors.inkMuted },
   toggle: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 3 },
   toggleLabel: { fontSize: 15, fontWeight: '700', color: colors.ink },

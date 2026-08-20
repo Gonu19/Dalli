@@ -163,7 +163,7 @@ export function useCreatePlan(token: string | null) {
 export function useUpdatePlan(token: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { planId: string; goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; status?: 'PLANNED' | 'DONE' | 'SKIPPED' }) => {
+    mutationFn: (input: { planId: string; goalType?: 'TIME' | 'DISTANCE'; goalValue?: number; status?: 'PLANNED' | 'DONE' | 'SKIPPED'; targetCadence?: number | null; title?: string | null }) => {
       const { planId, ...patch } = input;
       return updatePlan(requireToken(token), planId, patch);
     },
