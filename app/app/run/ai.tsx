@@ -227,10 +227,14 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 17, fontWeight: '700', color: colors.ink },
   cardBody: { fontSize: 15, color: colors.ink, lineHeight: 21, marginTop: 10 },
   evidence: { fontSize: 14, color: colors.ink, lineHeight: 20, marginTop: 8 },
-  next: { height: 145, marginTop: 35, borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: 17 },
+  /**
+   * 다음 목표. **높이를 고정하지 않는다** — 문장은 서버가 만들고 길이를 모른다.
+   * 145로 묶어 두니 세 줄이 넘는 문장이 상자 밖으로 흘러 아래 버튼과 겹쳤다.
+   */
+  next: { minHeight: 145, marginTop: 35, borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: 17 },
   nextTitle: { color: colors.white, fontSize: 17, fontWeight: '700' },
-  nextValue: { color: colors.white, fontSize: 28, fontWeight: '800', marginTop: 6 },
-  nextMeta: { color: colors.white, fontSize: 12, marginTop: 7 },
+  /** `lineHeight`를 준다. 큰 글씨의 기본 줄높이는 한글 받침을 잘라 먹는다. */
+  nextValue: { color: colors.white, fontSize: 28, fontWeight: '800', lineHeight: 36, marginTop: 6 },
   actions: { marginTop: 35, gap: 12 },
   suggest: { height: 52, borderRadius: 18, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   suggestText: { color: colors.white, fontSize: 16, fontWeight: '800' },

@@ -262,7 +262,8 @@ const styles = StyleSheet.create({
   baselineUnit: { color: colors.inkMuted, fontSize: 14 },
   baselineCopy: { color: colors.inkMuted, fontSize: 12, lineHeight: 18, marginTop: 5 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, marginTop: 22 },
-  metric: { width: '47.5%', height: 94, borderRadius: 20, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 17 },
+  // 32px 숫자 한 줄과 라벨이 94를 거의 꽉 채운다. 묶어 두면 아래가 잘린다.
+  metric: { width: '47.5%', minHeight: 94, borderRadius: 20, borderWidth: 0.5, borderColor: 'rgba(221,224,225,.3)', backgroundColor: 'rgba(255,255,255,.1)', padding: 17 },
   metricLabel: { color: 'rgba(255,255,255,.68)', fontSize: 12 },
   metricRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 5, gap: 5 },
   metricValue: { color: colors.white, fontSize: 32, fontWeight: '700' },
