@@ -30,6 +30,11 @@ const RANGE_PATTERN = /(\d{2,3})\s*(?:에\s*서|부\s*터|~|-|–|—)\s*(\d{2,3
 /** 리듬으로 볼 수 있는 값의 범위. `140과 24분`처럼 무관한 두 숫자를 범위로 오인하지 않는다. */
 const CADENCE_MIN = 100;
 const CADENCE_MAX = 220;
+/**
+ * 화면에 나오면 안 되는 내부 식별자. 실제로 `in_range 시간은 154초였고
+ * rhythm_score는 0.281`이 그대로 나왔다. 프롬프트가 금지했지만 지켜지지 않는다.
+ */
+const INTERNAL_TERMS = /rhythm_score|late_drop_rate|fatigue_index|in_range|segment_summary|median\s*cadence|cadence|completed|COMPLETE/i;
 /** `548초`처럼 분으로 읽어야 할 값. */
 const SECONDS_PATTERN = /(\d+)\s*초/g;
 /** 이 아래는 `7분 35초`처럼 분과 함께 쓰는 초라 그대로 둔다. */
@@ -74,12 +79,40 @@ function exposesRange(text: string): boolean {
   return low >= CADENCE_MIN && high <= CADENCE_MAX && low < high;
 }
 
-/** 분석 근거. 60초 이상을 초로만 적은 값을 분으로 바꿔 읽히게 한다. */
+/**
+ * 분석 근거. 60초 이상을 초로만 적은 값은 분으로 바꾸고,
+ * **내부 식별자가 섞인 항목은 통째로 버린다.**
+ *
+ * 한국어 문장 안의 식별자를 낱말만 바꾸면 조사가 어긋나 더 읽기 어려워진다
+ * (`rhythm_score는` → `안정 구간는`). 근거는 서로 독립된 항목이라 빼도 나머지가 성립하고,
+ * 전부 빠지면 화면이 이미 `표시할 근거가 없어요`를 그린다.
+ */
 export function safeEvidence(report: RunReport): string[] {
-  return report.evidence.map((item) => item.replace(SECONDS_PATTERN, (match, digits: string) => {
-    const seconds = Number(digits);
-    if (!Number.isFinite(seconds) || seconds < SECONDS_TO_MINUTES_FROM) return match;
-    warn('evidence', match);
-    return `약 ${Math.round(seconds / 60)}분`;
-  }));
+  return report.evidence
+    .filter((item) => {
+      if (!INTERNAL_TERMS.test(item)) return true;
+      warn('evidence', item);
+      return false;
+    })
+    .map((item) => item.replace(SECONDS_PATTERN, (match, digits: string) => {
+      const seconds = Number(digits);
+      if (!Number.isFinite(seconds) || seconds < SECONDS_TO_MINUTES_FROM) return match;
+      warn('evidence', match);
+      return `약 ${Math.round(seconds / 60)}분`;
+    }));
+}
+
+/**
+ * 다음 러닝 제안. 여기에도 목표 범위가 새어 나온다
+ * (`분당 136~144걸음 범위를 의식해`). 문장은 살리고 **범위만 중심값으로 바꾼다** —
+ * 제안은 행동을 담고 있어 통째로 버리면 알맹이가 사라진다.
+ */
+export function safePrescription(report: RunReport): string | null {
+  const text = report.prescription?.trim();
+  if (!text) return null;
+  if (!exposesRange(text)) return text;
+
+  warn('prescription', text);
+  const center = Math.round((report.nextTargetMin + report.nextTargetMax) / 2);
+  return text.replace(RANGE_PATTERN, String(center));
 }

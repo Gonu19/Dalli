@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, View } from 'react-native';
 
 import { isOfflineError } from '@/src/api/client';
-import { safeEvidence, safeNextGoalText, safeVerdict } from '@/src/api/report-text';
+import { safeEvidence, safeNextGoalText, safePrescription, safeVerdict } from '@/src/api/report-text';
 import { useCalendar, useCreatePlan, useProfile, useRunReport, useRuns, useUpdatePlan } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
 import { FigmaBack, FigmaScreen } from '@/src/components/figma-ui';
@@ -26,6 +26,7 @@ export default function AIReport() {
   const report = result?.report ?? fetched.data;
   // 서버 문장이 규칙을 어겨도 화면은 최소한을 지킨다 (`report-text.ts`).
   const evidence = report ? safeEvidence(report) : [];
+  const prescription = report ? safePrescription(report) : null;
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // 다음 루틴 제안 — 리포트가 말한 목표를 날짜가 붙은 계획으로 옮긴다.
@@ -121,7 +122,7 @@ export default function AIReport() {
             </>}
         <View style={styles.card}><Text style={styles.cardTitle}>분석 근거</Text>{evidence.length ? evidence.map((item, index)=><Text key={`${item}-${index}`} style={styles.evidence}>• {item}</Text>) : <Text style={styles.cardBody}>표시할 근거가 없어요.</Text>}</View>
         {report.hypothesis ? <Card title="가능한 원인" body={report.hypothesis} /> : null}
-        {report.prescription ? <Card orange title="다음 러닝 제안" body={report.prescription} /> : null}
+        {prescription ? <Card orange title="다음 러닝 제안" body={prescription} /> : null}
         {report.recoveryNote ? <Card title="회복 안내" body={report.recoveryNote} /> : null}
         <View style={styles.next}><Text style={styles.nextTitle}>다음 목표</Text><Text style={styles.nextValue}>{safeNextGoalText(report)}</Text></View>
       </> : null}
