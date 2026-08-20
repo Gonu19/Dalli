@@ -12,6 +12,10 @@ import { HapticPressable as Pressable } from '@/src/components/haptics';
 import { Screen } from '@/src/components/screen';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
 
+/** 카드 한 장의 높이와 카드 사이 간격. 접기 애니메이션이 같은 값을 쓴다. */
+const CARD_HEIGHT = 136;
+const CARD_GAP = 13;
+
 export default function Analysis({ active = true, onCardTouchChange }: { active?: boolean; onCardTouchChange?: (active: boolean) => void }) {
   const router = useRouter();
   const { token } = useAuth();
@@ -21,12 +25,21 @@ export default function Analysis({ active = true, onCardTouchChange }: { active?
   const [dismissSignal, setDismissSignal] = useState(0);
   const appRuns = runs.data?.filter((run) => run.source === 'APP') ?? [];
 
-  const confirm = (run: RunListItem, onCancel?: () => void) => Alert.alert(
+  const confirm = (run: RunListItem, onCancel?: () => void, onConfirmed?: () => void) => Alert.alert(
     '이 러닝을 삭제할까요?',
     '캘린더와 누적 활동일에서도 함께 사라져요.',
     [
       { text: '취소', style: 'cancel', onPress: onCancel },
-      { text: '삭제', style: 'destructive', onPress: () => void remove.mutateAsync(run.id) },
+      {
+        text: '삭제',
+        style: 'destructive',
+        // 카드를 먼저 접고 지운다. 목록이 갱신될 때는 이미 높이가 0이라 아래 카드가 튀지 않는다.
+        // 실패하면 되돌린다 — 전에는 사라진 채로 남아 기록이 지워진 것처럼 보였다.
+        onPress: () => {
+          onConfirmed?.();
+          void remove.mutateAsync(run.id).catch(() => onCancel?.());
+        },
+      },
     ],
   );
 
@@ -76,7 +89,7 @@ export default function Analysis({ active = true, onCardTouchChange }: { active?
                 <Text style={styles.prepareText}>러닝 준비하기</Text>
               </Pressable>
             </View>
-          : runs.data?.map((run) => <SwipeableRunCard key={run.id} active={active} dismissSignal={dismissSignal} onConfirmDelete={() => confirm(run)} onDelete={(onCancel) => confirm(run, onCancel)} onOpen={() => openDetail(run)} onCardTouchChange={handleCardTouchChange} run={run} />)}
+          : runs.data?.map((run) => <SwipeableRunCard key={run.id} active={active} dismissSignal={dismissSignal} onRequestDelete={(onCancel, onConfirmed) => confirm(run, onCancel, onConfirmed)} onOpen={() => openDetail(run)} onCardTouchChange={handleCardTouchChange} run={run} />)}
         <NativePressable accessibilityLabel="열린 기록 카드 닫기" onPress={() => { setDismissSignal((value) => value + 1); handleCardTouchChange(false); }} style={styles.dismissArea} />
       </Animated.ScrollView>
     </View>
@@ -97,16 +110,18 @@ function Metric({ value, label }: { value: string; label: string }) {
   </View>;
 }
 
-function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelete, onOpen, onCardTouchChange }: { active: boolean; dismissSignal: number; run: RunListItem; onConfirmDelete: () => void; onDelete: (onCancel?: () => void) => void; onOpen: () => void; onCardTouchChange?: (active: boolean) => void }) {
+function SwipeableRunCard({ active, dismissSignal, run, onRequestDelete, onOpen, onCardTouchChange }: { active: boolean; dismissSignal: number; run: RunListItem; onRequestDelete: (onCancel: () => void, onConfirmed: () => void) => void; onOpen: () => void; onCardTouchChange?: (active: boolean) => void }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
-  const deleteRef = useRef(onDelete);
+  /** 1이면 제자리, 0이면 접힌 상태. 높이라서 네이티브 드라이버를 쓸 수 없다. */
+  const collapse = useRef(new Animated.Value(1)).current;
+  const deleteRef = useRef(onRequestDelete);
   const [, setRevealed] = useState(false);
   const revealedRef = useRef(false);
   const gestureStartOffset = useRef(0);
   const longSwipeTriggered = useRef(false);
   const cardTouchChangeRef = useRef(onCardTouchChange);
-  deleteRef.current = onDelete;
+  deleteRef.current = onRequestDelete;
   cardTouchChangeRef.current = onCardTouchChange;
   useEffect(() => {
     if (!active) {
@@ -136,9 +151,18 @@ function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelet
     useNativeDriver: true,
   }).start();
   const restoreCard = () => {
+    collapse.setValue(1);
     opacity.setValue(1);
     Animated.spring(translateX, { damping: 20, mass: 0.55, stiffness: 300, toValue: 0, useNativeDriver: true }).start();
   };
+  /** 밀어내고 나서 높이를 0으로 접는다. 스와이프로 이미 밀려 있으면 앞 구간은 바로 끝난다. */
+  const finishDelete = () => Animated.sequence([
+    Animated.parallel([
+      Animated.timing(translateX, { duration: 160, toValue: -420, useNativeDriver: true }),
+      Animated.timing(opacity, { duration: 160, toValue: 0, useNativeDriver: true }),
+    ]),
+    Animated.timing(collapse, { duration: 180, toValue: 0, useNativeDriver: false }),
+  ]).start();
   const animateDelete = () => {
     onCardTouchChange?.(false);
     updateRevealed(false);
@@ -146,7 +170,7 @@ function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelet
       Animated.timing(translateX, { duration: 240, toValue: -420, useNativeDriver: true }),
       Animated.timing(opacity, { duration: 240, toValue: 0, useNativeDriver: true }),
     ]).start(({ finished }) => {
-      if (finished) deleteRef.current(restoreCard);
+      if (finished) deleteRef.current(restoreCard, finishDelete);
     });
   };
   const panResponder = useRef(PanResponder.create({
@@ -189,14 +213,17 @@ function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelet
     },
   })).current;
 
-  return <View
+  return <Animated.View
     {...panResponder.panHandlers}
     onTouchCancel={() => onCardTouchChange?.(false)}
     onTouchEnd={() => onCardTouchChange?.(false)}
     onTouchStart={() => { if (revealedRef.current) onCardTouchChange?.(true); }}
-    style={styles.swipeArea}
+    style={[styles.swipeArea, {
+      height: collapse.interpolate({ inputRange: [0, 1], outputRange: [0, CARD_HEIGHT] }),
+      marginTop: collapse.interpolate({ inputRange: [0, 1], outputRange: [0, CARD_GAP] }),
+    }]}
   >
-    <Pressable accessibilityLabel="러닝 기록 삭제" onPress={() => { onCardTouchChange?.(false); updateRevealed(false); animateTo(0); onConfirmDelete(); }} style={({ pressed }) => [styles.deleteReveal, pressed && styles.deleteRevealPressed]}>
+    <Pressable accessibilityLabel="러닝 기록 삭제" onPress={() => { onCardTouchChange?.(false); updateRevealed(false); onRequestDelete(restoreCard, finishDelete); }} style={({ pressed }) => [styles.deleteReveal, pressed && styles.deleteRevealPressed]}>
       <Ionicons color={colors.white} name="trash-outline" size={22} /><Text style={styles.deleteRevealText}>삭제</Text>
     </Pressable>
     <Animated.View style={[styles.card, { opacity, transform: [{ translateX }] }]}>
@@ -221,7 +248,7 @@ function SwipeableRunCard({ active, dismissSignal, run, onConfirmDelete, onDelet
         <Metric value={formatTime(run.activeDurationSec)} label="시간" />
       </View>
     </Animated.View>
-  </View>;
+  </Animated.View>;
 }
 
 function formatDay(value: string) {
@@ -252,11 +279,11 @@ const styles = StyleSheet.create({
   prepare: { position: 'absolute', left: 37, right: 39, top: 264, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,122,89,.85)', alignItems: 'center', justifyContent: 'center' },
   prepareText: { color: colors.white, fontSize: 15, fontWeight: '700' },
   buttonPressed: pressFeedback,
-  swipeArea: { height: 136, borderRadius: 20, backgroundColor: colors.danger, marginTop: 13, overflow: 'hidden' },
+  swipeArea: { borderRadius: 20, backgroundColor: colors.danger, overflow: 'hidden' },
   deleteReveal: { ...StyleSheet.absoluteFillObject, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 28, gap: 4 },
     deleteRevealPressed: { opacity: 0.72 },
   deleteRevealText: { color: colors.white, fontSize: 12, fontWeight: '700' },
-  card: { height: 136, borderRadius: 20, backgroundColor: colors.white, padding: 26, position: 'relative' },
+  card: { height: CARD_HEIGHT, borderRadius: 20, backgroundColor: colors.white, padding: 26, position: 'relative' },
   date: { fontSize: 13, fontWeight: '700', color: colors.ink },
   day: { fontSize: 13, color: '#747474', marginTop: 6 },
   sourceBadge: { position: 'absolute', right: 132, top: 20, height: 24, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
