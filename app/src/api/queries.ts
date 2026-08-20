@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 
 import {
   createRun,
@@ -100,6 +100,7 @@ export function useCalendar(token: string | null, year: number, month: number) {
     queryKey: ['calendar', year, month],
     queryFn: () => getCalendar(requireToken(token), year, month),
     enabled: Boolean(token),
+    placeholderData: keepPreviousData,
   });
 }
 
