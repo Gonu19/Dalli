@@ -143,6 +143,11 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert "입력 JSON에 실제로 존재하는 숫자만 사용하세요" in LLM_REPORT_INSTRUCTIONS_V3
     assert "start_sec/end_sec는 입력값을 기준으로" in LLM_REPORT_INSTRUCTIONS_V3
     assert "next_target_min/max는 입력값을 한 자리도 바꾸지 마세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "정확히 한 문장으로 작성하세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "내부 enum을 그대로 출력하지 마세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "목표 범위 두 숫자를 사용자 문장에 표시하지 마세요" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "548초는 '9분 8초'" in LLM_REPORT_INSTRUCTIONS_V3
+    assert "안정 구간 133spm" in LLM_REPORT_INSTRUCTIONS_V3
     assert "prescription: 다음 러닝에서 할 행동 하나만" in LLM_REPORT_INSTRUCTIONS_V3
     assert "detail_time_blocks가 있으면 전체 시간을 3등분한 순서대로" in LLM_REPORT_INSTRUCTIONS_V3
     assert "detail_rapid_changes가 있으면 실제 변화의 개수만큼만 설명하세요" in LLM_REPORT_INSTRUCTIONS_V3
