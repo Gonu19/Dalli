@@ -7,9 +7,9 @@ import type { ConditionLevel, ConditionValue, ExperienceLevel, RunningPurpose } 
 
 /** 초기 목표값 규칙표 — 경험 수준 기준값 (§2). 1회차 러닝에만 쓰인다. */
 export const EXPERIENCE_BASE_CADENCE: Record<ExperienceLevel, number> = {
-  0: 152,
-  1: 158,
-  2: 164,
+  0: 140,
+  1: 150,
+  2: 160,
 };
 
 /** 초기 목표값 규칙표 — 목적 보정 (§2). 의도적으로 낮게 잡는다. */

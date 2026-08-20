@@ -40,7 +40,7 @@ function buildSamples(durationSec: number, spmAt: (t: number) => number): Cadenc
 }
 
 // 1. 초기 목표값 — ENGINE.md §2 규칙표
-check('초기 목표값 (입문 × 완주)', computeInitialTargetCadence(0, 'COMPLETE'), 152);
+check('초기 목표값 (입문 × 완주)', computeInitialTargetCadence(0, 'COMPLETE'), 140);
 check('초기 목표값 (입문 × 습관)', computeInitialTargetCadence(0, 'HABIT'), 150);
 check('초기 목표값 (꾸준 × 기록)', computeInitialTargetCadence(2, 'PERFORMANCE'), 168);
 check(
