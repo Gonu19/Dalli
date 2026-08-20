@@ -33,8 +33,11 @@ const CADENCE_MAX = 220;
 /**
  * 화면에 나오면 안 되는 내부 식별자. 실제로 `in_range 시간은 154초였고
  * rhythm_score는 0.281`이 그대로 나왔다. 프롬프트가 금지했지만 지켜지지 않는다.
+ *
+ * **구분자를 가리지 않는다.** 프롬프트를 고친 뒤에도 `in_range`가 `in-range`로 모양만
+ * 바뀌어 다시 나왔다. 언더스코어·하이픈·공백을 모두 같은 것으로 본다.
  */
-const INTERNAL_TERMS = /rhythm_score|late_drop_rate|fatigue_index|in_range|segment_summary|median\s*cadence|cadence|completed|COMPLETE/i;
+const INTERNAL_TERMS = /rhythm[-_\s]?score|late[-_\s]?drop[-_\s]?rate|fatigue[-_\s]?index|in[-_\s]?range|segment[-_\s]?summary|median[-_\s]?cadence|cadence|completed|COMPLETE/i;
 /** `548초`처럼 분으로 읽어야 할 값. */
 const SECONDS_PATTERN = /(\d+)\s*초/g;
 /** 이 아래는 `7분 35초`처럼 분과 함께 쓰는 초라 그대로 둔다. */
