@@ -13,6 +13,13 @@ export type Cue = {
   text: string;
   /** 메트로놈을 함께 울릴지 — 리듬을 되찾는 개입에만 붙인다. */
   metronome: boolean;
+  /**
+   * 진동의 성격. 음성·메트로놈과 나란한 세 번째 채널이다.
+   *
+   * `impact`는 리듬을 고치라는 신호, `warning`은 상태가 바뀌었다는 알림이다.
+   * 어떤 세기로 울릴지는 `native/`가 정한다 — 여기서는 무엇을 알릴지만 고른다.
+   */
+  haptic: 'impact' | 'warning';
 };
 
 /**
@@ -54,18 +61,19 @@ export function cueForEvent(
   switch (event.type) {
     case 'TOO_FAST': {
       const line = FAST_LINES[Math.min(context.fastInterventionCount, FAST_LINES.length) - 1];
-      return line === undefined ? null : { text: line, metronome: true };
+      return line === undefined ? null : { text: line, metronome: true, haptic: 'impact' };
     }
     case 'TOO_SLOW':
       return {
         text: context.elapsedSec < SLOW_JUDGE_START_SEC ? EARLY_SLOW_LINE : SLOW_LINE,
         metronome: true,
+        haptic: 'impact',
       };
     case 'TARGET_ADJUSTED':
       // 중심값 하나만 말한다. 범위 숫자는 화면에도 음성에도 노출하지 않는다 (§3).
-      return { text: `목표를 ${(event.payload.min + event.payload.max) / 2}로 낮췄어요`, metronome: false };
+      return { text: `목표를 ${(event.payload.min + event.payload.max) / 2}로 낮췄어요`, metronome: false, haptic: 'impact' };
     case 'RECOVERY_MODE_ON':
-      return { text: RECOVERY_LINE, metronome: false };
+      return { text: RECOVERY_LINE, metronome: false, haptic: 'warning' };
     default:
       // RUN_START·PAUSE·RESUME·RUN_END는 화면이 알리고 음성은 쓰지 않는다.
       return null;

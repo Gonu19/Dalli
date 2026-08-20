@@ -65,8 +65,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    configureCues({ voice: voiceEnabled, metronome: metronomeEnabled });
-  }, [metronomeEnabled, voiceEnabled]);
+    configureCues({ voice: voiceEnabled, metronome: metronomeEnabled, haptics: hapticsEnabled });
+  }, [hapticsEnabled, metronomeEnabled, voiceEnabled]);
 
   const value = useMemo(() => ({
     voiceEnabled,

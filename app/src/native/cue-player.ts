@@ -1,8 +1,8 @@
 /**
  * 개입 오디오 재생 (`ENGINE.md` §7·§11).
  *
- * - 음성 ≤3초 한 문장 + 메트로놈 5초, 각각 설정으로 끌 수 있다
- * - **음성·메트로놈 모두 off면 햅틱 1회.** 아무 피드백도 없으면 앱이 죽은 것처럼 보인다
+ * - 음성 ≤3초 한 문장 + 메트로놈 5초 + 진동, 셋 다 각각 설정으로 끌 수 있다
+ * - **셋을 모두 끄면 아무것도 내보내지 않는다.** 끈 것을 대신 울려 주지 않는다
  * - 외부 음악은 멈추지 않는다. 개입 순간만 `duckOthers`로 잠깐 줄였다가 되돌린다
  *
  * 문구는 `engine/cues.ts`가 정한다. 여기서는 소리 내는 일만 한다.
@@ -19,9 +19,10 @@ import { CLICK_WAV_DATA_URI } from './click-sound';
 export type CuePreferences = {
   voice: boolean;
   metronome: boolean;
+  haptics: boolean;
 };
 
-let preferences: CuePreferences = { voice: true, metronome: false };
+let preferences: CuePreferences = { voice: true, metronome: false, haptics: true };
 let click: AudioPlayer | null = null;
 let metronomeTimer: ReturnType<typeof setInterval> | null = null;
 let metronomeStop: ReturnType<typeof setTimeout> | null = null;
@@ -46,6 +47,17 @@ const SPEECH_TIMEOUT_MS = 8_000;
  */
 const DUCK_SETTLE_MS = 200;
 
+/**
+ * 진동 한 번. 화면이 꺼져 있으면 OS가 알아서 무시하므로 여기서 따로 막지 않는다.
+ * 실패해도 삼킨다 — 진동은 보조 신호이고, 없다고 러닝을 멈출 이유가 없다.
+ */
+function playHaptic(kind: Cue['haptic']): Promise<void> {
+  const fired = kind === 'warning'
+    ? Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+    : Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  return fired.catch(() => {});
+}
+
 /** 설정 화면의 값을 그대로 넘겨준다. 러닝 중 변경도 즉시 반영된다. */
 export function configureCues(next: CuePreferences): void {
   preferences = next;
@@ -69,10 +81,10 @@ export function configureCues(next: CuePreferences): void {
  * 첫 번째를 끊는다.
  */
 export async function playCue(cue: Cue, bpm: number): Promise<void> {
-  if (!preferences.voice && !preferences.metronome) {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    return;
-  }
+  // 진동은 오디오와 독립된 채널이다. 소리를 껐다고 대신 울리지도, 소리가 난다고 빠지지도 않는다.
+  // 대기열에 넣지 않고 바로 내보낸다 — 개입이 밀려 있어도 신호는 지금 도착해야 한다.
+  if (preferences.haptics) void playHaptic(cue.haptic);
+  if (!preferences.voice && !preferences.metronome) return;
 
   queue.push({ cue, bpm });
   if (playing) return;

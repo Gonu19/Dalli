@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Modal, Platform, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { useUploadRun } from '@/src/api/queries';
 import { useAuth } from '@/src/components/auth-provider';
@@ -47,7 +46,6 @@ export default function ActiveRunScreen() {
   const [showGuide, setShowGuide] = useState(false);
   const [targetNotice, setTargetNotice] = useState<string | null>(null);
   const previousTarget = useRef(run.target.center);
-  const handledEventCount = useRef(run.events.length);
 
   useEffect(() => attachCues(), []);
 
@@ -60,22 +58,6 @@ export default function ActiveRunScreen() {
     }
     previousTarget.current = run.target.center;
   }, [run.target.center]);
-
-  useEffect(() => {
-    const freshEvents = run.events.slice(handledEventCount.current);
-    handledEventCount.current = run.events.length;
-    if (!hapticsEnabled || freshEvents.length === 0) return;
-
-    for (const event of freshEvents) {
-      if (event.type === 'TOO_FAST' || event.type === 'TOO_SLOW') {
-        if (AppState.currentState === 'active') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-      } else if (event.type === 'TARGET_ADJUSTED') {
-        if (AppState.currentState === 'active') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-      } else if (event.type === 'RECOVERY_MODE_ON') {
-        if (AppState.currentState === 'active') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      }
-    }
-  }, [hapticsEnabled, run.events]);
 
   const save = async () => {
     const snapshot = run.snapshot();
