@@ -100,7 +100,7 @@ export async function playCue(cue: Cue, bpm: number): Promise<void> {
       if (next === undefined) break;
 
       if (preferences.voice) await speakOnce(next.cue.text);
-      if (preferences.metronome && next.cue.metronome) await runMetronome(next.bpm);
+      if (preferences.metronome && next.cue.metronome) await runMetronome(next.bpm, next.cue.metronomeSec);
     }
   } finally {
     playing = false;
@@ -117,12 +117,28 @@ export async function playCue(cue: Cue, bpm: number): Promise<void> {
  * 길이는 개입 메트로놈과 같은 `METRONOME_SEC`다. 끝나면 resolve하므로 화면이 버튼 상태를
  * 되돌릴 수 있고, 도중에 `stopPreview()`로 끊어도 resolve된다.
  */
-export async function previewMetronome(bpm: number): Promise<void> {
+export async function previewMetronome(bpm: number, durationSec: number = METRONOME_SEC): Promise<void> {
+  await playAlone(bpm, durationSec);
+}
+
+/**
+ * 기준 리듬을 다시 들려주는 주기 안내. **박자만 나간다** — 음성도 진동도 쓰지 않는다.
+ *
+ * 개입이 아니므로 대기열을 쓰지 않는다. 다만 사용자가 끈 자동 소리이므로
+ * 미리듣기와 달리 **메트로놈 설정을 따른다.**
+ */
+export async function playPaceReminder(bpm: number, durationSec: number): Promise<void> {
+  if (!preferences.metronome) return;
+  await playAlone(bpm, durationSec);
+}
+
+/** 큐를 거치지 않고 메트로놈만 재생한다. */
+async function playAlone(bpm: number, durationSec: number): Promise<void> {
   await duck(true);
   // 세션 전환이 끝나기 전에 울리면 첫 클릭이 삼켜진다. 음성이 첫 음절을 잃는 것과 같은 이유다.
   await delay(DUCK_SETTLE_MS);
   try {
-    await runMetronome(bpm);
+    await runMetronome(bpm, durationSec);
   } finally {
     await duck(false);
   }

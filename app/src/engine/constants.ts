@@ -85,6 +85,17 @@ export const COOLDOWN_SEC = 60;
 // 개입 오디오 (§7)
 export const VOICE_MAX_SEC = 3;
 export const METRONOME_SEC = 5;
+/**
+ * 러닝 시작 안내에서 들려주는 목표 리듬 길이(초).
+ * 개입보다 길게 주는 이유는, 시작 시점에는 고칠 것이 아니라 기준을 몸에 넣는 것이기 때문이다.
+ */
+export const METRONOME_INTRO_SEC = 10;
+/**
+ * 기준 리듬을 다시 들려주는 주기(초).
+ * **개입이 있었던 주기는 건너뛴다.** 방금 지적을 받은 사람에게 또 소리를 내면
+ * 쿨다운(§7)이 무의미해지고, 개입 신호가 주기 소리에 묻힌다.
+ */
+export const PACE_REMINDER_SEC = 60;
 export const MAX_FAST_INTERVENTION = 2;
 /** 목표 90% 도달 이후 `TOO_FAST` 중지 — 막판 스퍼트 허용 (§10). */
 export const FAST_MUTE_PROGRESS = 0.9;

@@ -5,7 +5,7 @@
  * 음성은 **3초 이내 한 문장**이다. 길어지면 달리는 사람이 못 듣는다.
  */
 
-import { SLOW_JUDGE_START_SEC } from './constants';
+import { METRONOME_INTRO_SEC, METRONOME_SEC, SLOW_JUDGE_START_SEC } from './constants';
 import type { RunEvent, TargetRange } from './types';
 
 export type Cue = {
@@ -13,6 +13,8 @@ export type Cue = {
   text: string;
   /** 메트로놈을 함께 울릴지 — 리듬을 되찾는 개입에만 붙인다. */
   metronome: boolean;
+  /** 메트로놈 길이(초). 시작 안내는 기준을 익히는 자리라 개입보다 길다. */
+  metronomeSec: number;
   /**
    * 진동의 성격. 음성·메트로놈과 나란한 세 번째 채널이다.
    *
@@ -61,21 +63,30 @@ export function cueForEvent(
   switch (event.type) {
     case 'TOO_FAST': {
       const line = FAST_LINES[Math.min(context.fastInterventionCount, FAST_LINES.length) - 1];
-      return line === undefined ? null : { text: line, metronome: true, haptic: 'impact' };
+      return line === undefined ? null : { text: line, metronome: true, metronomeSec: METRONOME_SEC, haptic: 'impact' };
     }
     case 'TOO_SLOW':
       return {
         text: context.elapsedSec < SLOW_JUDGE_START_SEC ? EARLY_SLOW_LINE : SLOW_LINE,
         metronome: true,
+        metronomeSec: METRONOME_SEC,
         haptic: 'impact',
       };
     case 'TARGET_ADJUSTED':
       // 중심값 하나만 말한다. 범위 숫자는 화면에도 음성에도 노출하지 않는다 (§3).
-      return { text: `목표를 ${(event.payload.min + event.payload.max) / 2}로 낮췄어요`, metronome: false, haptic: 'impact' };
+      return { text: `목표를 ${(event.payload.min + event.payload.max) / 2}로 낮췄어요`, metronome: false, metronomeSec: METRONOME_SEC, haptic: 'impact' };
     case 'RECOVERY_MODE_ON':
-      return { text: RECOVERY_LINE, metronome: false, haptic: 'warning' };
+      return { text: RECOVERY_LINE, metronome: false, metronomeSec: METRONOME_SEC, haptic: 'warning' };
+    case 'RUN_START':
+      // 중심값 하나만 말한다 (§3). 조사가 숫자 끝소리에 따라 달라지지 않게 쉼표로 끊는다.
+      return {
+        text: `목표 리듬 ${(event.payload.min + event.payload.max) / 2}, 이 박자에 맞춰 달려볼까요?`,
+        metronome: true,
+        metronomeSec: METRONOME_INTRO_SEC,
+        haptic: 'impact',
+      };
     default:
-      // RUN_START·PAUSE·RESUME·RUN_END는 화면이 알리고 음성은 쓰지 않는다.
+      // PAUSE·RESUME·RUN_END는 화면이 알리고 음성은 쓰지 않는다.
       return null;
   }
 }
