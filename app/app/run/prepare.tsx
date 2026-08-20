@@ -12,6 +12,7 @@ import { WheelPickerModal } from '@/src/components/wheel-picker-modal';
 import { CONDITION_VALUE } from '@/src/engine/constants';
 import type { ConditionLevel } from '@/src/engine/types';
 import { findPlanForRun } from '@/src/store/plan-link';
+import { useMetronomePreview } from '@/src/components/use-metronome-preview';
 import { startTrackedRun } from '@/src/store/runController';
 import type { RunGoal } from '@/src/store/runStore';
 import { colors, compactPressFeedback, navigationHeader, pressFeedback } from '@/src/theme/tokens';
@@ -45,6 +46,7 @@ export default function RunPrepare() {
   const [timeSec, setTimeSec] = useState<number | null>(null);
   const [distanceM, setDistanceM] = useState<number | null>(null);
   const [goalPickerOpen, setGoalPickerOpen] = useState(false);
+  const { previewing, toggle: togglePreview, stop: stopPreview } = useMetronomePreview(cadence);
   const goal: RunGoal | null = goalKind === 'TIME'
     ? (timeSec === null ? null : { type: 'TIME', value: timeSec })
     : (distanceM === null ? null : { type: 'DISTANCE', value: distanceM });
@@ -84,6 +86,7 @@ export default function RunPrepare() {
 
   const begin = async () => {
     if (cadence === null || goal === null) return;
+    stopPreview();
     await startTrackedRun({
       referenceCadence: cadence,
       condition: CONDITION_VALUE[condition],
@@ -110,6 +113,16 @@ export default function RunPrepare() {
     </Pressable>
     <View style={styles.goalCard}>
       <Text style={styles.cardTitle}>목표 케이던스 조절</Text>
+      <Pressable
+        accessibilityLabel={previewing ? '리듬 듣기 멈춤' : '목표 리듬 들어보기'}
+        accessibilityRole="button"
+        disabled={cadence === null}
+        onPress={togglePreview}
+        style={({ pressed }) => [styles.preview, previewing && styles.previewOn, cadence === null && styles.disabled, pressed && styles.controlPressed]}
+      >
+        <Ionicons color={previewing ? colors.white : colors.primary} name={previewing ? 'stop' : 'volume-medium'} size={14} />
+        <Text style={[styles.previewText, previewing && styles.previewTextOn]}>{previewing ? '멈춤' : '들어보기'}</Text>
+      </Pressable>
       <View style={styles.valueRow}><Text style={styles.value}>{cadence ?? '—'}</Text>{cadence !== null ? <Text style={styles.unit}>spm</Text> : null}</View>
       <View style={styles.controls}>{cadenceControls.map(({ delta, label }) => <Pressable
         accessibilityLabel={`케이던스 ${label}`}
@@ -190,6 +203,10 @@ const styles = StyleSheet.create({
   buttonPressed: pressFeedback,
   controlText: { fontSize: 13, fontWeight: '700', color: colors.ink },
   disabled: { opacity: 0.45 },
+  preview: { position: 'absolute', right: 18, top: 14, flexDirection: 'row', alignItems: 'center', gap: 4, height: 28, paddingHorizontal: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.primary },
+  previewOn: { backgroundColor: colors.primary },
+  previewText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  previewTextOn: { color: colors.white },
   line: { position: 'absolute', left: 18, right: 18, top: 168, height: 1, backgroundColor: colors.border },
   timeBox: { position: 'absolute', left: 105, top: 190, width: 104, height: 36, borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center' },
   time: { marginLeft: 17, fontSize: 14, fontWeight: '700', color: colors.ink },

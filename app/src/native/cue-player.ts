@@ -106,6 +106,30 @@ export async function playCue(cue: Cue, bpm: number): Promise<void> {
   }
 }
 
+/**
+ * 목표 리듬을 미리 들려준다 (러닝 준비·온보딩의 리듬 조절).
+ *
+ * 개입 큐를 타지 않는다. 사용자가 직접 누른 것이므로 **메트로놈 설정이 꺼져 있어도 울린다.**
+ * 설정은 러닝 중 자동 개입을 켜고 끄는 것이지, 직접 요청한 재생까지 막지는 않는다.
+ *
+ * 길이는 개입 메트로놈과 같은 `METRONOME_SEC`다. 끝나면 resolve하므로 화면이 버튼 상태를
+ * 되돌릴 수 있고, 도중에 `stopPreview()`로 끊어도 resolve된다.
+ */
+export async function previewMetronome(bpm: number): Promise<void> {
+  await duck(true);
+  try {
+    await runMetronome(bpm);
+  } finally {
+    await duck(false);
+  }
+}
+
+/** 미리듣기 중단. 화면을 떠나거나 러닝을 시작할 때 반드시 부른다. */
+export function stopPreview(): void {
+  stopMetronome();
+  void duck(false);
+}
+
 /** 러닝 종료·화면 이탈 시 정리. */
 export function stopCues(): void {
   queue = [];
