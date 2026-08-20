@@ -23,6 +23,17 @@ export const PURPOSE_ADJUST: Record<RunningPurpose, number> = {
 
 // 측정 사이클 (§4)
 export const WINDOW_SEC = 20;
+/**
+ * 화면에 띄우는 리듬의 윈도우(초). 판정용 `WINDOW_SEC`와 **일부러 다르다.**
+ *
+ * 판정은 지속성을 봐야 해서 20초 중앙값이 옳다. 그런데 그 값은 새 리듬이 표본의
+ * 과반이 되기 전까지 **꿈쩍도 하지 않는다** — 빨리 뛰는데 숫자가 멈춰 있어 센서가
+ * 안 먹는 것처럼 느껴진다. 화면은 즉시 반응해야 하므로 더 짧게 본다.
+ *
+ * 소스가 이미 8초 구간합으로 배치 튐을 걷어낸 뒤라(§4), 여기서 짧게 잡아도
+ * `0, 300, 0` 같은 값이 들어오지 않는다.
+ */
+export const DISPLAY_WINDOW_SEC = 6;
 export const TICK_SEC = 5;
 export const SENSOR_TICK_SEC = 1;
 export const SAMPLE_INTERVAL_SEC = 5;

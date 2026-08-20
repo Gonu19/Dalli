@@ -14,7 +14,7 @@
 
 import { create } from 'zustand';
 
-import { SAMPLE_INTERVAL_SEC, TICK_SEC } from '../engine/constants';
+import { DISPLAY_WINDOW_SEC, SAMPLE_INTERVAL_SEC, TICK_SEC } from '../engine/constants';
 import { createJudgeState, judge } from '../engine/judge';
 import type { JudgeState } from '../engine/judge';
 import { computeMeasuredBaseline, computeTargetRange } from '../engine/target';
@@ -106,8 +106,13 @@ type RunStore = {
    */
   phase: JudgePhase;
   zone: CadenceZone | null;
-  /** 화면에 노출하는 현재 리듬. 품질 미달이면 `null`. */
+  /** 판정용 리듬 (20초 중앙값). 품질 미달이면 `null`. */
   cadence: number | null;
+  /**
+   * 화면에 띄우는 리듬 (`DISPLAY_WINDOW_SEC` 중앙값).
+   * 판정값보다 빨리 움직인다 — 숫자가 먼저 반응하고, 그 상태가 이어지면 색이 따라온다.
+   */
+  displayCadence: number | null;
   /** 화면·음성에는 `center` 하나만 쓴다. 범위 숫자는 노출 금지 (`ENGINE.md` §3). */
   target: TargetRange;
   totalSec: number;
@@ -135,6 +140,7 @@ type RunStore = {
 type Session = {
   judgeState: JudgeState;
   window: CadenceWindow;
+  displayWindow: CadenceWindow;
   initialTarget: TargetRange;
   condition: ConditionValue;
   goal: RunGoal;
@@ -166,6 +172,7 @@ const idleState = {
   phase: 'WARMUP' as JudgePhase,
   zone: null as CadenceZone | null,
   cadence: null,
+  displayCadence: null,
   target: { center: 0, min: 0, max: 0 },
   totalSec: 0,
   activeSec: 0,
@@ -187,6 +194,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     session = {
       judgeState: createJudgeState(target),
       window: new CadenceWindow(),
+      displayWindow: new CadenceWindow(DISPLAY_WINDOW_SEC),
       initialTarget: target,
       condition: options.condition,
       goal: options.goal,
@@ -222,7 +230,9 @@ export const useRunStore = create<RunStore>((set, get) => ({
     const activeSec = totalSec - current.pausedTotalSec;
 
     current.window.push(activeSec, sample.cadence);
+    current.displayWindow.push(activeSec, sample.cadence);
     const cadence = current.window.value(activeSec);
+    const displayCadence = current.displayWindow.value(activeSec) ?? cadence;
     const previous = get();
 
     // 센서는 1초마다 오지만 판정은 5초 tick이다 (`ENGINE.md` §4).
@@ -230,7 +240,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
     const shouldJudge =
       current.lastJudgeSec === null || activeSec - current.lastJudgeSec >= TICK_SEC;
     if (!shouldJudge) {
-      set({ totalSec, activeSec, cadence });
+      set({ totalSec, activeSec, cadence, displayCadence });
       return;
     }
     current.lastJudgeSec = activeSec;
@@ -263,6 +273,7 @@ export const useRunStore = create<RunStore>((set, get) => ({
       totalSec,
       activeSec,
       cadence,
+      displayCadence,
       verdict: result.state.verdict,
       phase: result.state.phase,
       zone: result.state.zone,

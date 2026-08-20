@@ -131,7 +131,7 @@ export default function ActiveRunScreen() {
       <Text style={styles.time}>{formatDuration(run.activeSec)}</Text>
 
       <View style={styles.metrics}>
-        <Metric highlighted label="현재 케이던스" value={run.verdict === 'UNAVAILABLE' || run.cadence === null ? '—' : `${Math.round(run.cadence)} SPM`} color={verdictColor} />
+        <Metric highlighted label="현재 케이던스" value={run.verdict === 'UNAVAILABLE' || run.displayCadence === null ? '—' : `${Math.round(run.displayCadence)} SPM`} color={verdictColor} />
         <Metric label="거리" value={run.distanceM === null ? '—' : `${(run.distanceM / 1000).toFixed(2)} km`} />
         <Metric label="평균 페이스" value={run.paceSecPerKm === null ? '—' : `${formatPace(run.paceSecPerKm)}/km`} />
       </View>
