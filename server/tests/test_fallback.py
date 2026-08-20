@@ -216,6 +216,28 @@ def test_fallback_verdict_keeps_complete_and_stable_focus_without_raw_fields():
     assert "0.600" not in content.verdict
 
 
+def test_fallback_formats_long_durations_for_people():
+    content = build(
+        app_run(
+            duration_sec=548,
+            samples=[{"t": t, "c": 157} for t in range(0, 548, 5)],
+        )
+    )
+    visible = " ".join((content.verdict, *content.evidence, content.limitation or ""))
+
+    assert "548초" not in visible
+    assert "9분 8초" in visible
+
+
+def test_fallback_formats_long_pace_without_raw_seconds():
+    run = app_run(avg_pace_sec_per_km=328)
+    run.user = User(running_purpose="PERFORMANCE")
+    content = build(run)
+
+    assert any("5분 28초/km" in evidence for evidence in content.evidence)
+    assert "328초/km" not in content.evidence
+
+
 def test_fallback_with_null_fatigue_does_not_guess_burden():
     content = build(app_run(late_drop_rate=None, fatigue_index=None))
     assert "안정적인 리듬" in content.verdict

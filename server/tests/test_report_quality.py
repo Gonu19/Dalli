@@ -78,7 +78,7 @@ def test_unsupported_numeric_claim_is_a_warning_but_report_still_passes() -> Non
     allowed = evaluate_report_output(
         {
             **payload,
-            "evidence": ["안정 구간 100% (600초)", "오늘의 부담 10%"],
+            "evidence": ["안정 구간 100% (6분)", "오늘의 부담 10%"],
             "prescription": "다음 러닝도 시작 5분 동안 같은 리듬을 유지해 보세요.",
         },
         fallback,
@@ -450,19 +450,47 @@ def test_aiq04_reproduced_validator_gaps_are_blocked(field, text, reason) -> Non
 @pytest.mark.parametrize(
     ("field", "text"),
     [
-        ("evidence", ["안정 구간 100% (600초)", "다음 목표 리듬은 159spm이에요."]),
+        ("evidence", ["안정 구간 100% (6분)", "다음 목표 리듬은 159spm이에요."]),
         ("recovery_note", "무리하지 말고 편안하게 회복해 주세요."),
         ("recovery_note", "불편함이 지속되면 전문가와 상담하세요."),
         ("verdict", "목표 범위를 벗어난 구간이 있었지만 러닝을 기록했어요."),
         ("prescription", "다음 러닝은 시작 5분 동안 같은 리듬을 유지해 보세요."),
         ("next_goal_text", "다음 목표: 10분 완주, 리듬 159"),
-        ("next_goal_text", "다음 목표: 10분 완주, 리듬 155~163"),
     ],
 )
 def test_aiq04_normal_korean_contrast_reports_are_not_overblocked(field, text) -> None:
     _, _, _, fallback, summary, payload = gate_context()
     result = evaluate_report_output({**payload, field: text}, fallback, summary)
     assert result.passed is True
+
+
+@pytest.mark.parametrize(
+    ("field", "text"),
+    [
+        ("next_goal_text", "다음 목표: 리듬 155~163"),
+        ("prescription", "다음에는 분당 155에서 163걸음으로 달려 보세요."),
+    ],
+)
+def test_target_range_is_rejected_even_when_values_match_server_target(field, text) -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    result = evaluate_report_output({**payload, field: text}, fallback, summary)
+
+    assert HardGateReason.TARGET_RANGE_EXPOSED in result.reasons
+
+
+@pytest.mark.parametrize(
+    ("field", "text", "reason"),
+    [
+        ("verdict", "오늘은 completed 흐름으로 기록됐어요.", HardGateReason.INTERNAL_FIELD_EXPOSED),
+        ("evidence", ["안정 구간의 median cadence는 157이에요."], HardGateReason.INTERNAL_FIELD_EXPOSED),
+        ("evidence", ["활동 시간은 548초였어요."], HardGateReason.UNREADABLE_DURATION_FORMAT),
+    ],
+)
+def test_product_readability_violations_are_hard_gated(field, text, reason) -> None:
+    _, _, _, fallback, summary, payload = gate_context()
+    result = evaluate_report_output({**payload, field: text}, fallback, summary)
+
+    assert reason in result.reasons
 
 
 @pytest.mark.parametrize(

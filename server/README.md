@@ -290,14 +290,14 @@ app/
   routers/   auth  users  runs  reports  plans  calendar  stats
   services/
     metrics.py    FI · Rhythm Score · 평균값
-    llm.py        8초 타임아웃
+    llm.py        20초 타임아웃 · 3000 출력 토큰
     fallback.py   룰베이스 문구
 ```
 
 ## 구현 순서
 1. `fallback.py` — **`llm.py`보다 먼저.** LLM 없이도 리포트가 나와야 시연이 안 죽음
 2. `metrics.py` — 계산식은 [../docs/ENGINE.md](../docs/ENGINE.md) §10
-3. `llm.py` — 8초 타임아웃, 초과·실패 시 폴백으로 **200 응답** (5xx 금지)
+3. `llm.py` — 20초 타임아웃, 초과·실패 시 폴백으로 **200 응답** (5xx 금지)
 
 ## 규칙
 - API 계약 변경은 [../docs/CONTRACT.md](../docs/CONTRACT.md)를 **먼저** 고치고 구현 → push + 팀 알림

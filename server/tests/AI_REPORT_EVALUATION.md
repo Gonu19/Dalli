@@ -11,9 +11,10 @@
 - 허용 집계값 밖의 numeric claim 금지
 - 의료 진단·치료 및 사용자 비난 표현 금지
 - `next_goal_text`의 목표 중심값·방향 모순 금지
+- 목표 리듬 범위, 내부 필드명, 60초 이상 초 단위 표기 금지
 - raw samples/events 외부 전송 금지
 - MANUAL 및 분석 불가능 Run 사전 호출 차단
-- 전체 deadline 8초와 실패 시 fallback
+- 전체 deadline 20초와 실패 시 fallback
 - fallback 자체의 schema 및 보호값 검증
 
 숫자 반올림은 기존 화면·fallback 표현만 허용한다. 0~1 지표의 정수 백분율, 초 단위 반올림, 정확히 나누어지는 분·km 표시, 다음 목표 범위의 중심값이 대상이다. 문서에 없는 임의 오차 범위는 두지 않는다.

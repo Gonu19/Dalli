@@ -39,6 +39,9 @@ class HardGateReason(StrEnum):
     MEDICAL_CLAIM_DETECTED = "MEDICAL_CLAIM_DETECTED"
     BLAMING_LANGUAGE_DETECTED = "BLAMING_LANGUAGE_DETECTED"
     NEXT_GOAL_CONTRADICTION = "NEXT_GOAL_CONTRADICTION"
+    TARGET_RANGE_EXPOSED = "TARGET_RANGE_EXPOSED"
+    INTERNAL_FIELD_EXPOSED = "INTERNAL_FIELD_EXPOSED"
+    UNREADABLE_DURATION_FORMAT = "UNREADABLE_DURATION_FORMAT"
     RAW_SENSOR_PAYLOAD_DETECTED = "RAW_SENSOR_PAYLOAD_DETECTED"
     MANUAL_RUN_LLM_BLOCKED = "MANUAL_RUN_LLM_BLOCKED"
     UNANALYZABLE_RUN_LLM_BLOCKED = "UNANALYZABLE_RUN_LLM_BLOCKED"
@@ -93,6 +96,19 @@ DURATION_SUMMARY_KEYS = ("duration_sec", "active_duration_sec", "in_range_sec")
 RHYTHM_TARGET_PATTERN = re.compile(r"리듬\s*([-+]?\d+(?:\.\d+)?)")
 RHYTHM_RANGE_PATTERN = re.compile(
     r"리듬\s*([-+]?\d+(?:\.\d+)?)\s*(?:~|-|–)\s*([-+]?\d+(?:\.\d+)?)"
+)
+TARGET_RANGE_PATTERN = re.compile(
+    r"(?<!\d)[-+]?\d+(?:\.\d+)?\s*(?:~|～|-|–|—|에서|부터)\s*"
+    r"[-+]?\d+(?:\.\d+)?"
+)
+INTERNAL_FIELD_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"(?<![A-Za-z0-9_])(?:active_duration_sec|duration_sec|in_range_sec|late_drop_rate|"
+        r"rhythm_score|fatigue_index|median_cadence|segment_summary|"
+        r"detail_time_blocks|detail_rapid_changes|recovery_mode|completed)(?![A-Za-z0-9_])",
+        r"(?<![A-Za-z0-9_])(?:baseline|cadence)(?![A-Za-z0-9_])",
+    )
 )
 ROUTINE_EVIDENCE_PATTERNS = tuple(
     re.compile(pattern)
@@ -437,6 +453,30 @@ def _next_goal_contradicts(
     )
 
 
+def _has_target_range(content: LLMReportContent) -> bool:
+    return any(
+        TARGET_RANGE_PATTERN.search(text) is not None
+        for text in (content.next_goal_text, content.prescription)
+        if text is not None
+    )
+
+
+def _has_internal_field_exposure(content: LLMReportContent) -> bool:
+    return any(
+        pattern.search(text) is not None
+        for text in _all_text(content)
+        for pattern in INTERNAL_FIELD_PATTERNS
+    )
+
+
+def _has_unreadable_duration_format(content: LLMReportContent) -> bool:
+    for text in _all_text(content):
+        for match in re.finditer(r"(?<!\d)(?P<seconds>\d{2,})\s*초", text):
+            if int(match.group("seconds")) >= 60:
+                return True
+    return False
+
+
 def evaluate_report_output(
     parsed: object,
     fallback: FallbackReportContent,
@@ -474,6 +514,12 @@ def evaluate_report_output(
         _add_reason(reasons, HardGateReason.MEDICAL_CLAIM_DETECTED)
     if any(pattern.search(joined) for pattern in BLAMING_PATTERNS):
         _add_reason(reasons, HardGateReason.BLAMING_LANGUAGE_DETECTED)
+    if _has_target_range(content):
+        _add_reason(reasons, HardGateReason.TARGET_RANGE_EXPOSED)
+    if _has_internal_field_exposure(content):
+        _add_reason(reasons, HardGateReason.INTERNAL_FIELD_EXPOSED)
+    if _has_unreadable_duration_format(content):
+        _add_reason(reasons, HardGateReason.UNREADABLE_DURATION_FORMAT)
     if _next_goal_contradicts(content, fallback, summary):
         _add_reason(reasons, HardGateReason.NEXT_GOAL_CONTRADICTION)
     return HardGateResult(

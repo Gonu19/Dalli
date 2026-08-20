@@ -113,9 +113,17 @@ def _weekly_run_count(run: Run) -> int:
 def _format_duration(value: int | None) -> str | None:
     if value is None or value < 0:
         return None
-    if value % 60 == 0:
-        return f"{value // 60}분"
-    return f"{value}초"
+    minutes, seconds = divmod(value, 60)
+    if minutes == 0:
+        return f"{seconds}초"
+    if seconds == 0:
+        return f"{minutes}분"
+    return f"{minutes}분 {seconds}초"
+
+
+def _format_pace(value: int | None) -> str | None:
+    formatted = _format_duration(value)
+    return f"{formatted}/km" if formatted is not None else None
 
 
 def _purpose_verdict(run: Run) -> str:
@@ -166,7 +174,9 @@ def _purpose_evidence(
         if run.rhythm_score is not None:
             evidence.append(f"안정 구간 {round(float(run.rhythm_score) * 100)}%")
         if run.avg_pace_sec_per_km is not None:
-            evidence.append(f"평균 페이스 {run.avg_pace_sec_per_km}초/km")
+            pace = _format_pace(round(float(run.avg_pace_sec_per_km)))
+            if pace is not None:
+                evidence.append(f"평균 페이스 {pace}")
         if run.intervention_count is not None:
             evidence.append(f"개입 {run.intervention_count}회")
         return evidence or ["리듬과 페이스를 확인했어요."]
@@ -175,9 +185,10 @@ def _purpose_evidence(
         "완주했어요" if run.completed else "러닝을 기록했어요.",
     ]
     if run.rhythm_score is not None and metrics.in_range_sec is not None:
+        in_range = _format_duration(round(float(metrics.in_range_sec)))
         evidence.append(
             f"안정 구간 {round(float(run.rhythm_score) * 100)}% "
-            f"({round(metrics.in_range_sec)}초)"
+            f"({in_range})"
         )
     if fatigue is not None:
         evidence.append(f"오늘의 부담: {fatigue}")
@@ -217,11 +228,7 @@ def _goal_text(run: Run, center: int) -> str:
     if purpose == "PERFORMANCE":
         return f"다음 목표: 안정 구간과 평균 페이스를 유지해 보세요. 리듬 {center}"
     if run.goal_type == "TIME" and run.goal_value is not None:
-        amount = (
-            f"{run.goal_value // 60}분"
-            if run.goal_value % 60 == 0
-            else f"{run.goal_value}초"
-        )
+        amount = _format_duration(run.goal_value) or "활동 시간"
         return f"다음 목표: {amount} 완주, 리듬 {center}"
     if run.goal_type == "DISTANCE" and run.goal_value is not None:
         amount = (
