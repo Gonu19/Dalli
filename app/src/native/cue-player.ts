@@ -23,8 +23,16 @@ export type CuePreferences = {
 };
 
 let preferences: CuePreferences = { voice: true, metronome: false, haptics: true };
-let click: AudioPlayer | null = null;
-let metronomeTimer: ReturnType<typeof setInterval> | null = null;
+/**
+ * 클릭 플레이어 풀.
+ *
+ * 하나를 되감아 재사용하면 박자가 빠진다. `seekTo`가 **Promise를 돌려주는 비동기**라
+ * 되감기가 끝나기 전에 `play()`가 나가고, 재생 머리가 소리 끝에 남아 있어 아무 소리도
+ * 안 난다. 여러 개를 돌려 쓰면 되감을 시간을 벌 수 있다.
+ */
+let clicks: AudioPlayer[] = [];
+let beatIndex = 0;
+let metronomeTimer: ReturnType<typeof setTimeout> | null = null;
 let metronomeStop: ReturnType<typeof setTimeout> | null = null;
 /** 메트로놈 5초가 끝났음을 큐에 알리는 resolver. 중간에 멈춰도 반드시 부른다. */
 let metronomeDone: (() => void) | null = null;
@@ -32,6 +40,11 @@ let metronomeDone: (() => void) | null = null;
 /** 재생 대기열과 진행 여부. 개입은 겹치지 않고 순서대로 나간다. */
 let queue: { cue: Cue; bpm: number }[] = [];
 let playing = false;
+
+/** 클릭음 길이(ms). 소리가 끝난 뒤에 되감아야 클릭이 한 번 더 울리지 않는다. */
+const CLICK_MS = 35;
+/** 클릭 플레이어 개수. 한 플레이어의 다음 차례가 3박 뒤라 되감기가 끝날 시간이 넉넉하다. */
+const CLICK_POOL_SIZE = 4;
 
 /**
  * 발화 안전망(ms). `onDone`이 오지 않는 기기가 있어 무한정 기다리지 않는다.
@@ -117,6 +130,8 @@ export async function playCue(cue: Cue, bpm: number): Promise<void> {
  */
 export async function previewMetronome(bpm: number): Promise<void> {
   await duck(true);
+  // 세션 전환이 끝나기 전에 울리면 첫 클릭이 삼켜진다. 음성이 첫 음절을 잃는 것과 같은 이유다.
+  await delay(DUCK_SETTLE_MS);
   try {
     await runMetronome(bpm);
   } finally {
@@ -179,26 +194,46 @@ function runMetronome(bpm: number): Promise<void> {
     }
 
     metronomeDone = resolve;
-    click ??= createAudioPlayer({ uri: CLICK_WAV_DATA_URI });
+    if (clicks.length === 0) {
+      clicks = Array.from({ length: CLICK_POOL_SIZE }, () => createAudioPlayer({ uri: CLICK_WAV_DATA_URI }));
+    }
     const intervalMs = (60 / bpm) * 1000;
 
     const beat = () => {
+      const player = clicks[beatIndex % clicks.length];
+      beatIndex += 1;
       try {
-        click?.seekTo(0);
-        click?.play();
+        player.play();
+        // 되감기는 소리가 끝난 뒤에 건다. 재생 중에 되감으면 같은 클릭이 다시 울린다.
+        setTimeout(() => void player.seekTo(0).catch(() => {}), CLICK_MS + 20);
       } catch {
         stopMetronome();
       }
     };
 
-    beat();
-    metronomeTimer = setInterval(beat, intervalMs);
+    /**
+     * 박자를 **절대 시각 기준**으로 잡는다.
+     *
+     * `setInterval`은 JS 스레드가 밀리면 그만큼씩 늦어지고 그 오차가 쌓여 박자가 흔들린다.
+     * 매 박마다 시작 시각으로부터의 목표 시각을 다시 계산해 밀린 만큼을 흡수한다.
+     * 시간을 재지 않는다는 규칙은 판정을 맡는 `engine/`의 것이고, 여기는 오디오 스케줄러다.
+     */
+    const startedAt = Date.now();
+    let played = 0;
+    const schedule = () => {
+      beat();
+      played += 1;
+      const target = played * intervalMs;
+      metronomeTimer = setTimeout(schedule, Math.max(0, target - (Date.now() - startedAt)));
+    };
+
+    schedule();
     metronomeStop = setTimeout(() => stopMetronome(), METRONOME_SEC * 1000);
   });
 }
 
 function stopMetronome(): void {
-  if (metronomeTimer !== null) clearInterval(metronomeTimer);
+  if (metronomeTimer !== null) clearTimeout(metronomeTimer);
   if (metronomeStop !== null) clearTimeout(metronomeStop);
   metronomeTimer = null;
   metronomeStop = null;
