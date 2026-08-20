@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     llm_enabled: bool = False
     openai_model: str = "gpt-4o-mini"
-    llm_timeout_sec: int = Field(default=8, ge=1, le=8)
+    llm_timeout_sec: int = Field(default=20, ge=1, le=20)
+    llm_max_output_tokens: int = Field(default=3000, ge=512, le=4096)
     app_env: str | None = None
 
     model_config = SettingsConfigDict(

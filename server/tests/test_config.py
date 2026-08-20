@@ -8,6 +8,7 @@ def test_settings_can_be_injected_without_operational_secrets(monkeypatch) -> No
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://test:test@db:5432/test")
     monkeypatch.setenv("JWT_SECRET", "test-only-secret")
     monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("LLM_ENABLED", "false")
     monkeypatch.setenv("LLM_TIMEOUT_SEC", "3")
     clear_settings_cache()
 
@@ -25,10 +26,10 @@ def test_settings_can_be_injected_without_operational_secrets(monkeypatch) -> No
         clear_settings_cache()
 
 
-def test_llm_timeout_cannot_exceed_eight_seconds() -> None:
+def test_llm_timeout_cannot_exceed_twenty_seconds() -> None:
     with pytest.raises(ValidationError):
         Settings(
             database_url="postgresql+psycopg://test:test@db:5432/test",
             jwt_secret="test-only-secret",
-            llm_timeout_sec=9,
+            llm_timeout_sec=21,
         )

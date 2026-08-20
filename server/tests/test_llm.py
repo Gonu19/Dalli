@@ -75,6 +75,7 @@ def settings(*, enabled: bool = True, key: str = SECRET) -> Settings:
         llm_enabled=enabled,
         openai_model="gpt-4o-mini",
         llm_timeout_sec=1,
+        llm_max_output_tokens=3000,
     )
 
 
@@ -135,7 +136,8 @@ def test_structured_llm_success_uses_safe_summary_and_no_retries() -> None:
     assert content.next_target_min == fallback.next_target_min
     assert factory_args == {"api_key": SECRET, "timeout": 1, "max_retries": 0}
     assert fake.kwargs["text_format"] is LLMReportContent
-    assert fake.kwargs["max_output_tokens"] == 900
+    assert fake.kwargs["reasoning"] == {"effort": "low"}
+    assert fake.kwargs["max_output_tokens"] == 3000
     assert fake.kwargs["store"] is False
     assert fake.kwargs["instructions"] == LLM_REPORT_INSTRUCTIONS_V3
     assert "문장은 모두 자연스러운 한국어" in LLM_REPORT_INSTRUCTIONS_V3

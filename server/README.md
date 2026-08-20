@@ -65,7 +65,8 @@ JWT_SECRET=<random-32-bytes>
 OPENAI_API_KEY=<key>
 LLM_ENABLED=false
 OPENAI_MODEL=gpt-4o-mini
-LLM_TIMEOUT_SEC=8
+LLM_TIMEOUT_SEC=20
+LLM_MAX_OUTPUT_TOKENS=3000
 ```
 **절대 커밋 금지.** `.env.example`만 커밋, 실값은 EC2에 직접 설정.
 
@@ -79,13 +80,14 @@ LLM을 사용할 환경에서만 커밋되지 않는 `server/.env`에 다음 값
 LLM_ENABLED=true
 OPENAI_API_KEY=<실제 키>
 OPENAI_MODEL=gpt-4o-mini
-LLM_TIMEOUT_SEC=8
+LLM_TIMEOUT_SEC=20
+LLM_MAX_OUTPUT_TOKENS=3000
 ```
 
 `OPENAI_MODEL` 기본값은 Structured Outputs를 지원하는 저비용 모델이며 코드에
 분산해 하드코딩하지 않는다. OpenAI Responses API의 Pydantic structured output을
-사용하고 SDK 재시도는 0회다. SDK timeout과 서버 측 전체 deadline을 모두 8초
-이하로 적용한다. 외부 호출에는 집계 지표와 허용된 러닝 요약만 전달하며 원본
+사용하고 SDK 재시도는 0회다. SDK timeout과 서버 측 전체 deadline을 모두 20초
+이하로 적용한다. GPT-5 계열은 낮은 reasoning effort로 응답 예산을 관리한다. 외부 호출에는 집계 지표와 허용된 러닝 요약만 전달하며 원본
 `samples`·`events`는 보내지 않는다.
 
 timeout, 연결·인증·rate limit·공급자 오류, 빈 응답, JSON/schema/Pydantic 검증
@@ -309,4 +311,4 @@ app/
 | `gen_random_uuid()` 없음 | `CREATE EXTENSION IF NOT EXISTS pgcrypto;` |
 | 실기기에서 API 접속 안 됨 | 컨테이너 포트가 루프백 바인딩. 개발 중엔 `0.0.0.0:8000` + 보안그룹 확인 |
 | alembic autogenerate가 빈 마이그레이션 | `alembic/env.py`에 모델 import 누락 |
-| 리포트 요청이 오래 걸림 | `LLM_TIMEOUT_SEC=8` 확인, 폴백 경로 동작 확인 |
+| 리포트 요청이 오래 걸림 | `LLM_TIMEOUT_SEC`와 `LLM_MAX_OUTPUT_TOKENS` 확인, 폴백 경로 동작 확인 |

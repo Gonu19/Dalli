@@ -460,7 +460,8 @@ def generate_llm_report(
             instructions=LLM_REPORT_INSTRUCTIONS_V3,
             input=json.dumps(summary, ensure_ascii=False, separators=(",", ":")),
             text_format=LLMReportContent,
-            max_output_tokens=900,
+            reasoning={"effort": "low"},
+            max_output_tokens=settings.llm_max_output_tokens,
             store=False,
         )
         # Evaluation-only callers may collect SDK usage/id metadata.  The
