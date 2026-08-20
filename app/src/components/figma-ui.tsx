@@ -21,14 +21,18 @@ export function FigmaBack({ onPress, top = navigationHeader.backTop, left = 27 }
   return <Pressable accessibilityLabel="뒤로" hitSlop={8} onPress={onPress} style={({ pressed }) => [styles.back, { top, left }, pressed && styles.compactPressed]}><Ionicons color={colors.white} name="chevron-back" size={22} /></Pressable>;
 }
 
+/** 온보딩 단계 수. 진행바와 `n / N` 표시가 같은 값을 봐야 마지막 단계에서 바가 꽉 찬다. */
+const ONBOARDING_STEP_COUNT = 4;
+const stepPercent = (step: number) => (step / ONBOARDING_STEP_COUNT) * 100;
+
 export function OnboardingTop({ step, onBack }: { step: number; onBack: () => void }) {
-  const progress = useRef(new Animated.Value(previousOnboardingStep * 20)).current;
+  const progress = useRef(new Animated.Value(stepPercent(previousOnboardingStep))).current;
 
   useEffect(() => {
     previousOnboardingStep = step;
     Animated.timing(progress, {
       duration: 420,
-      toValue: step * 20,
+      toValue: stepPercent(step),
       useNativeDriver: false,
     }).start();
   }, [progress, step]);
@@ -38,7 +42,7 @@ export function OnboardingTop({ step, onBack }: { step: number; onBack: () => vo
     <FigmaBack onPress={onBack} />
     <FigmaLogo centered />
     <View style={styles.progressTrack}><Animated.View style={[styles.progressFill, { width }]} /></View>
-    <Text style={styles.progressText}>{step} / 5</Text>
+    <Text style={styles.progressText}>{step} / {ONBOARDING_STEP_COUNT}</Text>
   </>;
 }
 

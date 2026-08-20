@@ -19,7 +19,6 @@ export type OnboardingDraft = {
   birthMonth?: number;
   birthDay?: number;
   gender?: Gender;
-  reasonChoice?: RunningPurpose;
   baselineCadence?: number;
 };
 
