@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, StyleSheet, Switch, Text, View } from 'react-native';
@@ -53,11 +52,6 @@ export default function ActiveRunScreen() {
   useEffect(() => attachCues(), []);
 
   useEffect(() => {
-    if (!hapticsEnabled || Platform.OS === 'web') return;
-    void Notifications.requestPermissionsAsync().catch(() => {});
-  }, [hapticsEnabled]);
-
-  useEffect(() => {
     if (previousTarget.current > 0 && run.target.center < previousTarget.current) {
       setTargetNotice(`목표를 ${run.target.center}로 낮췄어요`);
       const timeout = setTimeout(() => setTargetNotice(null), 4500);
@@ -73,16 +67,12 @@ export default function ActiveRunScreen() {
     if (!hapticsEnabled || freshEvents.length === 0) return;
 
     for (const event of freshEvents) {
-      const notificationBody = notificationText(event.type);
       if (event.type === 'TOO_FAST' || event.type === 'TOO_SLOW') {
         if (AppState.currentState === 'active') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-        else void notifyBackground(notificationBody);
       } else if (event.type === 'TARGET_ADJUSTED') {
         if (AppState.currentState === 'active') void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-        else void notifyBackground(notificationBody);
       } else if (event.type === 'RECOVERY_MODE_ON') {
         if (AppState.currentState === 'active') void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-        else void notifyBackground(notificationBody);
       }
     }
   }, [hapticsEnabled, run.events]);
@@ -256,21 +246,6 @@ function cadenceColor(verdict: JudgeVerdict) {
   return colors.text;
 }
 
-function notificationText(type: string) {
-  if (type === 'TOO_FAST') return '리듬을 조금 낮춰보세요.';
-  if (type === 'TOO_SLOW') return '리듬을 조금 올려보세요.';
-  if (type === 'TARGET_ADJUSTED') return '목표 리듬을 낮췄어요.';
-  return '지금은 회복이 우선이에요.';
-}
-
-async function notifyBackground(body: string) {
-  const permissions = await Notifications.getPermissionsAsync().catch(() => null);
-  if (!permissions?.granted) return;
-  await Notifications.scheduleNotificationAsync({
-    content: { title: '달리', body, sound: 'default' },
-    trigger: null,
-  }).catch(() => {});
-}
 function formatDuration(value: number) {
   const seconds = Math.max(0, Math.round(value));
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
